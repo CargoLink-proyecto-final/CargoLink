@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SHIPPER
+  CARRIER
+  ADMIN
+}
+
+enum LoadStatus {
+  PUBLISHED
+  ASSIGNED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum TripStatus {
+  PENDING
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  firstName     String   @map("first_name")
+  lastName      String   @map("last_name")
+  phone         String?
+  role          Role     @default(SHIPPER)
+  companyName   String?  @map("company_name")
+  avatarUrl     String?  @map("avatar_url")
+  isActive      Boolean  @default(true) @map("is_active")
+  resetToken    String?  @map("reset_token")
+  resetTokenExp DateTime? @map("reset_token_exp")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Shipper relations
+  loads         Load[]   @relation("ShipperLoads")
+
+  // Carrier relations
+  trips         Trip[]   @relation("CarrierTrips")
+
+  // Messages
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+
+  // Ratings
+  givenRatings    Rating[] @relation("RatingFrom")
+  receivedRatings Rating[] @relation("RatingTo")
+
+  @@map("users")
+}
+
+model Load {
+  id            String     @id @default(uuid())
+  shipperId     String     @map("shipper_id")
+  shipper       User       @relation("ShipperLoads", fields: [shipperId], references: [id])
+
+  title         String
+  description   String?
+  originAddress String     @map("origin_address")
+  originLat     Float      @map("origin_lat")
+  originLng     Float      @map("origin_lng")
+  destAddress   String     @map("dest_address")
+  destLat       Float      @map("dest_lat")
+  destLng       Float      @map("dest_lng")
+  cargoType     String     @map("cargo_type")
+  weight        Float
+  volume        Float?
+  pickupDate    DateTime   @map("pickup_date")
+  deliveryDate  DateTime?  @map("delivery_date")
+  price         Float
+  status        LoadStatus @default(PUBLISHED)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  trip          Trip?
+
+  @@index([shipperId])
+  @@index([status])
+  @@index([pickupDate])
+  @@index([originLat, originLng])
+  @@index([destLat, destLng])
+  @@map("loads")
+}
+
+model Trip {
+  id            String     @id @default(uuid())
+  loadId        String     @unique @map("load_id")
+  load          Load       @relation(fields: [loadId], references: [id])
+  carrierId     String     @map("carrier_id")
+  carrier       User       @relation("CarrierTrips", fields: [carrierId], references: [id])
+
+  status        TripStatus @default(PENDING)
+  currentLat    Float?     @map("current_lat")
+  currentLng    Float?     @map("current_lng")
+  startedAt     DateTime?  @map("started_at")
+  completedAt   DateTime?  @map("completed_at")
+  notes         String?
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  ratings       Rating[]
+
+  @@index([carrierId])
+  @@index([status])
+  @@map("trips")
+}
+
+model Message {
+  id          String   @id @default(uuid())
+  senderId    String   @map("sender_id")
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId  String   @map("receiver_id")
+  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  content     String
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([senderId, receiverId])
+  @@index([receiverId, isRead])
+  @@map("messages")
+}
+
+model Rating {
+  id          String   @id @default(uuid())
+  tripId      String   @map("trip_id")
+  trip        Trip     @relation(fields: [tripId], references: [id])
+  fromUserId  String   @map("from_user_id")
+  fromUser    User     @relation("RatingFrom", fields: [fromUserId], references: [id])
+  toUserId    String   @map("to_user_id")
+  toUser      User     @relation("RatingTo", fields: [toUserId], references: [id])
+  score       Int
+  comment     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([tripId, fromUserId])
+  @@index([toUserId])
+  @@map("ratings")
+}
