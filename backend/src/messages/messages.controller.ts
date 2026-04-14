@@ -20,39 +20,45 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class MessagesController {
   constructor(private messagesService: MessagesService) {}
 
-  @Post(':receiverId')
-  @ApiOperation({ summary: 'Send a message' })
+  @Post('trip/:tripId')
+  @ApiOperation({ summary: 'Send a message in a trip conversation' })
   send(
     @CurrentUser('id') userId: string,
-    @Param('receiverId') receiverId: string,
+    @Param('tripId') tripId: string,
     @Body() data: { content: string },
   ) {
-    return this.messagesService.create(userId, receiverId, data.content);
+    return this.messagesService.create(userId, tripId, data.content);
+  }
+
+  @Get('unread-count')
+  @ApiOperation({ summary: 'Get total unread message count' })
+  getUnreadCount(@CurrentUser('id') userId: string) {
+    return this.messagesService.getUnreadTotal(userId);
   }
 
   @Get('conversations')
-  @ApiOperation({ summary: 'Get list of conversations' })
+  @ApiOperation({ summary: 'Get list of trip-based conversations' })
   getConversations(@CurrentUser('id') userId: string) {
     return this.messagesService.getConversationList(userId);
   }
 
-  @Get('conversation/:userId')
-  @ApiOperation({ summary: 'Get messages with a specific user' })
-  getConversation(
-    @CurrentUser('id') myId: string,
-    @Param('userId') otherId: string,
+  @Get('trip/:tripId')
+  @ApiOperation({ summary: 'Get messages for a trip' })
+  getTripMessages(
+    @CurrentUser('id') userId: string,
+    @Param('tripId') tripId: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.messagesService.getConversation(myId, otherId, page, limit);
+    return this.messagesService.getTripMessages(tripId, userId, page, limit);
   }
 
-  @Patch('read/:senderId')
-  @ApiOperation({ summary: 'Mark messages as read' })
+  @Patch('trip/:tripId/read')
+  @ApiOperation({ summary: 'Mark trip messages as read' })
   markAsRead(
     @CurrentUser('id') userId: string,
-    @Param('senderId') senderId: string,
+    @Param('tripId') tripId: string,
   ) {
-    return this.messagesService.markAsRead(userId, senderId);
+    return this.messagesService.markAsRead(tripId, userId);
   }
 }

@@ -10,7 +10,8 @@ import { tripsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils';
 import { useRoute } from '@/lib/useRoute';
-import { MapPin, Truck, Calendar, Star } from 'lucide-react';
+import { MapPin, Truck, Calendar, Star, MessageSquare } from 'lucide-react';
+import Link from 'next/link';
 
 const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
 
@@ -168,6 +169,14 @@ export default function TripDetailPage() {
               >
                 Completar Viaje
               </button>
+            )}
+            {['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(trip.status) && (
+              <Link
+                href={`/messages/trip/${trip.id}`}
+                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1"
+              >
+                <MessageSquare size={16} /> Mensaje
+              </Link>
             )}
             {canRate && (
               <button

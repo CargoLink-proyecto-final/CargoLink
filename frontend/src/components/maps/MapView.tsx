@@ -4,7 +4,6 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef } from 'react';
 
-// Custom colored icons for origin (green), destination (red), truck (blue)
 function createColorIcon(color: string) {
   return L.divIcon({
     className: '',
@@ -66,16 +65,28 @@ export default function MapView({
   center = [-34.6037, -58.3816],
   zoom = 6,
 }: MapViewProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const routesLayerRef = useRef<L.LayerGroup | null>(null);
 
+  // Store latest props in refs so the init effect can access current data
+  const markersRef = useRef(markers);
+  const routesRef = useRef(routes);
+  markersRef.current = markers;
+  routesRef.current = routes;
+
   // Initialize map once
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!wrapperRef.current) return;
 
-    const map = L.map(containerRef.current, {
+    const mapDiv = document.createElement('div');
+    mapDiv.style.height = '100%';
+    mapDiv.style.width = '100%';
+    wrapperRef.current.innerHTML = '';
+    wrapperRef.current.appendChild(mapDiv);
+
+    const map = L.map(mapDiv, {
       center: center as L.LatLngExpression,
       zoom,
     });
@@ -86,13 +97,20 @@ export default function MapView({
 
     markersLayerRef.current = L.layerGroup().addTo(map);
     routesLayerRef.current = L.layerGroup().addTo(map);
-
     mapRef.current = map;
 
-    // Fix rendering in dynamic containers
-    setTimeout(() => map.invalidateSize(), 200);
+    const timer = setTimeout(() => {
+      if (mapRef.current) {
+        map.invalidateSize();
+        // Draw whatever data is available right now after size is correct
+        drawMarkers(markersLayerRef.current!, markersRef.current);
+        drawRoutes(routesLayerRef.current!, routesRef.current);
+        fitBounds(map, markersRef.current, routesRef.current);
+      }
+    }, 250);
 
     return () => {
+      clearTimeout(timer);
       map.remove();
       mapRef.current = null;
       markersLayerRef.current = null;
@@ -100,64 +118,55 @@ export default function MapView({
     };
   }, []);
 
-  // Update markers
+  // Sync markers whenever they change
   useEffect(() => {
-    const layer = markersLayerRef.current;
-    if (!layer) return;
-
-    layer.clearLayers();
-
-    markers.forEach((m) => {
-      const marker = L.marker([m.lat, m.lng], { icon: getIconForMarker(m) });
-      marker.bindPopup(`<strong>${m.title}</strong>${m.status ? `<br/>${m.status}` : ''}`);
-      layer.addLayer(marker);
-    });
+    if (!markersLayerRef.current) return;
+    drawMarkers(markersLayerRef.current, markers);
   }, [markers]);
 
-  // Update routes (with serialization to avoid redundant redraws)
-  const prevRouteKeyRef = useRef('');
+  // Sync routes whenever they change
   useEffect(() => {
-    const map = mapRef.current;
-    const layer = routesLayerRef.current;
-    if (!map || !layer) return;
-
-    // Build stable key to detect actual data changes
-    const key = routes.map((r) => `${r.coordinates.length}:${r.color}`).join('|');
-    if (key === prevRouteKeyRef.current) return;
-    prevRouteKeyRef.current = key;
-
-    layer.clearLayers();
-
-    routes.forEach((route) => {
-      if (route.coordinates.length < 2) return;
-      const polyline = L.polyline(route.coordinates, {
-        color: route.color || '#3b82f6',
-        weight: 4,
-        opacity: 0.8,
-      });
-      layer.addLayer(polyline);
-    });
+    if (!routesLayerRef.current) return;
+    drawRoutes(routesLayerRef.current, routes);
   }, [routes]);
 
-  // Fit bounds when markers or routes change (with stable key to prevent thrashing)
-  const prevBoundsKeyRef = useRef('');
+  // Fit bounds whenever data changes
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const points: L.LatLngExpression[] = [];
-    markers.forEach((m) => points.push([m.lat, m.lng]));
-    routes.forEach((r) => r.coordinates.forEach((c) => points.push(c)));
-
-    if (points.length < 2) return;
-
-    const key = `${points.length}-${JSON.stringify(points[0])}-${JSON.stringify(points[points.length - 1])}`;
-    if (key === prevBoundsKeyRef.current) return;
-    prevBoundsKeyRef.current = key;
-
-    const bounds = L.latLngBounds(points);
-    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    if (!mapRef.current) return;
+    fitBounds(mapRef.current, markers, routes);
   }, [markers, routes]);
 
-  return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />;
+  return <div ref={wrapperRef} style={{ height: '100%', width: '100%' }} />;
+}
+
+// --- Pure helper functions (no hooks, no refs) ---
+
+function drawMarkers(layer: L.LayerGroup, markers: MapMarker[]) {
+  layer.clearLayers();
+  markers.forEach((m) => {
+    const marker = L.marker([m.lat, m.lng], { icon: getIconForMarker(m) });
+    marker.bindPopup(`<strong>${m.title}</strong>${m.status ? `<br/>${m.status}` : ''}`);
+    layer.addLayer(marker);
+  });
+}
+
+function drawRoutes(layer: L.LayerGroup, routes: RouteData[]) {
+  layer.clearLayers();
+  routes.forEach((route) => {
+    if (route.coordinates.length < 2) return;
+    L.polyline(route.coordinates, {
+      color: route.color || '#3b82f6',
+      weight: 4,
+      opacity: 0.8,
+    }).addTo(layer);
+  });
+}
+
+function fitBounds(map: L.Map, markers: MapMarker[], routes: RouteData[]) {
+  const points: L.LatLngExpression[] = [];
+  markers.forEach((m) => points.push([m.lat, m.lng]));
+  routes.forEach((r) => r.coordinates.forEach((c) => points.push(c)));
+  if (points.length >= 2) {
+    map.fitBounds(L.latLngBounds(points), { padding: [50, 50], maxZoom: 14 });
+  }
 }

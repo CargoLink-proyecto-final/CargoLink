@@ -2,12 +2,16 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { loadsApi, tripsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { useRoute } from '@/lib/useRoute';
 import Link from 'next/link';
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils';
-import { MapPin, Package, Calendar, DollarSign, User, Truck } from 'lucide-react';
+import { MapPin, Package, Calendar, DollarSign, User, Truck, MessageSquare } from 'lucide-react';
+
+const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
 
 export default function LoadDetailPage() {
   const params = useParams();
@@ -20,6 +24,13 @@ export default function LoadDetailPage() {
     queryKey: ['load', id],
     queryFn: () => loadsApi.getById(id).then((r) => r.data),
   });
+
+  const routes = useRoute(
+    load?.originLat,
+    load?.originLng,
+    load?.destLat,
+    load?.destLng,
+  );
 
   const acceptMutation = useMutation({
     mutationFn: () => tripsApi.accept(id),
@@ -91,8 +102,28 @@ export default function LoadDetailPage() {
                 </button>
               </>
             )}
+            {load.trip && (
+              <Link
+                href={`/messages/trip/${load.trip.id}`}
+                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1"
+              >
+                <MessageSquare size={16} /> Mensaje
+              </Link>
+            )}
           </div>
         </div>
+
+        {load.originLat && load.destLat && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ height: '300px', zIndex: 1 }}>
+            <MapView
+              markers={[
+                { id: 'origin', lat: load.originLat, lng: load.originLng, title: `Origen: ${load.originAddress}` },
+                { id: 'dest', lat: load.destLat, lng: load.destLng, title: `Destino: ${load.destAddress}` },
+              ]}
+              routes={routes}
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">

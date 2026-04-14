@@ -74,12 +74,13 @@ export const tripsApi = {
 
 // Messages
 export const messagesApi = {
-  send: (receiverId: string, content: string) =>
-    api.post(`/messages/${receiverId}`, { content }),
+  send: (tripId: string, content: string) =>
+    api.post(`/messages/trip/${tripId}`, { content }),
   getConversations: () => api.get('/messages/conversations'),
-  getConversation: (userId: string, params?: any) =>
-    api.get(`/messages/conversation/${userId}`, { params }),
-  markAsRead: (senderId: string) => api.patch(`/messages/read/${senderId}`),
+  getTripMessages: (tripId: string, params?: any) =>
+    api.get(`/messages/trip/${tripId}`, { params }),
+  markAsRead: (tripId: string) => api.patch(`/messages/trip/${tripId}/read`),
+  getUnreadCount: () => api.get('/messages/unread-count'),
 };
 
 // Ratings

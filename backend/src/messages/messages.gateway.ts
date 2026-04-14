@@ -7,6 +7,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { MessagesService } from './messages.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @WebSocketGateway({
   cors: { origin: '*' },
@@ -18,38 +19,50 @@ export class MessagesGateway
   @WebSocketServer()
   server: Server;
 
-  private connectedUsers = new Map<string, string>();
+  constructor(
+    private messagesService: MessagesService,
+    private prisma: PrismaService,
+  ) {}
 
-  handleConnection(client: Socket) {
+  async handleConnection(client: Socket) {
     const userId = client.handshake.query.userId as string;
-    if (userId) {
-      this.connectedUsers.set(userId, client.id);
-      client.join(`user_${userId}`);
+    if (!userId) return;
+
+    client.join(`user_${userId}`);
+
+    // Join all trip rooms where the user is a participant
+    const trips = await this.prisma.trip.findMany({
+      where: {
+        OR: [
+          { carrierId: userId },
+          { load: { shipperId: userId } },
+        ],
+        status: { in: ['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'] },
+      },
+      select: { id: true },
+    });
+
+    for (const trip of trips) {
+      client.join(`trip_${trip.id}`);
     }
   }
 
-  handleDisconnect(client: Socket) {
-    const userId = client.handshake.query.userId as string;
-    if (userId) {
-      this.connectedUsers.delete(userId);
-    }
+  handleDisconnect(_client: Socket) {
+    // Socket.IO handles room cleanup automatically
   }
-
-  constructor(private messagesService: MessagesService) {}
 
   @SubscribeMessage('sendMessage')
   async handleMessage(
     client: Socket,
-    payload: { senderId: string; receiverId: string; content: string },
+    payload: { senderId: string; tripId: string; content: string },
   ) {
     const message = await this.messagesService.create(
       payload.senderId,
-      payload.receiverId,
+      payload.tripId,
       payload.content,
     );
 
-    this.server.to(`user_${payload.receiverId}`).emit('newMessage', message);
-    this.server.to(`user_${payload.senderId}`).emit('newMessage', message);
+    this.server.to(`trip_${payload.tripId}`).emit('newMessage', message);
 
     return message;
   }

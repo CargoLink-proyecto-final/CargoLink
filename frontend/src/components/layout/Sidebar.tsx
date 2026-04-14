@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
+import { messagesApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -41,12 +43,28 @@ const navItems = {
 };
 
 export default function Sidebar() {
+  const { user } = useAuthStore();
+  if (!user) return null;
+  return <SidebarContent user={user} />;
+}
+
+type AuthUser = NonNullable<ReturnType<typeof useAuthStore.getState>['user']>;
+
+function SidebarContent({ user }: { user: AuthUser }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { logout } = useAuthStore();
   const [open, setOpen] = useState(false);
 
-  if (!user) return null;
+  const { data: unreadData } = useQuery({
+    queryKey: ['unreadCount'],
+    queryFn: () => messagesApi.getUnreadCount().then((r) => r.data),
+    staleTime: 0,
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
+  });
+
+  const unreadCount = unreadData?.unreadCount || 0;
 
   const items = navItems[user.role] || [];
 
@@ -62,6 +80,11 @@ export default function Sidebar() {
         onClick={() => setOpen(!open)}
       >
         {open ? <X size={20} /> : <Menu size={20} />}
+        {!open && unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
       </button>
 
       <aside
@@ -80,13 +103,14 @@ export default function Sidebar() {
             {items.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
+              const isMessages = item.href === '/messages';
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition',
+                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition relative',
                     active
                       ? 'bg-primary-50 text-primary-700'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
@@ -94,6 +118,11 @@ export default function Sidebar() {
                 >
                   <Icon size={18} />
                   {item.label}
+                  {isMessages && unreadCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
