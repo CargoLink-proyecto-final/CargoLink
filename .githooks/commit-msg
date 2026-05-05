@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Opt-in commit-msg hook. Valida conventional commits.
+# Activar con:
+#     git config --local core.hooksPath .githooks
+#
+# Reglas:
+#   Formato: type(scope)?!?: description
+#   types:   feat|fix|chore|refactor|docs|test|style|perf|ci|build
+#   scope:   opcional, [a-z0-9._-], entre paréntesis
+#   `!`:     opcional para breaking changes
+#
+# Excepciones (pasan sin validar):
+#   - Merge commits (empiezan con "Merge ")
+#   - Revert commits (empiezan con "Revert ")
+#   - Fixup/squash commits (empiezan con "fixup! " o "squash! ")
+
+set +e
+
+MSG_FILE="$1"
+[ -z "$MSG_FILE" ] && exit 0
+[ ! -f "$MSG_FILE" ] && exit 0
+
+FIRST_LINE=$(head -n 1 "$MSG_FILE")
+
+# Excepciones
+case "$FIRST_LINE" in
+  "Merge "*|"Revert "*|"fixup! "*|"squash! "*) exit 0 ;;
+esac
+
+REGEX='^(feat|fix|chore|refactor|docs|test|style|perf|ci|build)(\([a-z0-9._-]+\))?!?: .+'
+
+if printf '%s' "$FIRST_LINE" | grep -qE "$REGEX"; then
+  exit 0
+fi
+
+cat >&2 <<EOF
+🚫 Commit rechazado: el mensaje no cumple conventional commits.
+
+Primera línea recibida:
+  $FIRST_LINE
+
+Formato esperado:
+  type(scope): description
+
+  type ∈ {feat, fix, chore, refactor, docs, test, style, perf, ci, build}
+  scope: opcional, kebab-case entre paréntesis.
+  description: en inglés, minúsculas, imperativo, sin punto final.
+
+Ejemplos válidos:
+  feat: migrate lote detail module
+  fix(gestion-licencias): scope admin licencias to user's org
+  chore(docker): lower resource limits for local dev
+
+Reintentá con un mensaje corregido.
+EOF
+exit 1
