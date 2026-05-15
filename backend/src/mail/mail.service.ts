@@ -11,18 +11,27 @@ export class MailService {
     if (this.transporter) return this.transporter;
 
     const host = process.env.SMTP_HOST;
-    if (host) {
+    const user = process.env.SMTP_USER;
+    // Require both host and user before treating SMTP as configured — a
+    // half-filled .env (host set, credentials missing) would otherwise try
+    // to talk to a real server unauthenticated and silently fail.
+    if (host && user) {
       this.transporter = nodemailer.createTransport({
         host,
         port: Number(process.env.SMTP_PORT ?? 587),
         secure: process.env.SMTP_SECURE === 'true',
-        auth: process.env.SMTP_USER
-          ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
-          : undefined,
+        auth: { user, pass: process.env.SMTP_PASSWORD },
       });
       if (process.env.SMTP_FROM) this.fromAddress = process.env.SMTP_FROM;
       this.logger.log(`Mail transport: SMTP ${host}`);
       return this.transporter;
+    }
+
+    if (host && !user) {
+      this.logger.warn(
+        `SMTP_HOST is set but SMTP_USER is empty — falling back to Ethereal. ` +
+          `Fill SMTP_USER and SMTP_PASSWORD in .env to deliver real emails.`,
+      );
     }
 
     // Dev fallback: Ethereal Email — auto-creates a fake inbox and gives
