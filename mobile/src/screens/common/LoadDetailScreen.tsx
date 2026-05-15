@@ -154,7 +154,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Remitente</Text>
+        <Text style={styles.sectionTitle}>Generador de carga</Text>
         <Text style={styles.infoValue}>
           {load.shipper?.firstName} {load.shipper?.lastName}
         </Text>
@@ -162,7 +162,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
       </View>
 
       <View style={styles.actions}>
-        {user?.role === 'CARRIER' && load.status === 'PUBLISHED' && (
+        {user?.role === 'TRANSPORTER' && load.status === 'PUBLISHED' && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#22c55e' }]}
             onPress={handleAccept}
@@ -172,7 +172,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
           </TouchableOpacity>
         )}
 
-        {user?.role === 'CARRIER' && load.trip?.status === 'ACCEPTED' && load.trip?.carrierId === user.id && (
+        {user?.role === 'TRANSPORTER' && load.trip?.status === 'ACCEPTED' && load.trip?.carrierId === user.id && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#f97316' }]}
             onPress={handleStartTrip}
@@ -182,7 +182,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
           </TouchableOpacity>
         )}
 
-        {user?.role === 'CARRIER' && load.trip?.status === 'IN_PROGRESS' && load.trip?.carrierId === user.id && (
+        {user?.role === 'TRANSPORTER' && load.trip?.status === 'IN_PROGRESS' && load.trip?.carrierId === user.id && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#22c55e' }]}
             onPress={handleCompleteTrip}
@@ -192,7 +192,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
           </TouchableOpacity>
         )}
 
-        {user?.role === 'SHIPPER' && load.shipperId === user.id && load.status === 'PUBLISHED' && (
+        {user?.role === 'CARGO_GENERATOR' && load.shipperId === user.id && load.status === 'PUBLISHED' && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#ef4444' }]}
             onPress={handleCancel}

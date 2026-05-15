@@ -17,14 +17,14 @@ interface RegisterForm {
   password: string;
   firstName: string;
   lastName: string;
-  phone?: string;
-  role: 'SHIPPER' | 'CARRIER';
+  phone: string;
+  role: 'CARGO_GENERATOR' | 'TRANSPORTER';
   companyName?: string;
 }
 
 export default function RegisterScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<'SHIPPER' | 'CARRIER'>('SHIPPER');
+  const [role, setRole] = useState<'CARGO_GENERATOR' | 'TRANSPORTER'>('CARGO_GENERATOR');
   const login = useAuthStore((s) => s.login);
 
   const { control, handleSubmit, formState: { errors } } = useForm<RegisterForm>();
@@ -49,16 +49,16 @@ export default function RegisterScreen({ navigation }: any) {
       <View style={styles.form}>
         <View style={styles.roleRow}>
           <TouchableOpacity
-            style={[styles.roleBtn, role === 'SHIPPER' && styles.roleBtnActive]}
-            onPress={() => setRole('SHIPPER')}
+            style={[styles.roleBtn, role === 'CARGO_GENERATOR' && styles.roleBtnActive]}
+            onPress={() => setRole('CARGO_GENERATOR')}
           >
-            <Text style={[styles.roleText, role === 'SHIPPER' && styles.roleTextActive]}>Remitente</Text>
+            <Text style={[styles.roleText, role === 'CARGO_GENERATOR' && styles.roleTextActive]}>Generador de carga</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.roleBtn, role === 'CARRIER' && styles.roleBtnActive]}
-            onPress={() => setRole('CARRIER')}
+            style={[styles.roleBtn, role === 'TRANSPORTER' && styles.roleBtnActive]}
+            onPress={() => setRole('TRANSPORTER')}
           >
-            <Text style={[styles.roleText, role === 'CARRIER' && styles.roleTextActive]}>Transportista</Text>
+            <Text style={[styles.roleText, role === 'TRANSPORTER' && styles.roleTextActive]}>Transportista</Text>
           </TouchableOpacity>
         </View>
 
@@ -69,7 +69,7 @@ export default function RegisterScreen({ navigation }: any) {
               name="firstName"
               rules={{ required: 'Obligatorio' }}
               render={({ field: { onChange, value } }) => (
-                <TextInput style={styles.input} placeholder="Nombre" value={value} onChangeText={onChange} />
+                <TextInput style={styles.input} placeholder="Nombre *" value={value} onChangeText={onChange} />
               )}
             />
           </View>
@@ -79,7 +79,7 @@ export default function RegisterScreen({ navigation }: any) {
               name="lastName"
               rules={{ required: 'Obligatorio' }}
               render={({ field: { onChange, value } }) => (
-                <TextInput style={styles.input} placeholder="Apellido" value={value} onChangeText={onChange} />
+                <TextInput style={styles.input} placeholder="Apellido *" value={value} onChangeText={onChange} />
               )}
             />
           </View>
@@ -90,7 +90,7 @@ export default function RegisterScreen({ navigation }: any) {
           name="email"
           rules={{ required: 'Correo electrónico obligatorio' }}
           render={({ field: { onChange, value } }) => (
-            <TextInput style={styles.input} placeholder="Correo electrónico" value={value} onChangeText={onChange} keyboardType="email-address" autoCapitalize="none" />
+            <TextInput style={styles.input} placeholder="Correo electrónico *" value={value} onChangeText={onChange} keyboardType="email-address" autoCapitalize="none" />
           )}
         />
 
@@ -99,15 +99,16 @@ export default function RegisterScreen({ navigation }: any) {
           name="password"
           rules={{ required: 'Contraseña obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } }}
           render={({ field: { onChange, value } }) => (
-            <TextInput style={styles.input} placeholder="Contraseña" value={value} onChangeText={onChange} secureTextEntry />
+            <TextInput style={styles.input} placeholder="Contraseña *" value={value} onChangeText={onChange} secureTextEntry />
           )}
         />
 
         <Controller
           control={control}
           name="phone"
+          rules={{ required: 'El teléfono es obligatorio' }}
           render={({ field: { onChange, value } }) => (
-            <TextInput style={styles.input} placeholder="Teléfono (opcional)" value={value} onChangeText={onChange} keyboardType="phone-pad" />
+            <TextInput style={styles.input} placeholder="Teléfono *" value={value} onChangeText={onChange} keyboardType="phone-pad" />
           )}
         />
 

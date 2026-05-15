@@ -1,4 +1,4 @@
-export type Role = 'SHIPPER' | 'CARRIER' | 'ADMIN';
+export type Role = 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN';
 export type LoadStatus = 'PUBLISHED' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type TripStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 

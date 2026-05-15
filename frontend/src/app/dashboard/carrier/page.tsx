@@ -31,7 +31,7 @@ export default function CarrierDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Panel del Transportador</h1>
+        <h1 className="text-2xl font-bold">Panel del Transportista</h1>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[

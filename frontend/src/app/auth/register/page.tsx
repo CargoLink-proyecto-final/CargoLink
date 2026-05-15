@@ -5,26 +5,24 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { authApi } from '@/lib/api';
-import { useAuthStore } from '@/store/auth';
 
 interface RegisterForm {
   email: string;
   password: string;
   firstName: string;
   lastName: string;
-  phone?: string;
-  role: 'SHIPPER' | 'CARRIER';
+  phone: string;
+  role: 'CARGO_GENERATOR' | 'TRANSPORTER';
   companyName?: string;
 }
 
 export default function RegisterPage() {
   const router = useRouter();
-  const login = useAuthStore((s) => s.login);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterForm>({
-    defaultValues: { role: 'SHIPPER' },
+    defaultValues: { role: 'CARGO_GENERATOR' },
   });
 
   const selectedRole = watch('role');
@@ -33,9 +31,8 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await authApi.register(data);
-      login(res.data.user, res.data.accessToken);
-      router.push('/');
+      await authApi.register(data);
+      router.push(`/auth/check-email?email=${encodeURIComponent(data.email)}`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error en el registro');
     } finally {
@@ -57,19 +54,19 @@ export default function RegisterPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="flex gap-2">
-            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'SHIPPER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
-              <input type="radio" value="SHIPPER" {...register('role')} className="sr-only" />
-              Transportista
+            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'CARGO_GENERATOR' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
+              <input type="radio" value="CARGO_GENERATOR" {...register('role')} className="sr-only" />
+              Generador de carga
             </label>
-            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'CARRIER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
-              <input type="radio" value="CARRIER" {...register('role')} className="sr-only" />
-              Transportador
+            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'TRANSPORTER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
+              <input type="radio" value="TRANSPORTER" {...register('role')} className="sr-only" />
+              Transportista
             </label>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <span className="text-red-500">*</span></label>
               <input
                 {...register('firstName', { required: 'Obligatorio' })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
@@ -77,7 +74,7 @@ export default function RegisterPage() {
               {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Apellido</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Apellido <span className="text-red-500">*</span></label>
               <input
                 {...register('lastName', { required: 'Obligatorio' })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
@@ -87,7 +84,7 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico <span className="text-red-500">*</span></label>
             <input
               type="email"
               {...register('email', { required: 'El correo electrónico es obligatorio' })}
@@ -97,7 +94,7 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña <span className="text-red-500">*</span></label>
             <input
               type="password"
               {...register('password', { required: 'La contraseña es obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } })}
@@ -107,11 +104,12 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono (opcional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono <span className="text-red-500">*</span></label>
             <input
-              {...register('phone')}
+              {...register('phone', { required: 'El teléfono es obligatorio' })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
             />
+            {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
           </div>
 
           <div>

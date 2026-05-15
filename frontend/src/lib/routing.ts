@@ -54,3 +54,81 @@ function makeStraightLine(
     [destLat, destLng],
   ];
 }
+
+/**
+ * Reverse-geocodes a coordinate pair into a human-readable address via
+ * Nominatim. Returns null if the lookup fails.
+ */
+export async function reverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<string | null> {
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { display_name?: string };
+    return data.display_name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Geocodes structured address components via Nominatim's structured
+ * search. Yields better matches than free-text when callers can split
+ * the address up. Returns null if no match.
+ */
+export async function geocodeStructured(parts: {
+  street?: string;
+  city?: string;
+  state?: string;
+  postalcode?: string;
+}): Promise<{ lat: number; lng: number; displayName: string } | null> {
+  const params = new URLSearchParams({ format: 'json', limit: '1' });
+  let hasField = false;
+  if (parts.street?.trim()) { params.set('street', parts.street.trim()); hasField = true; }
+  if (parts.city?.trim()) { params.set('city', parts.city.trim()); hasField = true; }
+  if (parts.state?.trim()) { params.set('state', parts.state.trim()); hasField = true; }
+  if (parts.postalcode?.trim()) { params.set('postalcode', parts.postalcode.trim()); hasField = true; }
+  if (!hasField) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
+    if (!data.length) return null;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return { lat, lng, displayName: data[0].display_name };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Geocodes a free-text address into coordinates via Nominatim (OpenStreetMap).
+ * Free, no API key; rate limit 1 req/sec.
+ * Returns null if the address can't be resolved.
+ */
+export async function geocodeAddress(
+  address: string,
+): Promise<{ lat: number; lng: number; displayName: string } | null> {
+  const q = address.trim();
+  if (!q) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
+    if (!data.length) return null;
+    const lat = parseFloat(data[0].lat);
+    const lng = parseFloat(data[0].lon);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return { lat, lng, displayName: data[0].display_name };
+  } catch {
+    return null;
+  }
+}

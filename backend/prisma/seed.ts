@@ -27,7 +27,7 @@ async function main() {
       firstName: 'Juan',
       lastName: 'García',
       phone: '+5491155551234',
-      role: Role.SHIPPER,
+      role: Role.CARGO_GENERATOR,
       companyName: 'Logística Sur S.A.',
     },
   });
@@ -41,7 +41,7 @@ async function main() {
       firstName: 'Carlos',
       lastName: 'Martínez',
       phone: '+5491155555678',
-      role: Role.CARRIER,
+      role: Role.TRANSPORTER,
       companyName: 'Transporte Rápido',
     },
   });

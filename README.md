@@ -104,8 +104,8 @@ Seeding runs automatically on every container start via `docker-entrypoint.sh`. 
 | Email | Role | Name | Company |
 |-------|------|------|---------|
 | `admin@cargolink.com` | ADMIN | Admin CargoLink | — |
-| `shipper@example.com` | SHIPPER | Juan García | Logística Sur S.A. |
-| `carrier@example.com` | CARRIER | Carlos Martínez | Transporte Rápido |
+| `shipper@example.com` | CARGO_GENERATOR | Juan García | Logística Sur S.A. |
+| `carrier@example.com` | TRANSPORTER | Carlos Martínez | Transporte Rápido |
 
 A sample load ("Electrónica a Córdoba") is also created, associated to the shipper account.
 
@@ -286,7 +286,7 @@ POST /api/auth/register
   "password": "StrongPass123",
   "firstName": "John",
   "lastName": "Doe",
-  "role": "SHIPPER",
+  "role": "CARGO_GENERATOR",
   "phone": "+1234567890",
   "companyName": "Acme Logistics"
 }
@@ -326,7 +326,7 @@ POST /api/loads
 ## Database Schema
 
 ### Tables
-- **users** - All user accounts with role (SHIPPER/CARRIER/ADMIN)
+- **users** - All user accounts with role (CARGO_GENERATOR/TRANSPORTER/ADMIN)
 - **loads** - Freight loads published by shippers
 - **trips** - Trips created when a carrier accepts a load
 - **messages** - Real-time chat messages between users

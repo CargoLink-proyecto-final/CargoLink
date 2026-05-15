@@ -20,14 +20,14 @@ import {
 import { useState } from 'react';
 
 const navItems = {
-  SHIPPER: [
+  CARGO_GENERATOR: [
     { href: '/dashboard/shipper', label: 'Panel', icon: LayoutDashboard },
     { href: '/loads', label: 'Mis Cargas', icon: Package },
     { href: '/loads/new', label: 'Nueva Carga', icon: Truck },
     { href: '/tracking', label: 'Seguimiento', icon: MapPin },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
   ],
-  CARRIER: [
+  TRANSPORTER: [
     { href: '/dashboard/carrier', label: 'Panel', icon: LayoutDashboard },
     { href: '/loads', label: 'Cargas Disponibles', icon: Package },
     { href: '/tracking', label: 'Mis Viajes', icon: Truck },
@@ -96,7 +96,7 @@ function SidebarContent({ user }: { user: AuthUser }) {
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-gray-100">
             <h1 className="text-2xl font-bold text-primary-700">CargoLink</h1>
-            <p className="text-xs text-gray-400 mt-1">Panel {user.role === 'SHIPPER' ? 'TRANSPORTISTA' : user.role === 'CARRIER' ? 'TRANSPORTADOR' : 'ADMINISTRADOR'}</p>
+            <p className="text-xs text-gray-400 mt-1">Panel {user.role === 'CARGO_GENERATOR' ? 'GENERADOR DE CARGA' : user.role === 'TRANSPORTER' ? 'TRANSPORTISTA' : 'ADMINISTRADOR'}</p>
           </div>
 
           <nav className="flex-1 p-4 space-y-1">

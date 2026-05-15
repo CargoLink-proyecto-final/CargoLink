@@ -28,7 +28,7 @@ export class LoadsController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles('SHIPPER')
+  @Roles('CARGO_GENERATOR')
   @ApiOperation({ summary: 'Create a new load (Shipper only)' })
   create(@CurrentUser('id') userId: string, @Body() dto: CreateLoadDto) {
     return this.loadsService.create(userId, dto);
@@ -80,7 +80,7 @@ export class LoadsController {
 
   @Get('my')
   @UseGuards(RolesGuard)
-  @Roles('SHIPPER')
+  @Roles('CARGO_GENERATOR')
   @ApiOperation({ summary: 'List my loads (Shipper)' })
   findMyLoads(
     @CurrentUser('id') userId: string,
@@ -98,7 +98,7 @@ export class LoadsController {
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles('SHIPPER')
+  @Roles('CARGO_GENERATOR')
   @ApiOperation({ summary: 'Update a load (Shipper only)' })
   update(
     @Param('id') id: string,
@@ -110,7 +110,7 @@ export class LoadsController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles('SHIPPER')
+  @Roles('CARGO_GENERATOR')
   @ApiOperation({ summary: 'Cancel a load (Shipper only)' })
   cancel(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.loadsService.cancel(id, userId);

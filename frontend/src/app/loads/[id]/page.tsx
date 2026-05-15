@@ -76,7 +76,7 @@ export default function LoadDetailPage() {
             </span>
           </div>
           <div className="flex gap-2">
-            {user?.role === 'CARRIER' && load.status === 'PUBLISHED' && (
+            {user?.role === 'TRANSPORTER' && load.status === 'PUBLISHED' && (
               <button
                 onClick={() => acceptMutation.mutate()}
                 disabled={acceptMutation.isPending}
@@ -85,7 +85,7 @@ export default function LoadDetailPage() {
                 {acceptMutation.isPending ? 'Aceptando...' : 'Aceptar Carga'}
               </button>
             )}
-            {user?.role === 'SHIPPER' && load.shipperId === user.id && load.status === 'PUBLISHED' && (
+            {user?.role === 'CARGO_GENERATOR' && load.shipperId === user.id && load.status === 'PUBLISHED' && (
               <>
                 <Link
                   href={`/loads/${id}/edit`}
@@ -161,14 +161,14 @@ export default function LoadDetailPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
-            <h2 className="font-semibold flex items-center gap-2"><User size={18} /> Transportista</h2>
+            <h2 className="font-semibold flex items-center gap-2"><User size={18} /> Generador de carga</h2>
             <div className="text-sm">
               <p className="font-medium">{load.shipper?.firstName} {load.shipper?.lastName}</p>
               {load.shipper?.companyName && <p className="text-gray-500">{load.shipper.companyName}</p>}
             </div>
             {load.trip && (
               <>
-                <h2 className="font-semibold flex items-center gap-2 pt-2 border-t"><Truck size={18} /> Transportador</h2>
+                <h2 className="font-semibold flex items-center gap-2 pt-2 border-t"><Truck size={18} /> Transportista</h2>
                 <div className="text-sm">
                   <p className="font-medium">{load.trip.carrier?.firstName} {load.trip.carrier?.lastName}</p>
                   <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(load.trip.status)}`}>
