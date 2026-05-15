@@ -62,7 +62,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 render={({ field: { onChange, value } }) => (
                   <TextInput
                     style={styles.input}
-                    placeholder="Correo electrónico"
+                    placeholder="Correo electrónico *"
                     value={value}
                     onChangeText={onChange}
                     keyboardType="email-address"

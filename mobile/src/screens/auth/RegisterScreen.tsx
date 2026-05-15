@@ -69,7 +69,7 @@ export default function RegisterScreen({ navigation }: any) {
               name="firstName"
               rules={{ required: 'Obligatorio' }}
               render={({ field: { onChange, value } }) => (
-                <TextInput style={styles.input} placeholder="Nombre" value={value} onChangeText={onChange} />
+                <TextInput style={styles.input} placeholder="Nombre *" value={value} onChangeText={onChange} />
               )}
             />
           </View>
@@ -79,7 +79,7 @@ export default function RegisterScreen({ navigation }: any) {
               name="lastName"
               rules={{ required: 'Obligatorio' }}
               render={({ field: { onChange, value } }) => (
-                <TextInput style={styles.input} placeholder="Apellido" value={value} onChangeText={onChange} />
+                <TextInput style={styles.input} placeholder="Apellido *" value={value} onChangeText={onChange} />
               )}
             />
           </View>
@@ -90,7 +90,7 @@ export default function RegisterScreen({ navigation }: any) {
           name="email"
           rules={{ required: 'Correo electrónico obligatorio' }}
           render={({ field: { onChange, value } }) => (
-            <TextInput style={styles.input} placeholder="Correo electrónico" value={value} onChangeText={onChange} keyboardType="email-address" autoCapitalize="none" />
+            <TextInput style={styles.input} placeholder="Correo electrónico *" value={value} onChangeText={onChange} keyboardType="email-address" autoCapitalize="none" />
           )}
         />
 
@@ -99,7 +99,7 @@ export default function RegisterScreen({ navigation }: any) {
           name="password"
           rules={{ required: 'Contraseña obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } }}
           render={({ field: { onChange, value } }) => (
-            <TextInput style={styles.input} placeholder="Contraseña" value={value} onChangeText={onChange} secureTextEntry />
+            <TextInput style={styles.input} placeholder="Contraseña *" value={value} onChangeText={onChange} secureTextEntry />
           )}
         />
 
@@ -108,7 +108,7 @@ export default function RegisterScreen({ navigation }: any) {
           name="phone"
           rules={{ required: 'El teléfono es obligatorio' }}
           render={({ field: { onChange, value } }) => (
-            <TextInput style={styles.input} placeholder="Teléfono" value={value} onChangeText={onChange} keyboardType="phone-pad" />
+            <TextInput style={styles.input} placeholder="Teléfono *" value={value} onChangeText={onChange} keyboardType="phone-pad" />
           )}
         />
 
