@@ -97,7 +97,7 @@ Once running:
 
 #### Database seeding
 
-Seeding runs automatically on every container start via `docker-entrypoint.sh`. It uses `upsert` (insert-or-skip), so it's safe to restart containers without duplicating data.
+Seeding runs automatically on every container start via `docker-entrypoint.sh`. Users are created with `upsert` (insert-or-skip), so they won't be duplicated. The sample load uses `create`, so it may be duplicated if the seed runs again — use `docker compose down -v` for a clean reset if needed.
 
 **Demo accounts** (all use password: `password123`):
 
@@ -195,8 +195,8 @@ cd frontend
 npm install
 cp .env.example .env.local
 # Edit .env.local if the backend runs on a different port/host
-# Default: NEXT_PUBLIC_API_URL=http://localhost:3001/api
-npm run dev            # Runs on http://localhost:3000
+# Default: NEXT_PUBLIC_API_URL=http://localhost:3002/api
+npm run dev            # Runs on http://localhost:3003
 ```
 
 **Available scripts:**
