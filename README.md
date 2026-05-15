@@ -33,13 +33,141 @@ CargoLink/
 
 ## Setup Instructions
 
-### Prerequisites
+### Option A: Docker Compose (Recommended)
 
-- Node.js 18+
-- PostgreSQL 14+
-- npm or yarn
+The fastest way to get the full stack running. A single command builds all containers, runs database migrations, and seeds demo data automatically.
 
-### 1. Backend
+#### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) (v20+)
+- [Docker Compose](https://docs.docker.com/compose/install/) (v2+, included with Docker Desktop)
+
+#### 1. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your values:
+
+```env
+# PostgreSQL
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=changeme          # REQUIRED — choose a secure password
+POSTGRES_DB=cargolink
+
+# Backend
+JWT_SECRET=changeme-use-a-long-random-string   # REQUIRED — random secret for JWT signing
+JWT_EXPIRATION=7d
+CORS_ORIGIN=http://localhost:3000
+```
+
+#### 2. Build and start
+
+```bash
+docker compose up -d
+```
+
+This will:
+1. Pull the PostgreSQL 15 image
+2. Build the backend (NestJS) and frontend (Next.js) images using multi-stage Dockerfiles
+3. Wait for PostgreSQL to pass its health check
+4. Run all Prisma migrations (`prisma migrate deploy`)
+5. Seed the database with demo data (users + sample load)
+6. Start the NestJS API server and the Next.js frontend
+
+#### 3. Verify
+
+```bash
+# Check all containers are running
+docker compose ps
+
+# Check backend logs (migrations + seed output)
+docker compose logs backend
+
+# Check frontend logs
+docker compose logs frontend
+```
+
+Once running:
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:3001
+- **Swagger docs:** http://localhost:3001/api/docs
+- **PostgreSQL:** localhost:5432
+
+#### Database seeding
+
+Seeding runs automatically on every container start via `docker-entrypoint.sh`. Users are created with `upsert` (insert-or-skip), so they won't be duplicated. The sample load uses `create`, so it may be duplicated if the seed runs again — use `docker compose down -v` for a clean reset if needed.
+
+**Demo accounts** (all use password: `password123`):
+
+| Email | Role | Name | Company |
+|-------|------|------|---------|
+| `admin@cargolink.com` | ADMIN | Admin CargoLink | — |
+| `shipper@example.com` | SHIPPER | Juan García | Logística Sur S.A. |
+| `carrier@example.com` | CARRIER | Carlos Martínez | Transporte Rápido |
+
+A sample load ("Electrónica a Córdoba") is also created, associated to the shipper account.
+
+To re-seed manually (e.g., after wiping the database):
+
+```bash
+docker compose exec backend node dist/prisma/seed.js
+```
+
+#### Common Docker commands
+
+```bash
+# Stop all containers
+docker compose down
+
+# Stop and remove database volume (full reset)
+docker compose down -v
+
+# Rebuild images after code changes
+docker compose up -d --build
+
+# Run migrations manually
+docker compose exec backend npx prisma migrate deploy
+
+# Open a shell inside the backend container
+docker compose exec backend sh
+
+# View real-time logs
+docker compose logs -f backend
+```
+
+#### Startup flow diagram
+
+```
+docker compose up
+       │
+       ▼
+  PostgreSQL starts
+       │ health check: pg_isready
+       ▼
+  Backend container starts
+       │
+       ├─ 1. prisma migrate deploy  (apply pending migrations)
+       ├─ 2. node dist/prisma/seed.js  (upsert demo data)
+       └─ 3. node dist/src/main  (start NestJS server on :3001)
+       │
+       ▼
+  Frontend container starts
+       └─ node server.js  (Next.js on :3000)
+```
+
+---
+
+### Option B: Local development (without Docker)
+
+#### Prerequisites
+
+- Node.js 20+
+- PostgreSQL 15+
+- npm
+
+#### 1. Backend
 
 ```bash
 cd backend
@@ -60,7 +188,7 @@ npm run start:dev      # Runs on http://localhost:3001
 - Shipper: `shipper@example.com`
 - Carrier: `carrier@example.com`
 
-### 2. Web App (Frontend)
+#### 2. Web App (Frontend)
 
 ```bash
 cd frontend
@@ -72,18 +200,16 @@ npm run dev            # Runs on http://localhost:3003
 ```
 
 **Available scripts:**
-- `npm run dev` — Start development server (port 3003)
+- `npm run dev` — Start development server
 - `npm run build` — Create optimized production build
 - `npm run start` — Serve the production build
 - `npm run lint` — Run ESLint
 
-**Key technologies:** Next.js 14, React 18, TypeScript, Tailwind CSS, React Query, Leaflet (maps), Zustand (state), Socket.IO (chat)
-
 **Prerequisites:**
 - The backend must be running first (`cd backend && npm run start:dev`)
-- Node.js 18+
+- Node.js 20+
 
-### 3. Mobile App
+#### 3. Mobile App
 
 ```bash
 cd mobile
