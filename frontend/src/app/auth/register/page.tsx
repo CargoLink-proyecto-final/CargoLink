@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { authApi } from '@/lib/api';
-import { useAuthStore } from '@/store/auth';
 
 interface RegisterForm {
   email: string;
@@ -19,7 +18,6 @@ interface RegisterForm {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const login = useAuthStore((s) => s.login);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -33,9 +31,8 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await authApi.register(data);
-      login(res.data.user, res.data.accessToken);
-      router.push('/');
+      await authApi.register(data);
+      router.push(`/auth/check-email?email=${encodeURIComponent(data.email)}`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error en el registro');
     } finally {

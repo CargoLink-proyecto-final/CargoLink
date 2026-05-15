@@ -16,21 +16,41 @@ export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
   const [error, setError] = useState('');
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [loading, setLoading] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>();
 
   const onSubmit = async (data: LoginForm) => {
     setError('');
+    setUnverifiedEmail(null);
+    setResendStatus('idle');
     setLoading(true);
     try {
       const res = await authApi.login(data);
       login(res.data.user, res.data.accessToken);
       router.push('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al iniciar sesión');
+      const body = err.response?.data;
+      if (body?.code === 'EMAIL_NOT_VERIFIED') {
+        setUnverifiedEmail(body.email || data.email);
+        setError(body.message || 'Tenés que verificar tu correo electrónico antes de iniciar sesión.');
+      } else {
+        setError(body?.message || 'Error al iniciar sesión');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    if (!unverifiedEmail) return;
+    setResendStatus('sending');
+    try {
+      await authApi.resendVerification(unverifiedEmail);
+    } finally {
+      setResendStatus('sent');
     }
   };
 
@@ -44,7 +64,21 @@ export default function LoginPage() {
 
         {error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
-            {error}
+            <p>{error}</p>
+            {unverifiedEmail && (
+              <button
+                type="button"
+                onClick={resendVerification}
+                disabled={resendStatus !== 'idle'}
+                className="mt-2 text-xs font-medium text-red-700 underline disabled:opacity-60"
+              >
+                {resendStatus === 'sending'
+                  ? 'Enviando...'
+                  : resendStatus === 'sent'
+                    ? 'Correo enviado — revisá tu bandeja'
+                    : 'Reenviar correo de verificación'}
+              </button>
+            )}
           </div>
         )}
 
