@@ -25,7 +25,7 @@ export class TripsController {
 
   @Post('accept/:loadId')
   @UseGuards(RolesGuard)
-  @Roles('CARRIER')
+  @Roles('TRANSPORTER')
   @ApiOperation({ summary: 'Accept a load and create a trip (Carrier only)' })
   acceptLoad(
     @CurrentUser('id') userId: string,
@@ -46,7 +46,7 @@ export class TripsController {
 
   @Get('my')
   @UseGuards(RolesGuard)
-  @Roles('CARRIER')
+  @Roles('TRANSPORTER')
   @ApiOperation({ summary: 'List my trips (Carrier)' })
   findMyTrips(
     @CurrentUser('id') userId: string,
@@ -65,7 +65,7 @@ export class TripsController {
 
   @Patch(':id/start')
   @UseGuards(RolesGuard)
-  @Roles('CARRIER')
+  @Roles('TRANSPORTER')
   @ApiOperation({ summary: 'Start a trip (Carrier only)' })
   startTrip(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.tripsService.startTrip(id, userId);
@@ -73,7 +73,7 @@ export class TripsController {
 
   @Patch(':id/complete')
   @UseGuards(RolesGuard)
-  @Roles('CARRIER')
+  @Roles('TRANSPORTER')
   @ApiOperation({ summary: 'Complete a trip (Carrier only)' })
   completeTrip(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.tripsService.completeTrip(id, userId);
@@ -81,7 +81,7 @@ export class TripsController {
 
   @Patch(':id/location')
   @UseGuards(RolesGuard)
-  @Roles('CARRIER')
+  @Roles('TRANSPORTER')
   @ApiOperation({ summary: 'Update trip location (Carrier only)' })
   updateLocation(
     @Param('id') id: string,

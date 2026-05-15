@@ -100,7 +100,7 @@ export default function AppNavigator() {
           <>
             <Stack.Screen
               name="Main"
-              component={user?.role === 'CARRIER' ? CarrierTabs : ShipperTabs}
+              component={user?.role === 'TRANSPORTER' ? CarrierTabs : ShipperTabs}
             />
             <Stack.Screen
               name="LoadDetail"

@@ -64,7 +64,10 @@ export default function CreateLoadScreen({ navigation }: any) {
 
   const Field = ({ name, label, placeholder, keyboardType, rules }: any) => (
     <View>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>
+        {label}
+        {rules?.required && <Text style={styles.required}> *</Text>}
+      </Text>
       <Controller
         control={control}
         name={name}
@@ -158,6 +161,7 @@ const styles = StyleSheet.create({
   section: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, gap: 10 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#374151', marginBottom: 4 },
   label: { fontSize: 13, fontWeight: '500', color: '#6b7280', marginBottom: 4 },
+  required: { color: '#ef4444' },
   input: {
     borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 14,
     paddingVertical: 10, fontSize: 15,

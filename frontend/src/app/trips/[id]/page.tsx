@@ -152,7 +152,7 @@ export default function TripDetailPage() {
             </span>
           </div>
           <div className="flex gap-2">
-            {user?.role === 'CARRIER' && trip.carrierId === user.id && trip.status === 'ACCEPTED' && (
+            {user?.role === 'TRANSPORTER' && trip.carrierId === user.id && trip.status === 'ACCEPTED' && (
               <button
                 onClick={() => startMutation.mutate()}
                 disabled={startMutation.isPending}
@@ -161,7 +161,7 @@ export default function TripDetailPage() {
                 Iniciar Viaje
               </button>
             )}
-            {user?.role === 'CARRIER' && trip.carrierId === user.id && trip.status === 'IN_PROGRESS' && (
+            {user?.role === 'TRANSPORTER' && trip.carrierId === user.id && trip.status === 'IN_PROGRESS' && (
               <button
                 onClick={() => completeMutation.mutate()}
                 disabled={completeMutation.isPending}
@@ -214,7 +214,7 @@ export default function TripDetailPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
-            <h2 className="font-semibold flex items-center gap-2"><Truck size={18} /> Transportador</h2>
+            <h2 className="font-semibold flex items-center gap-2"><Truck size={18} /> Transportista</h2>
             <p className="font-medium text-sm">{trip.carrier?.firstName} {trip.carrier?.lastName}</p>
             {trip.carrier?.companyName && <p className="text-sm text-gray-500">{trip.carrier.companyName}</p>}
           </div>

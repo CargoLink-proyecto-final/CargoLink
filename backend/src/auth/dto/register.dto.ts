@@ -22,12 +22,12 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'El apellido es obligatorio' })
   lastName: string;
 
-  @ApiProperty({ example: '+1234567890', required: false })
-  @IsOptional()
+  @ApiProperty({ example: '+1234567890' })
   @IsString({ message: 'El teléfono debe ser texto' })
-  phone?: string;
+  @IsNotEmpty({ message: 'El teléfono es obligatorio' })
+  phone: string;
 
-  @ApiProperty({ enum: Role, example: 'SHIPPER' })
+  @ApiProperty({ enum: Role, example: 'CARGO_GENERATOR' })
   @IsEnum(Role, { message: 'El rol debe ser un valor válido' })
   role: Role;
 

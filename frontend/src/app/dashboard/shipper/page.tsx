@@ -25,7 +25,7 @@ export default function ShipperDashboard() {
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Panel del Transportista</h1>
+          <h1 className="text-2xl font-bold">Panel del Generador de Carga</h1>
           <Link
             href="/loads/new"
             className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"

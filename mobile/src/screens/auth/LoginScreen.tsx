@@ -53,7 +53,7 @@ export default function LoginScreen({ navigation }: any) {
             render={({ field: { onChange, value } }) => (
               <TextInput
                 style={styles.input}
-                placeholder="Correo electrónico"
+                placeholder="Correo electrónico *"
                 value={value}
                 onChangeText={onChange}
                 keyboardType="email-address"
@@ -70,7 +70,7 @@ export default function LoginScreen({ navigation }: any) {
             render={({ field: { onChange, value } }) => (
               <TextInput
                 style={styles.input}
-                placeholder="Contraseña"
+                placeholder="Contraseña *"
                 value={value}
                 onChangeText={onChange}
                 secureTextEntry

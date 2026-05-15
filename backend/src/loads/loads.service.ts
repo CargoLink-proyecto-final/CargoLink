@@ -14,7 +14,12 @@ export class LoadsService {
 
   async create(shipperId: string, dto: CreateLoadDto) {
     return this.prisma.load.create({
-      data: { ...dto, shipperId },
+      data: {
+        ...dto,
+        pickupDate: new Date(dto.pickupDate),
+        deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
+        shipperId,
+      },
       include: { shipper: { select: { id: true, firstName: true, lastName: true, companyName: true } } },
     });
   }
@@ -95,7 +100,11 @@ export class LoadsService {
     }
     return this.prisma.load.update({
       where: { id },
-      data: dto,
+      data: {
+        ...dto,
+        pickupDate: dto.pickupDate ? new Date(dto.pickupDate) : undefined,
+        deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
+      },
       include: {
         shipper: { select: { id: true, firstName: true, lastName: true, companyName: true } },
         trip: { select: { id: true, status: true, carrierId: true } },

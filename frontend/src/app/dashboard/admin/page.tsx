@@ -65,7 +65,7 @@ export default function AdminDashboard() {
                     <p className="text-sm text-gray-500">{user.email}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded-full ${user.role === 'SHIPPER' ? 'bg-blue-100 text-blue-700' : user.role === 'CARRIER' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>
+                    <span className={`text-xs px-2 py-1 rounded-full ${user.role === 'CARGO_GENERATOR' ? 'bg-blue-100 text-blue-700' : user.role === 'TRANSPORTER' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>
                       {user.role}
                     </span>
                     <span className={`w-2 h-2 rounded-full ${user.isActive ? 'bg-green-400' : 'bg-red-400'}`} />

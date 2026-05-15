@@ -23,10 +23,10 @@ export default function LoadsPage() {
       const params: any = { page, limit: 20 };
       if (statusFilter) params.status = statusFilter;
       if (cargoType) params.cargoType = cargoType;
-      if (user?.role === 'SHIPPER') {
+      if (user?.role === 'CARGO_GENERATOR') {
         return loadsApi.getMy(params).then((r) => r.data);
       }
-      if (user?.role === 'CARRIER') {
+      if (user?.role === 'TRANSPORTER') {
         return loadsApi.getAvailable(params).then((r) => r.data);
       }
       return loadsApi.getAll(params).then((r) => r.data);
@@ -46,9 +46,9 @@ export default function LoadsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">
-            {user?.role === 'SHIPPER' ? 'Mis Cargas' : user?.role === 'CARRIER' ? 'Cargas Disponibles' : 'Todas las Cargas'}
+            {user?.role === 'CARGO_GENERATOR' ? 'Mis Cargas' : user?.role === 'TRANSPORTER' ? 'Cargas Disponibles' : 'Todas las Cargas'}
           </h1>
-          {user?.role === 'SHIPPER' && (
+          {user?.role === 'CARGO_GENERATOR' && (
             <Link
               href="/loads/new"
               className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
@@ -77,7 +77,7 @@ export default function LoadsPage() {
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
             />
           </div>
-          {user?.role !== 'CARRIER' && (
+          {user?.role !== 'TRANSPORTER' && (
             <div className="flex items-center gap-2">
               <select
                 value={statusFilter}

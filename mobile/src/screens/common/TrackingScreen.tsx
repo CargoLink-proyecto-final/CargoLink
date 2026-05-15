@@ -22,7 +22,7 @@ export default function TrackingScreen({ navigation }: any) {
 
   const fetchTrips = async () => {
     try {
-      const res = user?.role === 'CARRIER'
+      const res = user?.role === 'TRANSPORTER'
         ? await tripsApi.getMy({ status: 'IN_PROGRESS' })
         : await tripsApi.getMy();
       setTrips(res.data.trips || []);
@@ -80,7 +80,7 @@ export default function TrackingScreen({ navigation }: any) {
 
   // For carriers: send location updates
   useEffect(() => {
-    if (user?.role !== 'CARRIER') return;
+    if (user?.role !== 'TRANSPORTER') return;
 
     let subscription: Location.LocationSubscription | null = null;
 

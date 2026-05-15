@@ -2,23 +2,30 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
-  NotFoundException,
   BadRequestException,
+  ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
+const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private prisma: PrismaService,
+    private mailService: MailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -32,6 +39,50 @@ export class AuthService {
       ...dto,
       password: hashedPassword,
     });
+
+    const verificationToken = randomBytes(32).toString('hex');
+    const verificationExp = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerificationToken: verificationToken,
+        emailVerificationTokenExp: verificationExp,
+      },
+    });
+
+    try {
+      await this.mailService.sendVerificationEmail(user.email, user.firstName, verificationToken);
+    } catch (err) {
+      this.logger.error(`Failed to send verification email to ${user.email}`, err as Error);
+      // Registration still succeeds; the user can request a resend.
+    }
+
+    return {
+      message:
+        'Cuenta creada. Te enviamos un correo para verificar tu dirección. Revisá tu bandeja de entrada.',
+      email: user.email,
+    };
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    if (!user.emailVerified) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Tenés que verificar tu correo electrónico antes de iniciar sesión.',
+        email: user.email,
+      });
+    }
 
     const token = this.generateToken(user.id, user.email, user.role);
 
@@ -47,19 +98,28 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto) {
-    const user = await this.usersService.findByEmail(dto.email);
+  async verifyEmail(token: string) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        emailVerificationToken: token,
+        emailVerificationTokenExp: { gte: new Date() },
+      },
+    });
+
     if (!user) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new BadRequestException('Enlace de verificación inválido o expirado');
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationTokenExp: null,
+      },
+    });
 
-    const token = this.generateToken(user.id, user.email, user.role);
-
+    const accessToken = this.generateToken(user.id, user.email, user.role);
     return {
       user: {
         id: user.id,
@@ -68,8 +128,34 @@ export class AuthService {
         lastName: user.lastName,
         role: user.role,
       },
-      accessToken: token,
+      accessToken,
     };
+  }
+
+  async resendVerification(email: string) {
+    const user = await this.usersService.findByEmail(email);
+    // Don't leak whether the email exists.
+    const opaqueResponse = {
+      message: 'Si existe una cuenta sin verificar para ese correo, te enviamos un nuevo enlace.',
+    };
+    if (!user || user.emailVerified) return opaqueResponse;
+
+    const verificationToken = randomBytes(32).toString('hex');
+    const verificationExp = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerificationToken: verificationToken,
+        emailVerificationTokenExp: verificationExp,
+      },
+    });
+
+    try {
+      await this.mailService.sendVerificationEmail(user.email, user.firstName, verificationToken);
+    } catch (err) {
+      this.logger.error(`Failed to resend verification email to ${user.email}`, err as Error);
+    }
+    return opaqueResponse;
   }
 
   async forgotPassword(email: string) {
