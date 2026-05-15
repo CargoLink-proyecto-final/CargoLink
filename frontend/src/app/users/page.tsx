@@ -30,8 +30,8 @@ export default function UsersPage() {
   );
 
   const roleColors: Record<string, string> = {
-    SHIPPER: 'bg-blue-100 text-blue-700',
-    CARRIER: 'bg-orange-100 text-orange-700',
+    CARGO_GENERATOR: 'bg-blue-100 text-blue-700',
+    TRANSPORTER: 'bg-orange-100 text-orange-700',
     ADMIN: 'bg-purple-100 text-purple-700',
   };
 
@@ -58,8 +58,8 @@ export default function UsersPage() {
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
           >
             <option value="">Todos los Roles</option>
-            <option value="SHIPPER">Shipper</option>
-            <option value="CARRIER">Carrier</option>
+            <option value="CARGO_GENERATOR">Generador de carga</option>
+            <option value="TRANSPORTER">Transportista</option>
             <option value="ADMIN">Admin</option>
           </select>
         </div>

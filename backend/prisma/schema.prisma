@@ -8,8 +8,8 @@ datasource db {
 }
 
 enum Role {
-  SHIPPER
-  CARRIER
+  CARGO_GENERATOR
+  TRANSPORTER
   ADMIN
 }
 
@@ -36,7 +36,7 @@ model User {
   firstName     String   @map("first_name")
   lastName      String   @map("last_name")
   phone         String?
-  role          Role     @default(SHIPPER)
+  role          Role     @default(CARGO_GENERATOR)
   companyName   String?  @map("company_name")
   avatarUrl     String?  @map("avatar_url")
   isActive      Boolean  @default(true) @map("is_active")

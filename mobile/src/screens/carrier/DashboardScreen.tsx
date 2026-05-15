@@ -83,7 +83,7 @@ export default function CarrierDashboard({ navigation }: any) {
               {item.load?.originAddress} → {item.load?.destAddress}
             </Text>
             <Text style={styles.cardShipper}>
-              Remitente: {item.load?.shipper?.firstName} {item.load?.shipper?.lastName}
+              Generador de carga: {item.load?.shipper?.firstName} {item.load?.shipper?.lastName}
             </Text>
           </TouchableOpacity>
         )}

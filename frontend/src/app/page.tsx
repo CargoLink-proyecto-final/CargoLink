@@ -18,10 +18,10 @@ export default function Home() {
       case 'ADMIN':
         router.replace('/dashboard/admin');
         break;
-      case 'SHIPPER':
+      case 'CARGO_GENERATOR':
         router.replace('/dashboard/shipper');
         break;
-      case 'CARRIER':
+      case 'TRANSPORTER':
         router.replace('/dashboard/carrier');
         break;
       default:

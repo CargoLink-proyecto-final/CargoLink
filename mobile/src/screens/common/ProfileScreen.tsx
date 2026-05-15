@@ -16,7 +16,7 @@ export default function ProfileScreen() {
 
   if (!user) return null;
 
-  const roleColor = user.role === 'SHIPPER' ? '#3b82f6' : user.role === 'CARRIER' ? '#f97316' : '#8b5cf6';
+  const roleColor = user.role === 'CARGO_GENERATOR' ? '#3b82f6' : user.role === 'TRANSPORTER' ? '#f97316' : '#8b5cf6';
 
   return (
     <SafeAreaView style={styles.container}>

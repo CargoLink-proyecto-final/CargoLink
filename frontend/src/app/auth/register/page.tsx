@@ -12,8 +12,8 @@ interface RegisterForm {
   password: string;
   firstName: string;
   lastName: string;
-  phone?: string;
-  role: 'SHIPPER' | 'CARRIER';
+  phone: string;
+  role: 'CARGO_GENERATOR' | 'TRANSPORTER';
   companyName?: string;
 }
 
@@ -24,7 +24,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterForm>({
-    defaultValues: { role: 'SHIPPER' },
+    defaultValues: { role: 'CARGO_GENERATOR' },
   });
 
   const selectedRole = watch('role');
@@ -57,13 +57,13 @@ export default function RegisterPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="flex gap-2">
-            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'SHIPPER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
-              <input type="radio" value="SHIPPER" {...register('role')} className="sr-only" />
-              Transportista
+            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'CARGO_GENERATOR' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
+              <input type="radio" value="CARGO_GENERATOR" {...register('role')} className="sr-only" />
+              Generador de carga
             </label>
-            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'CARRIER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
-              <input type="radio" value="CARRIER" {...register('role')} className="sr-only" />
-              Transportador
+            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'TRANSPORTER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
+              <input type="radio" value="TRANSPORTER" {...register('role')} className="sr-only" />
+              Transportista
             </label>
           </div>
 
@@ -107,11 +107,12 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono (opcional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
             <input
-              {...register('phone')}
+              {...register('phone', { required: 'El teléfono es obligatorio' })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
             />
+            {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
           </div>
 
           <div>
