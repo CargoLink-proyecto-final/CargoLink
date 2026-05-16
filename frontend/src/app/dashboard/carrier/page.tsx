@@ -2,9 +2,11 @@
 
 import { useQuery } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import StatCard from '@/components/ui/StatCard';
+import StatusBadge from '@/components/ui/StatusBadge';
 import { tripsApi, loadsApi } from '@/lib/api';
-import { formatCurrency, getStatusColor } from '@/lib/utils';
-import { Truck, Package, Clock, CheckCircle } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+import { Truck, Package, Clock, CheckCircle, ArrowRight, Inbox } from 'lucide-react';
 import Link from 'next/link';
 
 export default function CarrierDashboard() {
@@ -30,90 +32,98 @@ export default function CarrierDashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Panel del Transportista</h1>
+      <div className="space-y-8">
+        <div>
+          <p className="eyebrow">Panel del transportista</p>
+          <h1 className="mt-2 font-display text-[38px] leading-[1.05]">
+            Tus <span className="font-semibold text-primary-700">viajes</span> y oportunidades
+          </h1>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: 'Total de Viajes', value: stats.total, icon: Truck, color: 'text-blue-600 bg-blue-50' },
-            { label: 'Activos', value: stats.active, icon: Clock, color: 'text-orange-600 bg-orange-50' },
-            { label: 'Aceptados', value: stats.accepted, icon: Package, color: 'text-yellow-600 bg-yellow-50' },
-            { label: 'Completados', value: stats.completed, icon: CheckCircle, color: 'text-green-600 bg-green-50' },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-lg ${stat.color}`}>
-                  <stat.icon size={20} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className="text-sm text-gray-500">{stat.label}</p>
-                </div>
-              </div>
-            </div>
-          ))}
+          <StatCard label="Total de viajes" value={stats.total} icon={Truck} tone="ink" />
+          <StatCard label="En camino" value={stats.active} icon={Clock} tone="primary" />
+          <StatCard label="Aceptados" value={stats.accepted} icon={Package} tone="warning" />
+          <StatCard label="Completados" value={stats.completed} icon={CheckCircle} tone="success" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-5 border-b border-gray-100">
-              <h2 className="font-semibold">Cargas Disponibles</h2>
+          <section className="card overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-ink-200/70">
+              <div>
+                <p className="eyebrow">Para tomar</p>
+                <h2 className="font-display text-[20px] mt-1">Cargas disponibles</h2>
+              </div>
+              <Link href="/loads" className="text-[12px] uppercase tracking-[0.16em] text-ink-500 hover:text-primary-700 inline-flex items-center gap-1">
+                Ver todas <ArrowRight size={12} />
+              </Link>
             </div>
             {availableLoads.length === 0 ? (
-              <div className="p-10 text-center text-gray-400">Sin cargas disponibles</div>
+              <EmptyState text="Sin cargas disponibles ahora mismo." />
             ) : (
-              <div className="divide-y divide-gray-50">
-                {availableLoads.map((load: any) => (
+              <div>
+                {availableLoads.map((load: any, i: number) => (
                   <Link
                     key={load.id}
                     href={`/loads/${load.id}`}
-                    className="block p-4 hover:bg-gray-50 transition"
+                    className={`block px-5 py-4 transition hover:bg-surface-sunk/60 ${i !== 0 ? 'border-t border-ink-200/60' : ''}`}
                   >
-                    <p className="font-medium">{load.title}</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {load.originAddress} → {load.destAddress}
+                    <p className="font-medium text-ink-900 truncate">{load.title}</p>
+                    <p className="text-[12.5px] text-ink-500 truncate mt-0.5">
+                      {load.originAddress} <span className="text-ink-400">→</span> {load.destAddress}
                     </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-sm font-semibold text-primary-600">
-                        {formatCurrency(load.price)}
-                      </span>
-                      <span className="text-xs text-gray-400">{load.weight} kg</span>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="font-mono text-[13px] text-primary-700 tabular-nums">{formatCurrency(load.price)}</span>
+                      <span className="font-mono text-[11px] text-ink-500">{load.weight} kg</span>
                     </div>
                   </Link>
                 ))}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-5 border-b border-gray-100">
-              <h2 className="font-semibold">Mis Viajes Activos</h2>
+          <section className="card overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-ink-200/70">
+              <div>
+                <p className="eyebrow">Tu agenda</p>
+                <h2 className="font-display text-[20px] mt-1">Mis viajes activos</h2>
+              </div>
+              <Link href="/tracking" className="text-[12px] uppercase tracking-[0.16em] text-ink-500 hover:text-primary-700 inline-flex items-center gap-1">
+                Seguimiento <ArrowRight size={12} />
+              </Link>
             </div>
             {tripsLoading ? (
-              <div className="p-10 text-center text-gray-400">Cargando...</div>
+              <div className="p-16 text-center text-ink-400 text-sm">Cargando…</div>
             ) : trips.length === 0 ? (
-              <div className="p-10 text-center text-gray-400">Sin viajes aún</div>
+              <EmptyState text="Sin viajes aún. Aceptá una carga disponible para empezar." />
             ) : (
-              <div className="divide-y divide-gray-50">
-                {trips.slice(0, 5).map((trip: any) => (
+              <div>
+                {trips.slice(0, 5).map((trip: any, i: number) => (
                   <Link
                     key={trip.id}
                     href={`/trips/${trip.id}`}
-                    className="block p-4 hover:bg-gray-50 transition"
+                    className={`flex items-center justify-between gap-3 px-5 py-4 transition hover:bg-surface-sunk/60 ${i !== 0 ? 'border-t border-ink-200/60' : ''}`}
                   >
-                    <p className="font-medium">{trip.load?.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>
-                        {trip.status}
-                      </span>
-                    </div>
+                    <p className="font-medium text-ink-900 truncate flex-1">{trip.load?.title}</p>
+                    <StatusBadge status={trip.status} />
                   </Link>
                 ))}
               </div>
             )}
-          </div>
+          </section>
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="px-8 py-12 text-center">
+      <div className="inline-flex w-10 h-10 rounded-full bg-ink-100 items-center justify-center mb-3">
+        <Inbox size={16} className="text-ink-400" />
+      </div>
+      <p className="text-[13px] text-ink-500">{text}</p>
+    </div>
   );
 }

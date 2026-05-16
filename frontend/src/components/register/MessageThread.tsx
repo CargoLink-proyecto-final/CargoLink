@@ -27,27 +27,17 @@ export default function MessageThread({ tripId, messageCount, enabled }: Props) 
 
   if (!tripId) {
     return (
-      <p className="text-sm text-gray-500 italic">
-        Esta carga no generó conversación.
-      </p>
+      <p className="text-[13px] text-ink-500 italic">Esta carga no generó conversación.</p>
     );
   }
-
   if (messageCount === 0) {
-    return (
-      <p className="text-sm text-gray-500 italic">Sin mensajes intercambiados.</p>
-    );
+    return <p className="text-[13px] text-ink-500 italic">Sin mensajes intercambiados.</p>;
   }
-
   if (!enabled) return null;
-
-  if (isLoading) {
-    return <p className="text-sm text-gray-400">Cargando mensajes…</p>;
-  }
-
+  if (isLoading) return <p className="text-[13px] text-ink-400">Cargando mensajes…</p>;
   if (isError) {
     return (
-      <p className="text-sm text-red-500">
+      <p className="text-[13px] text-danger-600">
         No se pudieron cargar los mensajes: {(error as Error).message}
       </p>
     );
@@ -56,31 +46,26 @@ export default function MessageThread({ tripId, messageCount, enabled }: Props) 
   const messages = data?.messages ?? [];
 
   return (
-    <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+    <div className="space-y-2 max-h-96 overflow-y-auto pr-2 scrollbar-thin">
       {messages.map((m) => {
         const isMine = m.senderId === currentUserId;
         return (
-          <div
-            key={m.id}
-            className={cn('flex flex-col', isMine ? 'items-end' : 'items-start')}
-          >
+          <div key={m.id} className={cn('flex flex-col', isMine ? 'items-end' : 'items-start')}>
             <div
               className={cn(
-                'max-w-[75%] rounded-2xl px-3 py-2 text-sm',
+                'max-w-[78%] rounded-2xl px-3.5 py-2 text-[13px] shadow-card',
                 isMine
-                  ? 'bg-primary-600 text-white rounded-br-sm'
-                  : 'bg-gray-100 text-gray-800 rounded-bl-sm',
+                  ? 'bg-ink-900 text-surface-raised rounded-br-sm'
+                  : 'bg-surface-raised border border-ink-200/70 text-ink-800 rounded-bl-sm',
               )}
             >
-              <p className="text-[11px] opacity-80 mb-0.5">
+              <p className={cn('text-[10px] uppercase tracking-[0.14em] font-medium mb-1',
+                isMine ? 'text-primary-300' : 'text-ink-500')}>
                 {m.sender.firstName} {m.sender.lastName}
               </p>
               <p className="whitespace-pre-wrap break-words">{m.content}</p>
-              <p className="text-[10px] opacity-70 mt-1 text-right">
-                {new Date(m.createdAt).toLocaleString('es-AR', {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                })}
+              <p className={cn('text-[10px] mt-1 text-right font-mono', isMine ? 'text-ink-400' : 'text-ink-400')}>
+                {new Date(m.createdAt).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
               </p>
             </div>
           </div>

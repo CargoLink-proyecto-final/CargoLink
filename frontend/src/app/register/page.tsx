@@ -8,18 +8,20 @@ import { useRegister } from '@/lib/hooks/useRegister';
 import { useAuthStore } from '@/store/auth';
 import type { RegisterFilters } from '@/types/register';
 
-function subtitleFor(role: string | undefined): string {
-  switch (role) {
-    case 'ADMIN':
-      return 'Todas las cargas cerradas del sistema.';
-    case 'CARGO_GENERATOR':
-      return 'Mis cargas entregadas y canceladas.';
-    case 'TRANSPORTER':
-      return 'Cargas que transporté.';
-    default:
-      return '';
-  }
-}
+const ROLE_COPY: Record<string, { eyebrow: string; subtitle: string }> = {
+  ADMIN: {
+    eyebrow: 'Vista de administrador',
+    subtitle: 'Todas las cargas cerradas del sistema — entregadas y canceladas.',
+  },
+  CARGO_GENERATOR: {
+    eyebrow: 'Tu historial',
+    subtitle: 'Cargas que publicaste y ya cerraron — entregadas o canceladas.',
+  },
+  TRANSPORTER: {
+    eyebrow: 'Tu historial',
+    subtitle: 'Viajes que completaste como transportista.',
+  },
+};
 
 export default function RegisterPage() {
   const user = useAuthStore((s) => s.user);
@@ -31,17 +33,18 @@ export default function RegisterPage() {
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 0;
 
-  const handleFiltersChange = (next: RegisterFilters) => {
-    setFilters(next);
-    setPage(1);
-  };
+  const handleFiltersChange = (next: RegisterFilters) => { setFilters(next); setPage(1); };
+  const copy = ROLE_COPY[user?.role ?? 'ADMIN'] ?? ROLE_COPY.ADMIN;
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold">Registro de cargas</h1>
-          <p className="text-sm text-gray-500">{subtitleFor(user?.role)}</p>
+      <div className="space-y-8">
+        <header className="flex flex-col gap-3">
+          <p className="eyebrow">{copy.eyebrow}</p>
+          <h1 className="font-display text-[38px] leading-[1.05]">
+            Registro de <span className="font-semibold text-primary-700">cargas</span>
+          </h1>
+          <p className="text-[14px] text-ink-500 max-w-xl">{copy.subtitle}</p>
         </header>
 
         <RegisterFiltersBar
@@ -59,24 +62,24 @@ export default function RegisterPage() {
         />
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between bg-white rounded-xl border border-gray-100 p-3">
-            <span className="text-sm text-gray-500">
-              Página {data?.page} de {totalPages} ({total} en total)
+          <div className="flex items-center justify-between card px-4 py-3">
+            <span className="text-[12px] text-ink-500 font-mono">
+              Página {data?.page} / {totalPages} · {total} en total
             </span>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50"
+                className="px-3 py-1.5 text-[12px] border border-ink-200 rounded-md hover:bg-surface-sunk disabled:opacity-40"
               >
-                Anterior
+                ← Anterior
               </button>
               <button
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page >= totalPages}
-                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50"
+                className="px-3 py-1.5 text-[12px] border border-ink-200 rounded-md hover:bg-surface-sunk disabled:opacity-40"
               >
-                Siguiente
+                Siguiente →
               </button>
             </div>
           </div>

@@ -26,8 +26,7 @@ export default function RegisterFiltersBar({ filters, onChange, isAdmin, total }
 
   const toggleStatus = (value: RegisterStatus) => {
     const set = new Set(statuses);
-    if (set.has(value)) set.delete(value);
-    else set.add(value);
+    if (set.has(value)) set.delete(value); else set.add(value);
     const next = Array.from(set) as RegisterStatus[];
     onChange({ ...filters, statuses: next.length ? next : undefined });
   };
@@ -41,27 +40,22 @@ export default function RegisterFiltersBar({ filters, onChange, isAdmin, total }
   const handleExport = async () => {
     setExporting(true);
     setExportError(null);
-    try {
-      await exportRegister(filters);
-    } catch (err: any) {
-      setExportError(
-        err?.response?.data?.message || err?.message || 'Falló la exportación',
-      );
-    } finally {
-      setExporting(false);
-    }
+    try { await exportRegister(filters); }
+    catch (err: any) {
+      setExportError(err?.response?.data?.message || err?.message || 'Falló la exportación');
+    } finally { setExporting(false); }
   };
 
   return (
-    <div className="space-y-3 bg-white rounded-xl border border-gray-100 p-4">
+    <div className="card p-4 space-y-4">
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" size={16} />
           <input
             value={filters.q ?? ''}
             onChange={(e) => onChange({ ...filters, q: e.target.value || undefined })}
             placeholder="Buscar por título, tipo, origen o destino…"
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm"
+            className="w-full pl-9 pr-4 py-2 bg-transparent border border-ink-200 rounded-lg text-[14px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
           />
         </div>
         {isAdmin && (
@@ -69,27 +63,27 @@ export default function RegisterFiltersBar({ filters, onChange, isAdmin, total }
             value={filters.participant ?? ''}
             onChange={(e) => onChange({ ...filters, participant: e.target.value || undefined })}
             placeholder="Generador o transportista…"
-            className="lg:w-64 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+            className="lg:w-72 px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
           />
         )}
       </div>
 
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <label className="text-gray-500">Desde</label>
+          <div className="flex items-center gap-2 text-[13px] text-ink-600">
+            <span className="text-[10px] uppercase tracking-[0.14em] text-ink-500">Desde</span>
             <input
               type="date"
               value={filters.from ?? ''}
               onChange={(e) => onChange({ ...filters, from: e.target.value || undefined })}
-              className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary-500"
+              className="px-2.5 py-1.5 border border-ink-200 rounded-md text-[12.5px] font-mono outline-none focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600"
             />
-            <label className="text-gray-500 ml-2">Hasta</label>
+            <span className="text-[10px] uppercase tracking-[0.14em] text-ink-500 ml-2">Hasta</span>
             <input
               type="date"
               value={filters.to ?? ''}
               onChange={(e) => onChange({ ...filters, to: e.target.value || undefined })}
-              className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary-500"
+              className="px-2.5 py-1.5 border border-ink-200 rounded-md text-[12.5px] font-mono outline-none focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600"
             />
           </div>
 
@@ -102,10 +96,10 @@ export default function RegisterFiltersBar({ filters, onChange, isAdmin, total }
                   type="button"
                   onClick={() => toggleStatus(opt.value)}
                   className={cn(
-                    'px-3 py-1.5 rounded-full text-xs font-medium border transition',
+                    'px-3 py-1.5 rounded-full text-[11px] font-medium uppercase tracking-[0.12em] border transition',
                     active
-                      ? 'bg-primary-50 text-primary-700 border-primary-200'
-                      : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50',
+                      ? 'bg-primary-50 text-primary-700 border-primary-600/30'
+                      : 'bg-surface-raised text-ink-500 border-ink-200 hover:bg-surface-sunk',
                   )}
                 >
                   {opt.label}
@@ -118,20 +112,22 @@ export default function RegisterFiltersBar({ filters, onChange, isAdmin, total }
             <button
               type="button"
               onClick={clear}
-              className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+              className="text-[11px] uppercase tracking-wider text-ink-500 hover:text-ink-700 flex items-center gap-1"
             >
-              <X size={14} /> Limpiar
+              <X size={12} /> Limpiar
             </button>
           )}
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500">{total} cargas</span>
+          <span className="text-[11px] uppercase tracking-[0.14em] text-ink-500 font-mono">
+            {total} cargas
+          </span>
           <button
             type="button"
             onClick={handleExport}
             disabled={exporting || total === 0}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 text-white transition"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-[12.5px] bg-ink-900 hover:bg-ink-800 disabled:bg-ink-300 text-surface-raised transition"
           >
             <Download size={14} />
             {exporting ? 'Exportando…' : 'Exportar CSV'}
@@ -140,7 +136,7 @@ export default function RegisterFiltersBar({ filters, onChange, isAdmin, total }
       </div>
 
       {exportError && (
-        <p className="text-xs text-red-500">{exportError}</p>
+        <p className="text-xs text-danger-600">{exportError}</p>
       )}
     </div>
   );
