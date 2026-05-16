@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
+import { ArrowRight, Truck } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
@@ -55,75 +56,142 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-600 to-primary-900 p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary-700">CargoLink</h1>
-          <p className="text-gray-500 mt-2">Iniciá sesión en tu cuenta</p>
-        </div>
+    <div className="min-h-screen bg-surface flex flex-col lg:flex-row">
+      {/* Left — editorial visual side */}
+      <aside className="relative lg:w-[46%] bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 text-surface-raised overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none opacity-40"
+             style={{
+               backgroundImage:
+                 'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), transparent 45%), radial-gradient(circle at 80% 80%, rgba(0,0,0,0.25), transparent 50%)',
+             }}
+        />
+        {/* Hatched cargo lines decoration */}
+        <svg className="absolute right-[-60px] top-[40%] opacity-10" width="320" height="320" viewBox="0 0 320 320">
+          {Array.from({ length: 28 }).map((_, i) => (
+            <line key={i} x1={i * 12} y1="0" x2={i * 12 + 120} y2="320" stroke="white" strokeWidth="1" />
+          ))}
+        </svg>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
-            <p>{error}</p>
-            {unverifiedEmail && (
-              <button
-                type="button"
-                onClick={resendVerification}
-                disabled={resendStatus !== 'idle'}
-                className="mt-2 text-xs font-medium text-red-700 underline disabled:opacity-60"
-              >
-                {resendStatus === 'sending'
-                  ? 'Enviando...'
-                  : resendStatus === 'sent'
-                    ? 'Correo enviado — revisá tu bandeja'
-                    : 'Reenviar correo de verificación'}
-              </button>
-            )}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="relative z-10 h-full flex flex-col justify-between px-10 lg:px-14 py-10 lg:py-14 min-h-[40vh] lg:min-h-screen">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico <span className="text-red-500">*</span></label>
-            <input
-              type="email"
-              {...register('email', { required: 'El correo electrónico es obligatorio' })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-              placeholder="tu@ejemplo.com"
-            />
-            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña <span className="text-red-500">*</span></label>
-            <input
-              type="password"
-              {...register('password', { required: 'La contraseña es obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-              placeholder="Ingresá tu contraseña"
-            />
-            {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
-            <Link href="/auth/forgot-password" className="text-xs text-primary-600 hover:underline float-right mt-1">
-              ¿Olvidaste tu contraseña?
+            <Link href="/" className="inline-flex items-center gap-2">
+              <span className="font-display font-semibold text-[32px] leading-none text-surface-raised tracking-tight">
+                CargoLink
+              </span>
             </Link>
+            <p className="eyebrow mt-3 text-primary-200">Plataforma de transporte terrestre</p>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
-          >
-            {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-          </button>
-        </form>
+          <div className="max-w-md">
+            <p className="font-display font-medium text-[40px] lg:text-[52px] leading-[1.05] text-surface-raised tracking-tight">
+              Mover carga,<br/>
+              <span className="font-semibold text-accent-300">claro como un manifiesto.</span>
+            </p>
+            <p className="mt-6 text-[15px] text-primary-100 leading-relaxed max-w-sm">
+              Conectá generadores y transportistas en una sola vista — publicación, ruta, conversación y entrega.
+            </p>
+          </div>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          ¿No tienes una cuenta?{' '}
-          <Link href="/auth/register" className="text-primary-600 hover:underline font-medium">
-            Registrarse
-          </Link>
-        </p>
-      </div>
+          <div className="flex items-center gap-4 text-[11px] uppercase tracking-[0.22em] text-primary-200">
+            <Truck size={14} className="text-accent-300" />
+            <span>Manifiesto N.º 2026 · {new Date().toLocaleDateString('es-AR')}</span>
+          </div>
+        </div>
+      </aside>
+
+      {/* Right — form */}
+      <section className="flex-1 flex items-center justify-center p-6 lg:p-12">
+        <div className="w-full max-w-md">
+          <div className="mb-8">
+            <p className="eyebrow">Acceso</p>
+            <h1 className="mt-2 font-display text-[34px] leading-tight">
+              Iniciá <span className="font-semibold text-primary-700">sesión</span>
+            </h1>
+            <p className="text-ink-500 mt-2 text-[14px]">
+              Bienvenido de vuelta. Ingresá con tu correo registrado.
+            </p>
+          </div>
+
+          {error && (
+            <div className="bg-danger-50 border border-danger-600/15 text-danger-700 p-3.5 rounded-lg mb-5 text-sm">
+              <p>{error}</p>
+              {unverifiedEmail && (
+                <button
+                  type="button"
+                  onClick={resendVerification}
+                  disabled={resendStatus !== 'idle'}
+                  className="mt-2 text-xs font-medium underline disabled:opacity-60"
+                >
+                  {resendStatus === 'sending'
+                    ? 'Enviando…'
+                    : resendStatus === 'sent'
+                      ? 'Correo enviado — revisá tu bandeja'
+                      : 'Reenviar correo de verificación'}
+                </button>
+              )}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <div>
+              <label className="block text-[12px] font-medium text-ink-700 mb-1.5 tracking-wide">
+                Correo electrónico
+              </label>
+              <input
+                type="email"
+                {...register('email', { required: 'El correo electrónico es obligatorio' })}
+                className="w-full px-4 py-2.5 bg-surface-raised border border-ink-200 rounded-lg text-[14px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
+                placeholder="tu@empresa.com"
+              />
+              {errors.email && <p className="text-danger-600 text-xs mt-1">{errors.email.message}</p>}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[12px] font-medium text-ink-700 tracking-wide">
+                  Contraseña
+                </label>
+                <Link href="/auth/forgot-password" className="text-[11px] text-primary-700 hover:text-primary-800 hover:underline">
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
+              <input
+                type="password"
+                {...register('password', { required: 'La contraseña es obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } })}
+                className="w-full px-4 py-2.5 bg-surface-raised border border-ink-200 rounded-lg text-[14px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
+                placeholder="••••••••"
+              />
+              {errors.password && <p className="text-danger-600 text-xs mt-1">{errors.password.message}</p>}
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="group w-full bg-ink-900 hover:bg-ink-800 text-surface-raised font-medium py-3 rounded-lg transition disabled:opacity-50 inline-flex items-center justify-center gap-2 text-[14px]"
+            >
+              {loading ? 'Iniciando sesión…' : (
+                <>
+                  Iniciar sesión
+                  <ArrowRight size={16} className="transition group-hover:translate-x-0.5" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="my-7 flex items-center gap-3">
+            <div className="flex-1 h-px bg-ink-200" />
+            <span className="text-[10px] uppercase tracking-[0.22em] text-ink-400">o</span>
+            <div className="flex-1 h-px bg-ink-200" />
+          </div>
+
+          <p className="text-center text-sm text-ink-500">
+            ¿Aún no tenés cuenta?{' '}
+            <Link href="/auth/register" className="text-primary-700 hover:text-primary-800 font-medium hover:underline">
+              Creá una nueva
+            </Link>
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

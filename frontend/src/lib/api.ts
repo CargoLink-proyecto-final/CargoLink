@@ -60,6 +60,9 @@ export const loadsApi = {
   getById: (id: string) => api.get(`/loads/${id}`),
   update: (id: string, data: any) => api.patch(`/loads/${id}`, data),
   cancel: (id: string) => api.delete(`/loads/${id}`),
+  getRegister: (params?: any) => api.get('/loads/register', { params }),
+  exportRegister: (params?: any) =>
+    api.get('/loads/register/export', { params, responseType: 'blob' }),
 };
 
 // Trips

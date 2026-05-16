@@ -43,14 +43,14 @@ export class MessagesController {
   }
 
   @Get('trip/:tripId')
-  @ApiOperation({ summary: 'Get messages for a trip' })
+  @ApiOperation({ summary: 'Get messages for a trip (admin can view any trip)' })
   getTripMessages(
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: { id: string; role: string },
     @Param('tripId') tripId: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.messagesService.getTripMessages(tripId, userId, page, limit);
+    return this.messagesService.getTripMessages(tripId, user, page, limit);
   }
 
   @Patch('trip/:tripId/read')
