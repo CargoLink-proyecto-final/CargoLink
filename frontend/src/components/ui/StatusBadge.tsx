@@ -13,6 +13,8 @@ const STATUS_TONES: Record<string, Tone> = {
   ACCEPTED: 'info',
   IN_PROGRESS: 'primary',
   COMPLETED: 'success',
+  REJECTED: 'danger',
+  WITHDRAWN: 'neutral',
 };
 
 const TONE_STYLES: Record<Tone, { dot: string; text: string; ring: string }> = {
