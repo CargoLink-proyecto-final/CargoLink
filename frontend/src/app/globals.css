@@ -3,8 +3,35 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+  :root { color-scheme: light; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  body { @apply bg-surface text-ink-900 antialiased font-sans; }
+
+  h1, h2, h3 {
+    @apply font-display text-ink-900;
+    letter-spacing: -0.02em;
+    font-weight: 500;
   }
+  h1 { font-weight: 500; }
+
+  table, .tabular, .tabular-nums { font-variant-numeric: tabular-nums; }
 }
 
+@layer components {
+  .eyebrow {
+    @apply text-[11px] font-medium uppercase text-ink-500;
+    letter-spacing: 0.18em;
+  }
+
+  .rule { @apply h-px w-full bg-ink-200/70; }
+
+  .card { @apply bg-surface-raised border border-ink-200/70 rounded-card shadow-card; }
+  .card-divider { @apply border-t border-ink-200/70; }
+}
+
+@layer utilities {
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: theme('colors.ink.300') transparent; }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: theme('colors.ink.300'); border-radius: 3px; }
+}

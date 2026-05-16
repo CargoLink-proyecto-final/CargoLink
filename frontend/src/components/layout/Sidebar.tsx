@@ -16,6 +16,7 @@ import {
   LogOut,
   Menu,
   X,
+  ClipboardList,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,12 +27,14 @@ const navItems = {
     { href: '/loads/new', label: 'Nueva Carga', icon: Truck },
     { href: '/tracking', label: 'Seguimiento', icon: MapPin },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
+    { href: '/register', label: 'Registro', icon: ClipboardList },
   ],
   TRANSPORTER: [
     { href: '/dashboard/carrier', label: 'Panel', icon: LayoutDashboard },
     { href: '/loads', label: 'Cargas Disponibles', icon: Package },
     { href: '/tracking', label: 'Mis Viajes', icon: Truck },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
+    { href: '/register', label: 'Registro', icon: ClipboardList },
   ],
   ADMIN: [
     { href: '/dashboard/admin', label: 'Panel', icon: LayoutDashboard },
@@ -39,7 +42,14 @@ const navItems = {
     { href: '/tracking', label: 'Seguimiento', icon: MapPin },
     { href: '/users', label: 'Usuarios', icon: Users },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
+    { href: '/register', label: 'Registro', icon: ClipboardList },
   ],
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  CARGO_GENERATOR: 'Generador de carga',
+  TRANSPORTER: 'Transportista',
+  ADMIN: 'Administrador',
 };
 
 export default function Sidebar() {
@@ -65,23 +75,21 @@ function SidebarContent({ user }: { user: AuthUser }) {
   });
 
   const unreadCount = unreadData?.unreadCount || 0;
-
   const items = navItems[user.role] || [];
-
-  const handleLogout = () => {
-    logout();
-    router.push('/auth/login');
-  };
+  const handleLogout = () => { logout(); router.push('/auth/login'); };
+  const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || '·';
 
   return (
     <>
+      {/* Mobile burger */}
       <button
-        className="lg:hidden fixed top-4 left-4 z-50 bg-white p-2 rounded-lg shadow-md"
+        className="lg:hidden fixed top-4 left-4 z-50 bg-ink-900 text-surface-raised p-2.5 rounded-lg shadow-raised"
         onClick={() => setOpen(!open)}
+        aria-label="Toggle navigation"
       >
-        {open ? <X size={20} /> : <Menu size={20} />}
+        {open ? <X size={18} /> : <Menu size={18} />}
         {!open && unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+          <span className="absolute -top-1 -right-1 bg-primary-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -89,17 +97,28 @@ function SidebarContent({ user }: { user: AuthUser }) {
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 w-64 bg-ink-900 text-ink-200 transform transition-transform lg:translate-x-0',
+          'border-r border-ink-800',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex flex-col h-full">
-          <div className="p-6 border-b border-gray-100">
-            <h1 className="text-2xl font-bold text-primary-700">CargoLink</h1>
-            <p className="text-xs text-gray-400 mt-1">Panel {user.role === 'CARGO_GENERATOR' ? 'GENERADOR DE CARGA' : user.role === 'TRANSPORTER' ? 'TRANSPORTISTA' : 'ADMINISTRADOR'}</p>
+        <div className="relative flex flex-col h-full z-10">
+          {/* Brand */}
+          <div className="px-6 pt-7 pb-6">
+            <Link href="/" className="block group">
+              <span className="font-display font-semibold text-[26px] leading-none text-surface-raised tracking-tight">
+                Cargo<span className="text-primary-400">Link</span>
+              </span>
+              <span className="block mt-2 text-[10px] uppercase tracking-[0.22em] text-ink-400">
+                {ROLE_LABEL[user.role] ?? user.role}
+              </span>
+            </Link>
           </div>
 
-          <nav className="flex-1 p-4 space-y-1">
+          <div className="h-px mx-6 bg-ink-800" />
+
+          {/* Nav */}
+          <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto scrollbar-thin">
             {items.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
@@ -110,16 +129,19 @@ function SidebarContent({ user }: { user: AuthUser }) {
                   href={item.href}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition relative',
+                    'relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition group',
                     active
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                      ? 'bg-ink-800/70 text-surface-raised'
+                      : 'text-ink-300 hover:text-surface-raised hover:bg-ink-800/40',
                   )}
                 >
-                  <Icon size={18} />
-                  {item.label}
+                  {active && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary-500" aria-hidden />
+                  )}
+                  <Icon size={16} className={cn('shrink-0 transition', active ? 'text-primary-400' : 'text-ink-400 group-hover:text-ink-200')} />
+                  <span className="flex-1">{item.label}</span>
                   {isMessages && unreadCount > 0 && (
-                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    <span className="bg-primary-500 text-white text-[10px] font-semibold rounded-full min-w-[20px] h-[18px] flex items-center justify-center px-1.5 tabular-nums">
                       {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                   )}
@@ -128,29 +150,32 @@ function SidebarContent({ user }: { user: AuthUser }) {
             })}
           </nav>
 
-          <div className="p-4 border-t border-gray-100">
-            <div className="flex items-center gap-3 px-4 py-2 mb-2">
-              <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-medium text-sm">
-                {user.firstName[0]}
+          {/* User block */}
+          <div className="px-3 pb-4 pt-3 border-t border-ink-800">
+            <div className="flex items-center gap-3 px-3 py-2.5">
+              <div className="w-9 h-9 rounded-full bg-primary-500/15 text-primary-300 flex items-center justify-center text-[12px] font-semibold font-mono ring-1 ring-primary-500/30">
+                {initials}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user.firstName} {user.lastName}</p>
-                <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                <p className="text-sm font-medium text-surface-raised truncate">
+                  {user.firstName} {user.lastName}
+                </p>
+                <p className="text-[11px] font-mono text-ink-400 truncate">{user.email}</p>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-red-50 hover:text-red-600 w-full transition"
+              className="mt-1 flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-ink-300 hover:bg-danger-600/10 hover:text-danger-600 w-full transition"
             >
-              <LogOut size={18} />
-              Cerrar Sesión
+              <LogOut size={15} />
+              Cerrar sesión
             </button>
           </div>
         </div>
       </aside>
 
       {open && (
-        <div className="fixed inset-0 bg-black/20 z-30 lg:hidden" onClick={() => setOpen(false)} />
+        <div className="fixed inset-0 bg-ink-900/40 backdrop-blur-sm z-30 lg:hidden" onClick={() => setOpen(false)} />
       )}
     </>
   );

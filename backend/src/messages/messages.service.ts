@@ -32,8 +32,18 @@ export class MessagesService {
     });
   }
 
-  async getTripMessages(tripId: string, userId: string, page?: number, limit?: number) {
-    await this.validateTripParticipant(tripId, userId);
+  async getTripMessages(
+    tripId: string,
+    user: { id: string; role: string },
+    page?: number,
+    limit?: number,
+  ) {
+    if (user.role !== 'ADMIN') {
+      await this.validateTripParticipant(tripId, user.id);
+    } else {
+      const exists = await this.prisma.trip.findUnique({ where: { id: tripId }, select: { id: true } });
+      if (!exists) throw new NotFoundException('Viaje no encontrado');
+    }
 
     const p = Math.max(1, Number(page) || 1);
     const l = Math.max(1, Number(limit) || 50);

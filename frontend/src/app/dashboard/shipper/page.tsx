@@ -2,9 +2,11 @@
 
 import { useQuery } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import StatCard from '@/components/ui/StatCard';
+import StatusBadge from '@/components/ui/StatusBadge';
 import { loadsApi } from '@/lib/api';
-import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils';
-import { Package, TrendingUp, Clock, CheckCircle } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+import { Package, TrendingUp, Clock, CheckCircle, Plus, ArrowRight, Inbox } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ShipperDashboard() {
@@ -23,74 +25,88 @@ export default function ShipperDashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Panel del Generador de Carga</h1>
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+          <div>
+            <p className="eyebrow">Panel del generador</p>
+            <h1 className="mt-2 font-display text-[38px] leading-[1.05]">
+              Tu <span className="font-semibold text-primary-700">operación</span> de hoy
+            </h1>
+          </div>
           <Link
             href="/loads/new"
-            className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+            className="inline-flex items-center gap-2 bg-ink-900 hover:bg-ink-800 text-surface-raised px-4 py-2.5 rounded-lg text-[13.5px] font-medium transition shadow-card"
           >
-            + Nueva Carga
+            <Plus size={15} /> Nueva carga
           </Link>
         </div>
 
+        {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: 'Total de Cargas', value: stats.total, icon: Package, color: 'text-blue-600 bg-blue-50' },
-            { label: 'Publicadas', value: stats.published, icon: TrendingUp, color: 'text-green-600 bg-green-50' },
-            { label: 'En Tránsito', value: stats.inTransit, icon: Clock, color: 'text-orange-600 bg-orange-50' },
-            { label: 'Entregadas', value: stats.delivered, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-lg ${stat.color}`}>
-                  <stat.icon size={20} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className="text-sm text-gray-500">{stat.label}</p>
-                </div>
-              </div>
-            </div>
-          ))}
+          <StatCard label="Total publicadas" value={stats.total} icon={Package} tone="ink" />
+          <StatCard label="Esperando transportista" value={stats.published} icon={TrendingUp} tone="info" />
+          <StatCard label="En tránsito" value={stats.inTransit} icon={Clock} tone="primary" />
+          <StatCard label="Entregadas" value={stats.delivered} icon={CheckCircle} tone="success" />
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-5 border-b border-gray-100">
-            <h2 className="font-semibold">Cargas Recientes</h2>
+        {/* Recent loads */}
+        <section className="card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-ink-200/70">
+            <div>
+              <p className="eyebrow">Últimas 10</p>
+              <h2 className="font-display text-[20px] mt-1">Cargas recientes</h2>
+            </div>
+            <Link href="/loads" className="text-[12px] uppercase tracking-[0.16em] text-ink-500 hover:text-primary-700 transition inline-flex items-center gap-1">
+              Ver todas <ArrowRight size={12} />
+            </Link>
           </div>
           {isLoading ? (
-            <div className="p-10 text-center text-gray-400">Cargando...</div>
+            <div className="p-16 text-center text-ink-400 text-sm">Cargando…</div>
           ) : loads.length === 0 ? (
-            <div className="p-10 text-center text-gray-400">
-              Sin cargas aún. ¡Crea tu primera carga!
-            </div>
+            <EmptyShipper />
           ) : (
-            <div className="divide-y divide-gray-50">
-              {loads.slice(0, 10).map((load: any) => (
+            <div>
+              {loads.slice(0, 10).map((load: any, i: number) => (
                 <Link
                   key={load.id}
                   href={`/loads/${load.id}`}
-                  className="flex items-center justify-between p-4 hover:bg-gray-50 transition"
+                  className={`group flex items-center justify-between gap-4 px-5 py-3.5 transition hover:bg-surface-sunk/60 ${i !== 0 ? 'border-t border-ink-200/60' : ''}`}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{load.title}</p>
-                    <p className="text-sm text-gray-500 truncate">
-                      {load.originAddress} → {load.destAddress}
+                    <p className="font-medium text-ink-900 group-hover:text-primary-700 transition truncate">{load.title}</p>
+                    <p className="text-[12.5px] text-ink-500 truncate mt-0.5">
+                      {load.originAddress} <span className="text-ink-400">→</span> {load.destAddress}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 ml-4">
-                    <span className="text-sm font-medium">{formatCurrency(load.price)}</span>
-                    <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(load.status)}`}>
-                      {load.status}
-                    </span>
+                  <div className="flex items-center gap-4 shrink-0">
+                    <span className="font-mono text-[13px] tabular-nums text-ink-700">{formatCurrency(load.price)}</span>
+                    <StatusBadge status={load.status} />
                   </div>
                 </Link>
               ))}
             </div>
           )}
-        </div>
+        </section>
       </div>
     </DashboardLayout>
+  );
+}
+
+function EmptyShipper() {
+  return (
+    <div className="px-10 py-16 text-center">
+      <div className="inline-flex w-12 h-12 rounded-full bg-ink-100 items-center justify-center mb-4">
+        <Inbox size={18} className="text-ink-400" />
+      </div>
+      <p className="font-display text-[20px] text-ink-800">Aún no publicaste cargas</p>
+      <p className="mt-1 text-[13px] text-ink-500">Creá tu primera carga para que los transportistas la vean.</p>
+      <Link
+        href="/loads/new"
+        className="inline-flex items-center gap-2 mt-5 bg-primary-600 hover:bg-primary-700 text-surface-raised px-4 py-2 rounded-lg text-[13px] transition"
+      >
+        <Plus size={14} /> Crear primera carga
+      </Link>
+    </div>
   );
 }

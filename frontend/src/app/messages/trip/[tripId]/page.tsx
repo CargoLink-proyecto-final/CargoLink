@@ -43,12 +43,15 @@ export default function TripConversationPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const isAdmin = user?.role === 'ADMIN';
+
   useEffect(() => {
+    if (isAdmin) return;
     messagesApi.markAsRead(tripId).then(() => {
       queryClient.invalidateQueries({ queryKey: ['unreadCount'] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     });
-  }, [tripId, queryClient]);
+  }, [tripId, queryClient, isAdmin]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +99,10 @@ export default function TripConversationPage() {
             </p>
           )}
           {messages.map((msg: any) => {
-            const isMe = msg.senderId === user?.id;
+            const isMe = !isAdmin && msg.senderId === user?.id;
+            const senderName = msg.sender
+              ? `${msg.sender.firstName ?? ''} ${msg.sender.lastName ?? ''}`.trim()
+              : 'Desconocido';
             return (
               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <div
@@ -106,7 +112,10 @@ export default function TripConversationPage() {
                       : 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
                   }`}
                 >
-                  {msg.content}
+                  <p className={`text-[11px] font-medium mb-1 ${isMe ? 'text-primary-100' : 'text-gray-500'}`}>
+                    {senderName}
+                  </p>
+                  <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                   <div className={`text-[10px] mt-1 ${isMe ? 'text-primary-200' : 'text-gray-400'}`}>
                     {new Date(msg.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                   </div>
@@ -117,25 +126,31 @@ export default function TripConversationPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <form
-          onSubmit={handleSend}
-          className="bg-white rounded-b-xl shadow-sm border border-gray-100 p-4 flex gap-2"
-        >
-          <input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-            placeholder="Escribe un mensaje..."
-          />
-          <button
-            type="submit"
-            disabled={!message.trim() || sendMutation.isPending}
-            className="bg-primary-600 hover:bg-primary-700 text-white p-2.5 rounded-lg transition disabled:opacity-50"
+        {/* Input — hidden for admin (read-only oversight) */}
+        {isAdmin ? (
+          <div className="bg-gray-50 rounded-b-xl border border-t-0 border-gray-100 px-4 py-3 text-center text-xs text-gray-500 italic">
+            Vista de solo lectura — los administradores no participan en la conversación.
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSend}
+            className="bg-white rounded-b-xl shadow-sm border border-gray-100 p-4 flex gap-2"
           >
-            <Send size={18} />
-          </button>
-        </form>
+            <input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              placeholder="Escribe un mensaje..."
+            />
+            <button
+              type="submit"
+              disabled={!message.trim() || sendMutation.isPending}
+              className="bg-primary-600 hover:bg-primary-700 text-white p-2.5 rounded-lg transition disabled:opacity-50"
+            >
+              <Send size={18} />
+            </button>
+          </form>
+        )}
       </div>
     </DashboardLayout>
   );
