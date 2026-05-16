@@ -46,26 +46,44 @@ async function main() {
     },
   });
 
-  const load = await prisma.load.create({
-    data: {
-      shipperId: shipper.id,
-      title: 'Electrónica a Córdoba',
-      description: 'Carga frágil de componentes electrónicos',
-      originAddress: 'Av. Corrientes 1234, CABA',
-      originLat: -34.6037,
-      originLng: -58.3816,
-      destAddress: 'Av. Colón 567, Córdoba',
-      destLat: -31.4201,
-      destLng: -64.1888,
-      cargoType: 'Electrónica',
-      weight: 2500,
-      volume: 8.5,
-      pickupDate: new Date('2024-03-01T08:00:00Z'),
-      price: 250000,
-    },
+  const SEED_LOAD_TITLE = 'Electrónica a Córdoba';
+  const existing = await prisma.load.findFirst({
+    where: { shipperId: shipper.id, title: SEED_LOAD_TITLE },
   });
 
-  console.log('Datos de seed creados:', { admin: admin.email, shipper: shipper.email, carrier: carrier.email, load: load.id });
+  const now = new Date();
+  const pickup = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+  const delivery = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const load = existing
+    ? existing
+    : await prisma.load.create({
+        data: {
+          shipperId: shipper.id,
+          title: SEED_LOAD_TITLE,
+          description: 'Carga frágil de componentes electrónicos',
+          originAddress: 'Av. Corrientes 1234, CABA',
+          originLat: -34.6037,
+          originLng: -58.3816,
+          destAddress: 'Av. Colón 567, Córdoba',
+          destLat: -31.4201,
+          destLng: -64.1888,
+          cargoType: 'Electrónica',
+          weight: 2500,
+          volume: 8.5,
+          pickupDate: pickup,
+          deliveryDate: delivery,
+          price: 250000,
+        },
+      });
+
+  console.log('Datos de seed listos:', {
+    admin: admin.email,
+    shipper: shipper.email,
+    carrier: carrier.email,
+    load: load.id,
+    reused: !!existing,
+  });
 }
 
 main()

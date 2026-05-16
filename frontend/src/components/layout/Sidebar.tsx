@@ -16,6 +16,7 @@ import {
   LogOut,
   Menu,
   X,
+  ClipboardList,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,12 +27,14 @@ const navItems = {
     { href: '/loads/new', label: 'Nueva Carga', icon: Truck },
     { href: '/tracking', label: 'Seguimiento', icon: MapPin },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
+    { href: '/register', label: 'Registro', icon: ClipboardList },
   ],
   TRANSPORTER: [
     { href: '/dashboard/carrier', label: 'Panel', icon: LayoutDashboard },
     { href: '/loads', label: 'Cargas Disponibles', icon: Package },
     { href: '/tracking', label: 'Mis Viajes', icon: Truck },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
+    { href: '/register', label: 'Registro', icon: ClipboardList },
   ],
   ADMIN: [
     { href: '/dashboard/admin', label: 'Panel', icon: LayoutDashboard },
@@ -39,6 +42,7 @@ const navItems = {
     { href: '/tracking', label: 'Seguimiento', icon: MapPin },
     { href: '/users', label: 'Usuarios', icon: Users },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
+    { href: '/register', label: 'Registro', icon: ClipboardList },
   ],
 };
 
