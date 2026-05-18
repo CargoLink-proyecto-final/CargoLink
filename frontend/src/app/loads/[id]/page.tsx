@@ -1,24 +1,37 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { loadsApi, tripsApi } from '@/lib/api';
+import { loadsApi, postulationsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useRoute } from '@/lib/useRoute';
 import Link from 'next/link';
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils';
-import { MapPin, Package, Calendar, DollarSign, User, Truck, MessageSquare } from 'lucide-react';
+import {
+  MapPin,
+  Package,
+  Calendar,
+  User,
+  Truck,
+  MessageSquare,
+  Hand,
+} from 'lucide-react';
+import PostulationsPanel from '@/components/postulations/PostulationsPanel';
+import PostulateModal from '@/components/postulations/PostulateModal';
+import StatusBadge from '@/components/ui/StatusBadge';
+import type { PostulationWithLoad } from '@/types';
 
 const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
 
 export default function LoadDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const id = params.id as string;
+  const [showPostulateModal, setShowPostulateModal] = useState(false);
 
   const { data: load, isLoading } = useQuery({
     queryKey: ['load', id],
@@ -32,11 +45,38 @@ export default function LoadDetailPage() {
     load?.destLng,
   );
 
-  const acceptMutation = useMutation({
-    mutationFn: () => tripsApi.accept(id),
+  const isTransporter = user?.role === 'TRANSPORTER';
+  const isOwner =
+    user?.role === 'CARGO_GENERATOR' && load?.shipperId === user.id;
+
+  const { data: myPostulation } = useQuery({
+    queryKey: ['my-postulation', id, user?.id],
+    queryFn: () =>
+      postulationsApi
+        .getMy()
+        .then(
+          (r) =>
+            (r.data as PostulationWithLoad[]).find((p) => p.loadId === id) ?? null,
+        ),
+    enabled: !!user && isTransporter,
+  });
+
+  const postulateMutation = useMutation({
+    mutationFn: (payload: { message?: string; proposedPrice?: number }) =>
+      postulationsApi.create(id, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['load', id] });
-      router.push('/dashboard/carrier');
+      queryClient.invalidateQueries({ queryKey: ['my-postulation', id, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['postulations', id] });
+      setShowPostulateModal(false);
+    },
+  });
+
+  const withdrawMutation = useMutation({
+    mutationFn: (postulationId: string) =>
+      postulationsApi.withdraw(postulationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-postulation', id, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['postulations', id] });
     },
   });
 
@@ -65,6 +105,13 @@ export default function LoadDetailPage() {
     );
   }
 
+  const canPostulate =
+    isTransporter && load.status === 'PUBLISHED' && !myPostulation;
+  const canWithdraw =
+    isTransporter &&
+    load.status === 'PUBLISHED' &&
+    myPostulation?.status === 'PENDING';
+
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto space-y-6">
@@ -76,16 +123,23 @@ export default function LoadDetailPage() {
             </span>
           </div>
           <div className="flex gap-2">
-            {user?.role === 'TRANSPORTER' && load.status === 'PUBLISHED' && (
+            {canPostulate && (
               <button
-                onClick={() => acceptMutation.mutate()}
-                disabled={acceptMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                onClick={() => setShowPostulateModal(true)}
+                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
               >
-                {acceptMutation.isPending ? 'Aceptando...' : 'Aceptar Carga'}
+                Postularme
               </button>
             )}
-            {user?.role === 'CARGO_GENERATOR' && load.shipperId === user.id && load.status === 'PUBLISHED' && (
+            {isTransporter && load.trip && load.trip.carrierId === user?.id && (
+              <Link
+                href={`/trips/${load.trip.id}`}
+                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1"
+              >
+                <Truck size={16} /> Ir al viaje
+              </Link>
+            )}
+            {isOwner && load.status === 'PUBLISHED' && (
               <>
                 <Link
                   href={`/loads/${id}/edit`}
@@ -112,6 +166,62 @@ export default function LoadDetailPage() {
             )}
           </div>
         </div>
+
+        {isOwner && (load.pendingPostulationsCount ?? 0) > 0 && load.status === 'PUBLISHED' && (
+          <div className="card p-4 flex items-center justify-between bg-primary-50 border-primary-200">
+            <div className="flex items-center gap-2 text-primary-800">
+              <Hand size={18} />
+              <span className="font-medium">
+                Tenés {load.pendingPostulationsCount} postulaci
+                {load.pendingPostulationsCount === 1 ? 'ón' : 'ones'} pendiente
+                {load.pendingPostulationsCount === 1 ? '' : 's'} para revisar.
+              </span>
+            </div>
+            <a href="#postulaciones" className="text-sm font-medium text-primary-700 hover:text-primary-800">
+              Ver abajo ↓
+            </a>
+          </div>
+        )}
+
+        {isTransporter && myPostulation?.status === 'ACCEPTED' && load.trip && load.trip.status === 'ACCEPTED' && (
+          <div className="card p-4 flex items-center justify-between bg-success-50 border-success-200">
+            <div className="flex items-center gap-2 text-success-800">
+              <Truck size={18} />
+              <span className="font-medium">
+                Tu postulación fue aceptada. Marcá la carga como recogida para iniciar el viaje.
+              </span>
+            </div>
+            <Link
+              href={`/trips/${load.trip.id}`}
+              className="text-sm font-medium text-success-700 hover:text-success-800"
+            >
+              Ir al viaje →
+            </Link>
+          </div>
+        )}
+
+        {isTransporter && myPostulation && (
+          <div className="card p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-ink-600">Tu postulación:</span>
+              <StatusBadge status={myPostulation.status} />
+              {myPostulation.proposedPrice != null && (
+                <span className="text-sm text-ink-600">
+                  Propusiste {formatCurrency(myPostulation.proposedPrice)}
+                </span>
+              )}
+            </div>
+            {canWithdraw && (
+              <button
+                onClick={() => withdrawMutation.mutate(myPostulation.id)}
+                disabled={withdrawMutation.isPending}
+                className="text-sm font-medium text-danger-700 hover:text-danger-800 disabled:opacity-50"
+              >
+                {withdrawMutation.isPending ? 'Retirando...' : 'Retirar postulación'}
+              </button>
+            )}
+          </div>
+        )}
 
         {load.originLat && load.destLat && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ height: '300px', zIndex: 1 }}>
@@ -179,7 +289,26 @@ export default function LoadDetailPage() {
             )}
           </div>
         </div>
+
+        {isOwner && (
+          <div id="postulaciones">
+            <PostulationsPanel
+              loadId={id}
+              listedPrice={load.price}
+              canAccept={load.status === 'PUBLISHED'}
+            />
+          </div>
+        )}
       </div>
+
+      {showPostulateModal && (
+        <PostulateModal
+          listedPrice={load.price}
+          submitting={postulateMutation.isPending}
+          onClose={() => setShowPostulateModal(false)}
+          onSubmit={(payload) => postulateMutation.mutate(payload)}
+        />
+      )}
     </DashboardLayout>
   );
 }

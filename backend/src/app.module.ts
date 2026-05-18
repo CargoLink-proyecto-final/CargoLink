@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { LoadsModule } from './loads/loads.module';
 import { TripsModule } from './trips/trips.module';
+import { PostulationsModule } from './postulations/postulations.module';
 import { MessagesModule } from './messages/messages.module';
 import { RatingsModule } from './ratings/ratings.module';
 
@@ -16,6 +17,7 @@ import { RatingsModule } from './ratings/ratings.module';
     UsersModule,
     LoadsModule,
     TripsModule,
+    PostulationsModule,
     MessagesModule,
     RatingsModule,
   ],

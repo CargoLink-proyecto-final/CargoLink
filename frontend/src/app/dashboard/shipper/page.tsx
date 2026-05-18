@@ -6,7 +6,7 @@ import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { loadsApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { Package, TrendingUp, Clock, CheckCircle, Plus, ArrowRight, Inbox } from 'lucide-react';
+import { Package, TrendingUp, Clock, CheckCircle, Plus, ArrowRight, Inbox, Hand } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ShipperDashboard() {
@@ -80,6 +80,11 @@ export default function ShipperDashboard() {
                     </p>
                   </div>
                   <div className="flex items-center gap-4 shrink-0">
+                    {load.pendingPostulationsCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[12px] font-medium text-primary-700 bg-primary-100 px-2 py-0.5 rounded-full">
+                        <Hand size={12} /> {load.pendingPostulationsCount} postulaci{load.pendingPostulationsCount === 1 ? 'ón' : 'ones'}
+                      </span>
+                    )}
                     <span className="font-mono text-[13px] tabular-nums text-ink-700">{formatCurrency(load.price)}</span>
                     <StatusBadge status={load.status} />
                   </div>

@@ -47,6 +47,8 @@ export function getStatusLabel(status: string): string {
     ASSIGNED: 'Asignado',
     ACCEPTED: 'Aceptado',
     IN_PROGRESS: 'En Progreso',
+    REJECTED: 'Rechazada',
+    WITHDRAWN: 'Retirada',
   };
   return labels[status] || status;
 }

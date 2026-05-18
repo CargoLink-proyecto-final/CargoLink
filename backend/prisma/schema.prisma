@@ -29,6 +29,13 @@ enum TripStatus {
   CANCELLED
 }
 
+enum PostulationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
 model User {
   id            String   @id @default(uuid())
   email         String   @unique
@@ -53,6 +60,9 @@ model User {
 
   // Carrier relations
   trips         Trip[]   @relation("CarrierTrips")
+
+  // Postulations submitted as a transporter
+  postulations  Postulation[] @relation("TransporterPostulations")
 
   // Messages
   sentMessages     Message[] @relation("SentMessages")
@@ -89,6 +99,7 @@ model Load {
   updatedAt     DateTime   @updatedAt @map("updated_at")
 
   trip          Trip?
+  postulations  Postulation[]
 
   @@index([shipperId])
   @@index([status])
@@ -96,6 +107,24 @@ model Load {
   @@index([originLat, originLng])
   @@index([destLat, destLng])
   @@map("loads")
+}
+
+model Postulation {
+  id             String            @id @default(uuid())
+  loadId         String            @map("load_id")
+  load           Load              @relation(fields: [loadId], references: [id])
+  transporterId  String            @map("transporter_id")
+  transporter    User              @relation("TransporterPostulations", fields: [transporterId], references: [id])
+  message        String?
+  proposedPrice  Float?            @map("proposed_price")
+  status         PostulationStatus @default(PENDING)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  @@unique([loadId, transporterId])
+  @@index([loadId, status])
+  @@index([transporterId])
+  @@map("postulations")
 }
 
 model Trip {

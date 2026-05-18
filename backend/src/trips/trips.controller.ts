@@ -25,8 +25,11 @@ export class TripsController {
 
   @Post('accept/:loadId')
   @UseGuards(RolesGuard)
-  @Roles('TRANSPORTER')
-  @ApiOperation({ summary: 'Accept a load and create a trip (Carrier only)' })
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary:
+      'Force-accept a load (admin override — bypasses postulation flow)',
+  })
   acceptLoad(
     @CurrentUser('id') userId: string,
     @Param('loadId') loadId: string,
