@@ -92,13 +92,21 @@ export class LoadsService {
         include: {
           shipper: { select: { id: true, firstName: true, lastName: true, companyName: true } },
           trip: { select: { id: true, status: true, carrierId: true } },
+          _count: {
+            select: { postulations: { where: { status: 'PENDING' } } },
+          },
         },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.load.count({ where }),
     ]);
 
-    return { loads, total, page, limit, totalPages: Math.ceil(total / limit) };
+    const shaped = loads.map(({ _count, ...rest }) => ({
+      ...rest,
+      pendingPostulationsCount: _count?.postulations ?? 0,
+    }));
+
+    return { loads: shaped, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   async findAvailable(params?: { page?: number; limit?: number }) {
@@ -115,10 +123,17 @@ export class LoadsService {
             carrier: { select: { id: true, firstName: true, lastName: true, companyName: true, phone: true } },
           },
         },
+        _count: {
+          select: { postulations: { where: { status: 'PENDING' } } },
+        },
       },
     });
     if (!load) throw new NotFoundException('Carga no encontrada');
-    return load;
+    const { _count, ...rest } = load;
+    return {
+      ...rest,
+      pendingPostulationsCount: _count?.postulations ?? 0,
+    };
   }
 
   async update(id: string, userId: string, dto: UpdateLoadDto) {

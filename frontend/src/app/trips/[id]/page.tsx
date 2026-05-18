@@ -158,7 +158,7 @@ export default function TripDetailPage() {
                 disabled={startMutation.isPending}
                 className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
               >
-                Iniciar Viaje
+                Marcar como recogida e iniciar
               </button>
             )}
             {user?.role === 'TRANSPORTER' && trip.carrierId === user.id && trip.status === 'IN_PROGRESS' && (

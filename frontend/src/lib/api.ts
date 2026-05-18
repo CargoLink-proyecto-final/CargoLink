@@ -94,3 +94,13 @@ export const ratingsApi = {
     api.post('/ratings', data),
   getUserRatings: (userId: string) => api.get(`/ratings/user/${userId}`),
 };
+
+// Postulations
+export const postulationsApi = {
+  create: (loadId: string, data: { message?: string; proposedPrice?: number }) =>
+    api.post(`/loads/${loadId}/postulations`, data),
+  getForLoad: (loadId: string) => api.get(`/loads/${loadId}/postulations`),
+  getMy: (params?: { status?: string }) => api.get('/postulations/my', { params }),
+  accept: (postulationId: string) => api.post(`/postulations/${postulationId}/accept`),
+  withdraw: (postulationId: string) => api.delete(`/postulations/${postulationId}`),
+};

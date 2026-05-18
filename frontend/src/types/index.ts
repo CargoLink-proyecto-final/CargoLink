@@ -2,6 +2,7 @@ export type Role = 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN';
 
 export type LoadStatus = 'PUBLISHED' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type TripStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+export type PostulationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
 
 export interface User {
   id: string;
@@ -36,6 +37,7 @@ export interface Load {
   price: number;
   status: LoadStatus;
   trip?: Trip;
+  pendingPostulationsCount?: number;
   createdAt: string;
 }
 
@@ -75,6 +77,30 @@ export interface Rating {
   score: number;
   comment?: string;
   createdAt: string;
+}
+
+export interface Postulation {
+  id: string;
+  loadId: string;
+  transporterId: string;
+  message?: string | null;
+  proposedPrice?: number | null;
+  status: PostulationStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PostulationWithTransporter extends Postulation {
+  transporter: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'companyName' | 'avatarUrl'>;
+  averageRating: number;
+  totalRatings: number;
+}
+
+export interface PostulationWithLoad extends Postulation {
+  load: Pick<Load, 'id' | 'title' | 'status' | 'originAddress' | 'destAddress' | 'pickupDate' | 'price'> & {
+    shipper: Pick<User, 'id' | 'firstName' | 'lastName' | 'companyName'>;
+    trip?: { id: string } | null;
+  };
 }
 
 export interface PaginatedResponse<T> {
