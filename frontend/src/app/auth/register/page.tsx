@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
+import { Eye, EyeOff } from 'lucide-react';
 import { authApi } from '@/lib/api';
 
 interface RegisterForm {
   email: string;
   password: string;
+  confirmPassword: string;
   firstName: string;
   lastName: string;
   phone: string;
@@ -20,18 +22,22 @@ export default function RegisterPage() {
   const router = useRouter();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterForm>({
     defaultValues: { role: 'CARGO_GENERATOR' },
   });
 
   const selectedRole = watch('role');
+  const passwordValue = watch('password');
 
   const onSubmit = async (data: RegisterForm) => {
     setError('');
     setLoading(true);
     try {
-      await authApi.register(data);
+      const { confirmPassword: _, ...submitData } = data;
+      await authApi.register(submitData);
       router.push(`/auth/check-email?email=${encodeURIComponent(data.email)}`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error en el registro');
@@ -68,7 +74,10 @@ export default function RegisterPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <span className="text-red-500">*</span></label>
               <input
-                {...register('firstName', { required: 'Obligatorio' })}
+                {...register('firstName', {
+                required: 'Obligatorio',
+                pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
+              })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
               />
               {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
@@ -76,7 +85,10 @@ export default function RegisterPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Apellido <span className="text-red-500">*</span></label>
               <input
-                {...register('lastName', { required: 'Obligatorio' })}
+                {...register('lastName', {
+                required: 'Obligatorio',
+                pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
+              })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
               />
               {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
@@ -95,18 +107,59 @@ export default function RegisterPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña <span className="text-red-500">*</span></label>
-            <input
-              type="password"
-              {...register('password', { required: 'La contraseña es obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                {...register('password', { required: 'La contraseña es obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } })}
+                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Repetir contraseña <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                {...register('confirmPassword', {
+                  required: 'Repetí la contraseña',
+                  validate: (value) => value === passwordValue || 'Las contraseñas no coinciden',
+                })}
+                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword.message}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono <span className="text-red-500">*</span></label>
             <input
-              {...register('phone', { required: 'El teléfono es obligatorio' })}
+              type="tel"
+              placeholder="+54 9 351 123 4567"
+              {...register('phone', {
+                required: 'El teléfono es obligatorio',
+                pattern: {
+                  value: /^\+?[\d\s\-().]{7,20}$/,
+                  message: 'Formato inválido. Ej: +54 9 351 123 4567',
+                },
+              })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
             />
             {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
