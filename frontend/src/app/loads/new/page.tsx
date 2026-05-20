@@ -257,8 +257,9 @@ export default function NewLoadPage() {
         destLng: dest.lng,
       });
       router.push('/dashboard/shipper');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear la carga');
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e.response?.data?.message || 'Error al crear la carga');
     } finally {
       setLoading(false);
     }
