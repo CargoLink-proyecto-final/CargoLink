@@ -140,6 +140,10 @@ export default function NewLoadPage() {
     const country = isOrigin ? v.originCountry : v.destCountry;
     const postalCode = isOrigin ? v.originPostalCode : v.destPostalCode;
 
+    if (!street?.trim() || !city?.trim()) {
+      setVerification({ status: 'error' });
+      return;
+    }
     setVerification({ status: 'loading' });
     const streetFull = [street, streetNumber].filter(Boolean).join(' ');
     try {
@@ -163,8 +167,8 @@ export default function NewLoadPage() {
 
       // City cross-validation — Nominatim uses city/town/village/hamlet depending on settlement size
       const nominatimCity = addr.city ?? addr.town ?? addr.village ?? addr.hamlet ?? addr.municipality ?? addr.suburb ?? '';
-      if (city?.trim() && !looseMatch(city, nominatimCity, result.displayName)) {
-        mismatches.push(`Ciudad: ingresaste "${city}" pero se encontró "${nominatimCity || 'localidad desconocida'}"`);
+      if (city?.trim() && nominatimCity && !looseMatch(city, nominatimCity, result.displayName)) {
+        mismatches.push(`Ciudad: ingresaste "${city}" pero se encontró "${nominatimCity}"`);
       }
 
       // Postal code cross-validation: compare the 4-digit numeric core
@@ -260,7 +264,7 @@ export default function NewLoadPage() {
     }
   };
 
-  const ic = 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none';
+  const inputClass = 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none';
 
   return (
     <DashboardLayout>
@@ -276,19 +280,19 @@ export default function NewLoadPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Titulo <span className="text-red-500">*</span></label>
-              <input {...register('title', { required: 'Requerido' })} className={ic} placeholder="Ej., Electrónica a Córdoba" />
+              <input {...register('title', { required: 'Requerido' })} className={inputClass} placeholder="Ej., Electrónica a Córdoba" />
               {errors.title && <p className="text-red-500 text-xs mt-1">{errors.title.message}</p>}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-              <textarea {...register('description')} className={ic} rows={3} placeholder="Detalles adicionales sobre la carga" />
+              <textarea {...register('description')} className={inputClass} rows={3} placeholder="Detalles adicionales sobre la carga" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Carga <span className="text-red-500">*</span></label>
-                <select {...register('cargoType', { required: 'Requerido' })} className={ic}>
+                <select {...register('cargoType', { required: 'Requerido' })} className={inputClass}>
                   <option value="">Seleccioná un tipo</option>
                   {CARGO_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
@@ -296,7 +300,7 @@ export default function NewLoadPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg) <span className="text-red-500">*</span></label>
-                <input type="number" step="0.1" {...register('weight', { required: 'Requerido', min: { value: 0, message: 'No puede ser negativo' } })} className={ic} />
+                <input type="number" step="0.1" {...register('weight', { required: 'Requerido', min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
                 {errors.weight && <p className="text-red-500 text-xs mt-1">{errors.weight.message}</p>}
               </div>
             </div>
@@ -304,12 +308,12 @@ export default function NewLoadPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Volumen (m³, opcional)</label>
-                <input type="number" step="0.1" {...register('volume', { min: { value: 0, message: 'No puede ser negativo' } })} className={ic} />
+                <input type="number" step="0.1" {...register('volume', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
                 {errors.volume && <p className="text-red-500 text-xs mt-1">{errors.volume.message}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS) <span className="text-red-500">*</span></label>
-                <input type="number" step="0.01" {...register('price', { required: 'Requerido', min: { value: 0, message: 'No puede ser negativo' } })} className={ic} />
+                <input type="number" step="0.01" {...register('price', { required: 'Requerido', min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
                 {errors.price && <p className="text-red-500 text-xs mt-1">{errors.price.message}</p>}
               </div>
             </div>
@@ -323,21 +327,21 @@ export default function NewLoadPage() {
             verification={originVerification}
             onVerify={() => verifyAddress('origin', setOriginVerification)}
             onFieldChange={() => setOriginVerification({ status: 'idle' })}
-            streetInput={<input {...register('originStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={ic} placeholder="Ej., Av. Corrientes" />}
+            streetInput={<input {...register('originStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. Corrientes" />}
             streetError={errors.originStreet?.message}
-            streetNumberInput={<input {...register('originStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={ic} placeholder="Ej., 1234" />}
+            streetNumberInput={<input {...register('originStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 1234" />}
             streetNumberError={errors.originStreetNumber?.message}
-            cityInput={<input {...register('originCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={ic} placeholder="Ej., Buenos Aires" />}
+            cityInput={<input {...register('originCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Buenos Aires" />}
             cityError={errors.originCity?.message}
-            stateInput={<input {...register('originState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={ic} placeholder="Ej., CABA" />}
+            stateInput={<input {...register('originState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., CABA" />}
             stateError={errors.originState?.message}
-            countryInput={<input {...register('originCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={ic} placeholder="Ej., Argentina" />}
+            countryInput={<input {...register('originCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
             countryError={errors.originCountry?.message}
-            postalCodeInput={<input {...register('originPostalCode', { pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 1043 o C1043AAU' } })} className={ic} placeholder="Ej., 1043 o C1043AAU" />}
+            postalCodeInput={<input {...register('originPostalCode', { pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 1043 o C1043AAU' } })} className={inputClass} placeholder="Ej., 1043 o C1043AAU" />}
             postalCodeError={errors.originPostalCode?.message}
-            latInput={<input type="number" step="any" {...register('originLat')} className={ic} placeholder="-34.6037" />}
-            lngInput={<input type="number" step="any" {...register('originLng')} className={ic} placeholder="-58.3816" />}
-            coordsLabelInput={<input {...register('originCoordsLabel')} className={ic} placeholder="Ej., Depósito central, Planta industrial..." />}
+            latInput={<input type="number" step="any" {...register('originLat')} className={inputClass} placeholder="-34.6037" />}
+            lngInput={<input type="number" step="any" {...register('originLng')} className={inputClass} placeholder="-58.3816" />}
+            coordsLabelInput={<input {...register('originCoordsLabel')} className={inputClass} placeholder="Ej., Depósito central, Planta industrial..." />}
           />
 
           {/* Destino */}
@@ -348,21 +352,21 @@ export default function NewLoadPage() {
             verification={destVerification}
             onVerify={() => verifyAddress('dest', setDestVerification)}
             onFieldChange={() => setDestVerification({ status: 'idle' })}
-            streetInput={<input {...register('destStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={ic} placeholder="Ej., Av. San Martín" />}
+            streetInput={<input {...register('destStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. San Martín" />}
             streetError={errors.destStreet?.message}
-            streetNumberInput={<input {...register('destStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={ic} placeholder="Ej., 567" />}
+            streetNumberInput={<input {...register('destStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 567" />}
             streetNumberError={errors.destStreetNumber?.message}
-            cityInput={<input {...register('destCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={ic} placeholder="Ej., Córdoba" />}
+            cityInput={<input {...register('destCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Córdoba" />}
             cityError={errors.destCity?.message}
-            stateInput={<input {...register('destState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={ic} placeholder="Ej., Córdoba" />}
+            stateInput={<input {...register('destState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Córdoba" />}
             stateError={errors.destState?.message}
-            countryInput={<input {...register('destCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={ic} placeholder="Ej., Argentina" />}
+            countryInput={<input {...register('destCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
             countryError={errors.destCountry?.message}
-            postalCodeInput={<input {...register('destPostalCode', { pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 5000 o X5000AAA' } })} className={ic} placeholder="Ej., 5000 o X5000AAA" />}
+            postalCodeInput={<input {...register('destPostalCode', { pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 5000 o X5000AAA' } })} className={inputClass} placeholder="Ej., 5000 o X5000AAA" />}
             postalCodeError={errors.destPostalCode?.message}
-            latInput={<input type="number" step="any" {...register('destLat')} className={ic} placeholder="-31.4201" />}
-            lngInput={<input type="number" step="any" {...register('destLng')} className={ic} placeholder="-64.1888" />}
-            coordsLabelInput={<input {...register('destCoordsLabel')} className={ic} placeholder="Ej., Centro de distribución, Cliente final..." />}
+            latInput={<input type="number" step="any" {...register('destLat')} className={inputClass} placeholder="-31.4201" />}
+            lngInput={<input type="number" step="any" {...register('destLng')} className={inputClass} placeholder="-64.1888" />}
+            coordsLabelInput={<input {...register('destCoordsLabel')} className={inputClass} placeholder="Ej., Centro de distribución, Cliente final..." />}
           />
 
           {/* Fechas */}
@@ -378,7 +382,7 @@ export default function NewLoadPage() {
                     required: 'Requerido',
                     validate: (v) => v >= minPickup || 'No puede ser anterior a hoy',
                   })}
-                  className={ic}
+                  className={inputClass}
                 />
                 {errors.pickupDate && <p className="text-red-500 text-xs mt-1">{errors.pickupDate.message}</p>}
               </div>
@@ -393,7 +397,7 @@ export default function NewLoadPage() {
                       return v >= pickupDateValue || 'Debe ser posterior o igual a la recogida';
                     },
                   })}
-                  className={ic}
+                  className={inputClass}
                 />
                 {errors.deliveryDate && <p className="text-red-500 text-xs mt-1">{errors.deliveryDate.message}</p>}
               </div>
@@ -460,7 +464,7 @@ function LocationCard({
       </div>
 
       {/* Address mode */}
-      <div className="space-y-3" style={{ display: mode === 'address' ? 'block' : 'none' }} onChange={onFieldChange}>
+      <div className="space-y-3" style={{ display: mode === 'address' ? 'block' : 'none' }} onInput={onFieldChange}>
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Calle <span className="text-red-500">*</span></label>

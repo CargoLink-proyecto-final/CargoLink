@@ -39,8 +39,9 @@ export default function RegisterPage() {
       const { confirmPassword: _, ...submitData } = data;
       await authApi.register(submitData);
       router.push(`/auth/check-email?email=${encodeURIComponent(data.email)}`);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error en el registro');
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e.response?.data?.message || 'Error en el registro');
     } finally {
       setLoading(false);
     }
