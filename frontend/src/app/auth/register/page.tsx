@@ -111,7 +111,16 @@ export default function RegisterPage() {
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
-                {...register('password', { required: 'La contraseña es obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } })}
+                {...register('password', {
+                  required: 'La contraseña es obligatoria',
+                  validate: (value) => {
+                    if (!value) return true;
+                    if (value.length < 8) return 'Mínimo 8 caracteres';
+                    if (!/[a-zA-Z]/.test(value)) return 'Debe contener al menos una letra';
+                    if (!/[0-9]/.test(value)) return 'Debe contener al menos un número';
+                    return true;
+                  },
+                })}
                 className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
               />
               <button
