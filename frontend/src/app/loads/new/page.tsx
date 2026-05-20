@@ -1,29 +1,82 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
+import { CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { loadsApi } from '@/lib/api';
 import { geocodeStructured, reverseGeocode } from '@/lib/routing';
+
+const CARGO_TYPES = [
+  'Electrónica y tecnología',
+  'Alimentos y bebidas',
+  'Materiales de construcción',
+  'Muebles y artículos del hogar',
+  'Ropa y textiles',
+  'Maquinaria e industria',
+  'Mercadería general',
+  'Otro',
+] as const;
+
+// Only chars valid in street names/numbers. Blocks <>{}&% etc.
+const STREET_PATTERN = /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9\s.\-/'°]+$/;
+// City, province, country: letters only (no digits).
+const PLACE_PATTERN = /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s.\-']+$/;
+const STREET_MSG = 'Solo letras, números y caracteres comunes de dirección';
+const PLACE_MSG = 'Solo letras';
+
+type VerificationState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ok'; displayName: string }
+  | { status: 'mismatch'; displayName: string; mismatches: string[] }
+  | { status: 'error' };
+
+// Normalize string: lowercase + remove accents for loose comparisons.
+function normalize(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+// Known abbreviations that Nominatim returns as full names.
+const PLACE_ALIASES: Record<string, string[]> = {
+  caba: ['ciudad autonoma de buenos aires', 'ciudad de buenos aires'],
+  bsas: ['buenos aires'],
+  cba: ['cordoba'],
+  mdz: ['mendoza'],
+};
+
+function looseMatch(userInput: string, nominatimValue: string, displayName: string): boolean {
+  const na = normalize(userInput);
+  const nb = normalize(nominatimValue);
+  const nd = normalize(displayName);
+  if (nb.includes(na) || na.includes(nb) || nd.includes(na)) return true;
+  return (PLACE_ALIASES[na] ?? []).some((alias) => nb.includes(alias) || nd.includes(alias));
+}
 
 interface LoadForm {
   title: string;
   description?: string;
 
   originStreet?: string;
+  originStreetNumber?: string;
   originCity?: string;
   originState?: string;
+  originCountry?: string;
   originPostalCode?: string;
   originLat?: number;
   originLng?: number;
+  originCoordsLabel?: string;
 
   destStreet?: string;
+  destStreetNumber?: string;
   destCity?: string;
   destState?: string;
+  destCountry?: string;
   destPostalCode?: string;
   destLat?: number;
   destLng?: number;
+  destCoordsLabel?: string;
 
   cargoType: string;
   weight: number;
@@ -37,15 +90,26 @@ type LocationMode = 'address' | 'coords';
 
 interface AddressParts {
   street?: string;
+  streetNumber?: string;
   city?: string;
   state?: string;
+  country?: string;
   postalCode?: string;
 }
 
 function formatAddress(parts: AddressParts): string {
-  const base = [parts.street, parts.city, parts.state].map((v) => v?.trim()).filter(Boolean).join(', ');
+  const streetFull = [parts.street, parts.streetNumber].filter(Boolean).join(' ');
+  const base = [streetFull, parts.city, parts.state, parts.country]
+    .map((v) => v?.trim())
+    .filter(Boolean)
+    .join(', ');
   const cp = parts.postalCode?.trim();
   return cp ? `${base} (CP ${cp})` : base;
+}
+
+function toLocalDatetimeString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 export default function NewLoadPage() {
@@ -54,14 +118,85 @@ export default function NewLoadPage() {
   const [error, setError] = useState('');
   const [originMode, setOriginMode] = useState<LocationMode>('address');
   const [destMode, setDestMode] = useState<LocationMode>('address');
+  const [originVerification, setOriginVerification] = useState<VerificationState>({ status: 'idle' });
+  const [destVerification, setDestVerification] = useState<VerificationState>({ status: 'idle' });
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoadForm>();
+  const minPickup = useMemo(() => toLocalDatetimeString(new Date()), []);
+
+  const { register, handleSubmit, watch, getValues, formState: { errors } } = useForm<LoadForm>();
+
+  const pickupDateValue = watch('pickupDate');
+
+  const verifyAddress = async (
+    prefix: 'origin' | 'dest',
+    setVerification: React.Dispatch<React.SetStateAction<VerificationState>>,
+  ) => {
+    const v = getValues();
+    const isOrigin = prefix === 'origin';
+    const street = isOrigin ? v.originStreet : v.destStreet;
+    const streetNumber = isOrigin ? v.originStreetNumber : v.destStreetNumber;
+    const city = isOrigin ? v.originCity : v.destCity;
+    const state = isOrigin ? v.originState : v.destState;
+    const country = isOrigin ? v.originCountry : v.destCountry;
+    const postalCode = isOrigin ? v.originPostalCode : v.destPostalCode;
+
+    if (!street?.trim() || !city?.trim()) {
+      setVerification({ status: 'error' });
+      return;
+    }
+    setVerification({ status: 'loading' });
+    const streetFull = [street, streetNumber].filter(Boolean).join(' ');
+    try {
+      const result = await geocodeStructured({ street: streetFull, city, state, postalcode: postalCode });
+      if (!result) { setVerification({ status: 'error' }); return; }
+
+      const mismatches: string[] = [];
+      const addr = result.address;
+
+      // Country cross-validation
+      const nominatimCountry = addr.country ?? '';
+      if (country?.trim() && nominatimCountry && !looseMatch(country, nominatimCountry, result.displayName)) {
+        mismatches.push(`País: ingresaste "${country}" pero la dirección pertenece a "${nominatimCountry}"`);
+      }
+
+      // Province/state cross-validation
+      const nominatimState = addr.state ?? addr.province ?? '';
+      if (state?.trim() && nominatimState && !looseMatch(state, nominatimState, result.displayName)) {
+        mismatches.push(`Provincia: ingresaste "${state}" pero se encontró "${nominatimState}"`);
+      }
+
+      // City cross-validation — Nominatim uses city/town/village/hamlet depending on settlement size
+      const nominatimCity = addr.city ?? addr.town ?? addr.village ?? addr.hamlet ?? addr.municipality ?? addr.suburb ?? '';
+      if (city?.trim() && nominatimCity && !looseMatch(city, nominatimCity, result.displayName)) {
+        mismatches.push(`Ciudad: ingresaste "${city}" pero se encontró "${nominatimCity}"`);
+      }
+
+      // Postal code cross-validation: compare the 4-digit numeric core
+      const nominatimCP = addr.postcode?.trim() ?? '';
+      if (postalCode?.trim() && nominatimCP) {
+        const userDigits = /\d{4}/.exec(postalCode.trim())?.[0] ?? '';
+        const nominatimDigits = /\d{4}/.exec(nominatimCP)?.[0] ?? '';
+        if (userDigits && nominatimDigits && userDigits !== nominatimDigits) {
+          mismatches.push(`Código postal: ingresaste "${postalCode.trim()}" pero se encontró "${nominatimCP}"`);
+        }
+      }
+
+      if (mismatches.length > 0) {
+        setVerification({ status: 'mismatch', displayName: result.displayName, mismatches });
+      } else {
+        setVerification({ status: 'ok', displayName: result.displayName });
+      }
+    } catch {
+      setVerification({ status: 'error' });
+    }
+  };
 
   const resolveLocation = async (
     mode: LocationMode,
     parts: AddressParts,
     lat: number | undefined,
     lng: number | undefined,
+    coordsLabel?: string,
   ): Promise<{ address: string; lat: number; lng: number } | { error: string }> => {
     if (mode === 'coords') {
       const latN = Number(lat);
@@ -70,25 +205,19 @@ export default function NewLoadPage() {
         return { error: 'Latitud y longitud son obligatorias en modo Coordenadas' };
       }
       const resolved = await reverseGeocode(latN, lngN);
-      return {
-        address: resolved ?? `Coordenadas: ${latN}, ${lngN}`,
-        lat: latN,
-        lng: lngN,
-      };
+      const label = coordsLabel?.trim();
+      return { address: label ?? resolved ?? `Coordenadas: ${latN}, ${lngN}`, lat: latN, lng: lngN };
     }
     if (!parts.street?.trim() || !parts.city?.trim()) {
       return { error: 'Calle y Ciudad son obligatorias en modo Dirección' };
     }
-    const result = await geocodeStructured({
-      street: parts.street,
-      city: parts.city,
-      state: parts.state,
-      postalcode: parts.postalCode,
-    });
+    if (!parts.state?.trim()) return { error: 'Provincia es obligatoria en modo Dirección' };
+    if (!parts.country?.trim()) return { error: 'País es obligatorio en modo Dirección' };
+
+    const streetFull = [parts.street, parts.streetNumber].filter(Boolean).join(' ');
+    const result = await geocodeStructured({ street: streetFull, city: parts.city, state: parts.state, postalcode: parts.postalCode });
     if (!result) {
-      return {
-        error: `No se pudo resolver "${formatAddress(parts)}". Probá afinar los campos o cambiá a modo Coordenadas.`,
-      };
+      return { error: `No se pudo resolver "${formatAddress(parts)}". Verificá los campos o cambiá a modo Coordenadas.` };
     }
     return { address: formatAddress(parts), lat: result.lat, lng: result.lng };
   };
@@ -99,24 +228,18 @@ export default function NewLoadPage() {
     try {
       const origin = await resolveLocation(
         originMode,
-        { street: data.originStreet, city: data.originCity, state: data.originState, postalCode: data.originPostalCode },
-        data.originLat,
-        data.originLng,
+        { street: data.originStreet, streetNumber: data.originStreetNumber, city: data.originCity, state: data.originState, country: data.originCountry, postalCode: data.originPostalCode },
+        data.originLat, data.originLng, data.originCoordsLabel,
       );
-      if ('error' in origin) {
-        setError(`Origen: ${origin.error}`);
-        return;
-      }
+      if ('error' in origin) { setError(`Origen: ${origin.error}`); return; }
+
       const dest = await resolveLocation(
         destMode,
-        { street: data.destStreet, city: data.destCity, state: data.destState, postalCode: data.destPostalCode },
-        data.destLat,
-        data.destLng,
+        { street: data.destStreet, streetNumber: data.destStreetNumber, city: data.destCity, state: data.destState, country: data.destCountry, postalCode: data.destPostalCode },
+        data.destLat, data.destLng, data.destCoordsLabel,
       );
-      if ('error' in dest) {
-        setError(`Destino: ${dest.error}`);
-        return;
-      }
+      if ('error' in dest) { setError(`Destino: ${dest.error}`); return; }
+
       await loadsApi.create({
         title: data.title,
         description: data.description,
@@ -134,8 +257,9 @@ export default function NewLoadPage() {
         destLng: dest.lng,
       });
       router.push('/dashboard/shipper');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear la carga');
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e.response?.data?.message || 'Error al crear la carga');
     } finally {
       setLoading(false);
     }
@@ -148,11 +272,10 @@ export default function NewLoadPage() {
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Crear Nueva Carga</h1>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">{error}</div>
-        )}
+        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">{error}</div>}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Detalles */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
             <h2 className="font-semibold text-gray-700">Detalles de la Carga</h2>
 
@@ -170,60 +293,114 @@ export default function NewLoadPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Carga <span className="text-red-500">*</span></label>
-                <input {...register('cargoType', { required: 'Requerido' })} className={inputClass} placeholder="Ej., Electrónica" />
+                <select {...register('cargoType', { required: 'Requerido' })} className={inputClass}>
+                  <option value="">Seleccioná un tipo</option>
+                  {CARGO_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                {errors.cargoType && <p className="text-red-500 text-xs mt-1">{errors.cargoType.message}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg) <span className="text-red-500">*</span></label>
-                <input type="number" {...register('weight', { required: 'Requerido' })} className={inputClass} />
+                <input type="number" step="0.1" {...register('weight', { required: 'Requerido', min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                {errors.weight && <p className="text-red-500 text-xs mt-1">{errors.weight.message}</p>}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Volumen (m3, opcional)</label>
-                <input type="number" step="0.1" {...register('volume')} className={inputClass} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Volumen (m³, opcional)</label>
+                <input type="number" step="0.1" {...register('volume', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                {errors.volume && <p className="text-red-500 text-xs mt-1">{errors.volume.message}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS) <span className="text-red-500">*</span></label>
-                <input type="number" {...register('price', { required: 'Requerido' })} className={inputClass} />
+                <input type="number" step="0.01" {...register('price', { required: 'Requerido', min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                {errors.price && <p className="text-red-500 text-xs mt-1">{errors.price.message}</p>}
               </div>
             </div>
           </div>
 
+          {/* Origen */}
           <LocationCard
             title="Origen"
             mode={originMode}
-            onModeChange={setOriginMode}
-            streetInput={<input {...register('originStreet')} className={inputClass} placeholder="Ej., Av. Corrientes 1234" />}
-            cityInput={<input {...register('originCity')} className={inputClass} placeholder="Ej., Buenos Aires" />}
-            stateInput={<input {...register('originState')} className={inputClass} placeholder="Ej., CABA" />}
-            postalCodeInput={<input {...register('originPostalCode')} className={inputClass} placeholder="Ej., C1043AAU" />}
+            onModeChange={(m) => { setOriginMode(m); setOriginVerification({ status: 'idle' }); }}
+            verification={originVerification}
+            onVerify={() => verifyAddress('origin', setOriginVerification)}
+            onFieldChange={() => setOriginVerification({ status: 'idle' })}
+            streetInput={<input {...register('originStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. Corrientes" />}
+            streetError={errors.originStreet?.message}
+            streetNumberInput={<input {...register('originStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 1234" />}
+            streetNumberError={errors.originStreetNumber?.message}
+            cityInput={<input {...register('originCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Buenos Aires" />}
+            cityError={errors.originCity?.message}
+            stateInput={<input {...register('originState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., CABA" />}
+            stateError={errors.originState?.message}
+            countryInput={<input {...register('originCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
+            countryError={errors.originCountry?.message}
+            postalCodeInput={<input {...register('originPostalCode', { pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 1043 o C1043AAU' } })} className={inputClass} placeholder="Ej., 1043 o C1043AAU" />}
+            postalCodeError={errors.originPostalCode?.message}
             latInput={<input type="number" step="any" {...register('originLat')} className={inputClass} placeholder="-34.6037" />}
             lngInput={<input type="number" step="any" {...register('originLng')} className={inputClass} placeholder="-58.3816" />}
+            coordsLabelInput={<input {...register('originCoordsLabel')} className={inputClass} placeholder="Ej., Depósito central, Planta industrial..." />}
           />
 
+          {/* Destino */}
           <LocationCard
             title="Destino"
             mode={destMode}
-            onModeChange={setDestMode}
-            streetInput={<input {...register('destStreet')} className={inputClass} placeholder="Ej., Av. San Martín 567" />}
-            cityInput={<input {...register('destCity')} className={inputClass} placeholder="Ej., Córdoba" />}
-            stateInput={<input {...register('destState')} className={inputClass} placeholder="Ej., Córdoba" />}
-            postalCodeInput={<input {...register('destPostalCode')} className={inputClass} placeholder="Ej., X5000" />}
+            onModeChange={(m) => { setDestMode(m); setDestVerification({ status: 'idle' }); }}
+            verification={destVerification}
+            onVerify={() => verifyAddress('dest', setDestVerification)}
+            onFieldChange={() => setDestVerification({ status: 'idle' })}
+            streetInput={<input {...register('destStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. San Martín" />}
+            streetError={errors.destStreet?.message}
+            streetNumberInput={<input {...register('destStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 567" />}
+            streetNumberError={errors.destStreetNumber?.message}
+            cityInput={<input {...register('destCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Córdoba" />}
+            cityError={errors.destCity?.message}
+            stateInput={<input {...register('destState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Córdoba" />}
+            stateError={errors.destState?.message}
+            countryInput={<input {...register('destCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
+            countryError={errors.destCountry?.message}
+            postalCodeInput={<input {...register('destPostalCode', { pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 5000 o X5000AAA' } })} className={inputClass} placeholder="Ej., 5000 o X5000AAA" />}
+            postalCodeError={errors.destPostalCode?.message}
             latInput={<input type="number" step="any" {...register('destLat')} className={inputClass} placeholder="-31.4201" />}
             lngInput={<input type="number" step="any" {...register('destLng')} className={inputClass} placeholder="-64.1888" />}
+            coordsLabelInput={<input {...register('destCoordsLabel')} className={inputClass} placeholder="Ej., Centro de distribución, Cliente final..." />}
           />
 
+          {/* Fechas */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
             <h2 className="font-semibold text-gray-700">Fechas</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Recogida <span className="text-red-500">*</span></label>
-                <input type="datetime-local" {...register('pickupDate', { required: 'Requerido' })} className={inputClass} />
+                <input
+                  type="datetime-local"
+                  min={minPickup}
+                  {...register('pickupDate', {
+                    required: 'Requerido',
+                    validate: (v) => v >= minPickup || 'No puede ser anterior a hoy',
+                  })}
+                  className={inputClass}
+                />
+                {errors.pickupDate && <p className="text-red-500 text-xs mt-1">{errors.pickupDate.message}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Entrega (opcional)</label>
-                <input type="datetime-local" {...register('deliveryDate')} className={inputClass} />
+                <input
+                  type="datetime-local"
+                  min={pickupDateValue || minPickup}
+                  {...register('deliveryDate', {
+                    validate: (v) => {
+                      if (!v || !pickupDateValue) return true;
+                      return v >= pickupDateValue || 'Debe ser posterior o igual a la recogida';
+                    },
+                  })}
+                  className={inputClass}
+                />
+                {errors.deliveryDate && <p className="text-red-500 text-xs mt-1">{errors.deliveryDate.message}</p>}
               </div>
             </div>
           </div>
@@ -242,89 +419,149 @@ export default function NewLoadPage() {
 }
 
 function LocationCard({
-  title,
-  mode,
-  onModeChange,
-  streetInput,
-  cityInput,
-  stateInput,
-  postalCodeInput,
-  latInput,
-  lngInput,
+  title, mode, onModeChange,
+  verification, onVerify, onFieldChange,
+  streetInput, streetError,
+  streetNumberInput, streetNumberError,
+  cityInput, cityError,
+  stateInput, stateError,
+  countryInput, countryError,
+  postalCodeInput, postalCodeError,
+  latInput, lngInput, coordsLabelInput,
 }: {
   title: string;
   mode: LocationMode;
   onModeChange: (m: LocationMode) => void;
+  verification: VerificationState;
+  onVerify: () => void;
+  onFieldChange: () => void;
   streetInput: React.ReactNode;
+  streetError?: string;
+  streetNumberInput: React.ReactNode;
+  streetNumberError?: string;
   cityInput: React.ReactNode;
+  cityError?: string;
   stateInput: React.ReactNode;
+  stateError?: string;
+  countryInput: React.ReactNode;
+  countryError?: string;
   postalCodeInput: React.ReactNode;
+  postalCodeError?: string;
   latInput: React.ReactNode;
   lngInput: React.ReactNode;
+  coordsLabelInput: React.ReactNode;
 }) {
   const tabClass = (active: boolean) =>
-    `flex-1 text-sm py-2 rounded-md transition ${
-      active ? 'bg-white text-primary-700 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'
-    }`;
+    `flex-1 text-sm py-2 rounded-md transition ${active ? 'bg-white text-primary-700 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
       <div className="flex items-center justify-between gap-4">
         <h2 className="font-semibold text-gray-700">{title}</h2>
         <div className="flex bg-gray-100 rounded-lg p-1 gap-1" role="tablist" aria-label={`Modo de entrada de ${title}`}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'address'}
-            className={tabClass(mode === 'address')}
-            onClick={() => onModeChange('address')}
-          >
-            Dirección
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'coords'}
-            className={tabClass(mode === 'coords')}
-            onClick={() => onModeChange('coords')}
-          >
-            Coordenadas
-          </button>
+          <button type="button" role="tab" aria-selected={mode === 'address'} className={tabClass(mode === 'address')} onClick={() => onModeChange('address')}>Dirección</button>
+          <button type="button" role="tab" aria-selected={mode === 'coords'} className={tabClass(mode === 'coords')} onClick={() => onModeChange('coords')}>Coordenadas</button>
         </div>
       </div>
 
-      <div className="space-y-3" style={{ display: mode === 'address' ? 'block' : 'none' }}>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Calle <span className="text-red-500">*</span></label>
-          {streetInput}
+      {/* Address mode */}
+      <div className="space-y-3" style={{ display: mode === 'address' ? 'block' : 'none' }} onInput={onFieldChange}>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Calle <span className="text-red-500">*</span></label>
+            {streetInput}
+            {streetError && <p className="text-red-500 text-xs mt-1">{streetError}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+            {streetNumberInput}
+            {streetNumberError && <p className="text-red-500 text-xs mt-1">{streetNumberError}</p>}
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad <span className="text-red-500">*</span></label>
             {cityInput}
+            {cityError && <p className="text-red-500 text-xs mt-1">{cityError}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Provincia <span className="text-red-500">*</span></label>
             {stateInput}
+            {stateError && <p className="text-red-500 text-xs mt-1">{stateError}</p>}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">País <span className="text-red-500">*</span></label>
+            {countryInput}
+            {countryError && <p className="text-red-500 text-xs mt-1">{countryError}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
+            {postalCodeInput}
+            {postalCodeError && <p className="text-red-500 text-xs mt-1">{postalCodeError}</p>}
+          </div>
+        </div>
+
+        {/* Verification */}
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={onVerify}
+            disabled={verification.status === 'loading'}
+            className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg border border-primary-300 text-primary-700 hover:bg-primary-50 transition disabled:opacity-50"
+          >
+            {verification.status === 'loading' && <Loader2 size={14} className="animate-spin" />}
+            Verificar dirección
+          </button>
+
+          {verification.status === 'ok' && (
+            <div className="mt-2 flex items-start gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+              <CheckCircle size={16} className="mt-0.5 shrink-0" />
+              <span><span className="font-medium">Dirección verificada:</span> {verification.displayName}</span>
+            </div>
+          )}
+          {verification.status === 'mismatch' && (
+            <div className="mt-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 space-y-1">
+              <div className="flex items-center gap-2 font-medium">
+                <AlertTriangle size={16} className="shrink-0" />
+                Dirección encontrada pero hay inconsistencias:
+              </div>
+              <ul className="pl-6 list-disc space-y-0.5">
+                {verification.mismatches.map((m) => <li key={m}>{m}</li>)}
+              </ul>
+              <p className="text-xs text-amber-600 pt-1">Dirección encontrada: {verification.displayName}</p>
+            </div>
+          )}
+          {verification.status === 'error' && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+              <XCircle size={16} className="shrink-0" />
+              No se encontró la dirección. Revisá los campos o usá modo Coordenadas.
+            </div>
+          )}
+          {verification.status === 'idle' && (
+            <p className="mt-1 text-xs text-gray-500">
+              Verificá para confirmar que la dirección, ciudad, provincia y CP corresponden.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Coords mode */}
+      <div className="space-y-3" style={{ display: mode === 'coords' ? 'block' : 'none' }}>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Latitud <span className="text-red-500">*</span></label>
+            {latInput}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Longitud <span className="text-red-500">*</span></label>
+            {lngInput}
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
-          {postalCodeInput}
-        </div>
-        <p className="text-xs text-gray-500">
-          Calle y Ciudad son obligatorias. Las coordenadas se obtienen automáticamente al crear la carga.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4" style={{ display: mode === 'coords' ? 'grid' : 'none' }}>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Latitud <span className="text-red-500">*</span></label>
-          {latInput}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Longitud <span className="text-red-500">*</span></label>
-          {lngInput}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Descripción de la ubicación (opcional)</label>
+          {coordsLabelInput}
         </div>
       </div>
     </div>
