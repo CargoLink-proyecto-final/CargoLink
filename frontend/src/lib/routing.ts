@@ -80,13 +80,28 @@ export async function reverseGeocode(
  * search. Yields better matches than free-text when callers can split
  * the address up. Returns null if no match.
  */
+export interface NominatimAddressDetail {
+  country?: string;
+  country_code?: string;
+  state?: string;
+  province?: string;
+  county?: string;
+  city?: string;
+  town?: string;
+  village?: string;
+  hamlet?: string;
+  municipality?: string;
+  suburb?: string;
+  postcode?: string;
+}
+
 export async function geocodeStructured(parts: {
   street?: string;
   city?: string;
   state?: string;
   postalcode?: string;
-}): Promise<{ lat: number; lng: number; displayName: string } | null> {
-  const params = new URLSearchParams({ format: 'json', limit: '1' });
+}): Promise<{ lat: number; lng: number; displayName: string; address: NominatimAddressDetail } | null> {
+  const params = new URLSearchParams({ format: 'json', limit: '1', addressdetails: '1' });
   let hasField = false;
   if (parts.street?.trim()) { params.set('street', parts.street.trim()); hasField = true; }
   if (parts.city?.trim()) { params.set('city', parts.city.trim()); hasField = true; }
@@ -97,12 +112,17 @@ export async function geocodeStructured(parts: {
     const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
     const res = await fetch(url, { headers: { 'Accept-Language': 'es' } });
     if (!res.ok) return null;
-    const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
+    const data = (await res.json()) as Array<{
+      lat: string;
+      lon: string;
+      display_name: string;
+      address: NominatimAddressDetail;
+    }>;
     if (!data.length) return null;
     const lat = parseFloat(data[0].lat);
     const lng = parseFloat(data[0].lon);
     if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
-    return { lat, lng, displayName: data[0].display_name };
+    return { lat, lng, displayName: data[0].display_name, address: data[0].address ?? {} };
   } catch {
     return null;
   }
