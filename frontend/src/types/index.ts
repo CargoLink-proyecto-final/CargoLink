@@ -2,7 +2,7 @@ export type Role = 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN';
 
 export type LoadStatus = 'PUBLISHED' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type TripStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-export type PostulationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
+export type PostulationStatus = 'PENDING' | 'NEGOTIATING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
 
 export interface User {
   id: string;
@@ -85,6 +85,8 @@ export interface Postulation {
   transporterId: string;
   message?: string | null;
   proposedPrice?: number | null;
+  counterOfferPrice?: number | null;
+  lastOfferBy?: 'SHIPPER' | 'TRANSPORTER' | null;
   status: PostulationStatus;
   createdAt: string;
   updatedAt: string;

@@ -46,6 +46,7 @@ export function getStatusLabel(status: string): string {
     PUBLISHED: 'Publicado',
     ASSIGNED: 'Asignado',
     ACCEPTED: 'Aceptado',
+    NEGOTIATING: 'En negociación',
     IN_PROGRESS: 'En Progreso',
     REJECTED: 'Rechazada',
     WITHDRAWN: 'Retirada',
