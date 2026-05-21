@@ -31,6 +31,7 @@ enum TripStatus {
 
 enum PostulationStatus {
   PENDING
+  NEGOTIATING
   ACCEPTED
   REJECTED
   WITHDRAWN
@@ -115,11 +116,13 @@ model Postulation {
   load           Load              @relation(fields: [loadId], references: [id])
   transporterId  String            @map("transporter_id")
   transporter    User              @relation("TransporterPostulations", fields: [transporterId], references: [id])
-  message        String?
-  proposedPrice  Float?            @map("proposed_price")
-  status         PostulationStatus @default(PENDING)
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
+  message           String?
+  proposedPrice     Float?            @map("proposed_price")
+  counterOfferPrice Float?            @map("counter_offer_price")
+  lastOfferBy       String?           @map("last_offer_by")
+  status            PostulationStatus @default(PENDING)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   @@unique([loadId, transporterId])
   @@index([loadId, status])

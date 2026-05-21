@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, FormEvent } from 'react';
 import { Mail, Phone, Star } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { formatCurrency } from '@/lib/utils';
@@ -11,6 +12,8 @@ interface Props {
   canAccept: boolean;
   onAccept: () => void;
   accepting: boolean;
+  onCounterOffer: (price: number) => void;
+  counteringOffer: boolean;
 }
 
 function initials(firstName: string, lastName: string): string {
@@ -42,11 +45,52 @@ export default function PostulationCard({
   canAccept,
   onAccept,
   accepting,
+  onCounterOffer,
+  counteringOffer,
 }: Props) {
-  const { transporter, averageRating, totalRatings, message, proposedPrice, status } =
+  const { transporter, averageRating, totalRatings, message, proposedPrice, counterOfferPrice, lastOfferBy, status } =
     postulation;
-  const priceDelta =
-    proposedPrice != null ? proposedPrice - listedPrice : null;
+  const [showCounterForm, setShowCounterForm] = useState(false);
+  const [counterPriceInput, setCounterPriceInput] = useState('');
+
+  const isNegotiating = status === 'NEGOTIATING';
+  const currentOffer = isNegotiating && counterOfferPrice != null ? counterOfferPrice : proposedPrice;
+  const priceDelta = currentOffer != null ? currentOffer - listedPrice : null;
+
+  // The transporter's current asking price — shipper's counter must not exceed it
+  const transporterCurrentOffer =
+    isNegotiating && lastOfferBy === 'TRANSPORTER' && counterOfferPrice != null
+      ? counterOfferPrice
+      : proposedPrice;
+
+  // Shipper can counter only when there's a transporter price to negotiate against
+  const canCounter =
+    canAccept &&
+    (status === 'PENDING' || status === 'NEGOTIATING') &&
+    lastOfferBy !== 'SHIPPER' &&
+    transporterCurrentOffer != null;
+
+  const counterParsed = Number(counterPriceInput);
+  const counterError =
+    counterPriceInput !== '' && (
+      counterParsed <= 0
+        ? 'El precio debe ser mayor a 0'
+        : counterParsed > listedPrice
+        ? `No puede superar el precio listado ($${listedPrice}). Si querés pagar más, aceptá la oferta del transportista.`
+        : transporterCurrentOffer != null && counterParsed >= transporterCurrentOffer
+        ? `Debe ser menor a la oferta del transportista ($${transporterCurrentOffer}). Si aceptás ese precio, usá "Elegir transportista".`
+        : null
+    );
+
+  function handleCounterSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!counterParsed || counterParsed <= 0) return;
+    if (counterParsed > listedPrice) return;
+    if (transporterCurrentOffer != null && counterParsed >= transporterCurrentOffer) return;
+    onCounterOffer(counterParsed);
+    setShowCounterForm(false);
+    setCounterPriceInput('');
+  }
 
   return (
     <div className="card p-5 space-y-4">
@@ -94,26 +138,80 @@ export default function PostulationCard({
         </p>
       )}
 
-      {proposedPrice != null && (
-        <div className="flex items-center justify-between text-sm">
-          <div>
-            <span className="text-ink-500">Precio listado: </span>
+      {/* Price negotiation summary */}
+      {(proposedPrice != null || isNegotiating) && (
+        <div className="rounded-card border border-ink-200/60 bg-surface-sunk p-3 space-y-1.5 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-ink-500">Precio listado</span>
             <span className="font-medium">{formatCurrency(listedPrice)}</span>
           </div>
-          <div>
-            <span className="text-ink-500">Propuesto: </span>
-            <span className="font-medium">{formatCurrency(proposedPrice)}</span>
-            {priceDelta != null && priceDelta !== 0 && (
-              <span
-                className={`ml-2 text-xs ${
-                  priceDelta < 0 ? 'text-success-700' : 'text-warning-700'
-                }`}
-              >
-                {priceDelta < 0 ? '↓' : '↑'} {formatCurrency(Math.abs(priceDelta))}
+          {proposedPrice != null && (
+            <div className="flex items-center justify-between">
+              <span className="text-ink-500">Oferta del transportista</span>
+              <span className="font-medium">
+                {formatCurrency(proposedPrice)}
+                {proposedPrice !== listedPrice && (
+                  <span className={`ml-2 text-xs ${proposedPrice < listedPrice ? 'text-success-700' : 'text-warning-700'}`}>
+                    {proposedPrice < listedPrice ? '↓' : '↑'} {formatCurrency(Math.abs(proposedPrice - listedPrice))}
+                  </span>
+                )}
               </span>
-            )}
-          </div>
+            </div>
+          )}
+          {isNegotiating && counterOfferPrice != null && (
+            <div className="flex items-center justify-between border-t border-ink-200/60 pt-1.5">
+              <span className="text-ink-500">
+                {lastOfferBy === 'SHIPPER' ? 'Tu contra-oferta' : 'Contra-oferta del transportista'}
+              </span>
+              <span className="font-semibold text-primary-700">
+                {formatCurrency(counterOfferPrice)}
+                {counterOfferPrice !== listedPrice && (
+                  <span className={`ml-2 text-xs ${counterOfferPrice < listedPrice ? 'text-success-700' : 'text-warning-700'}`}>
+                    {counterOfferPrice < listedPrice ? '↓' : '↑'} {formatCurrency(Math.abs(counterOfferPrice - listedPrice))}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+          {isNegotiating && lastOfferBy === 'SHIPPER' && (
+            <p className="text-xs text-ink-400 italic pt-0.5">Esperando respuesta del transportista…</p>
+          )}
         </div>
+      )}
+
+      {/* Counter-offer inline form */}
+      {showCounterForm && canCounter && (
+        <form onSubmit={handleCounterSubmit} className="space-y-1">
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              step="any"
+              value={counterPriceInput}
+              onChange={(e) => setCounterPriceInput(e.target.value)}
+              placeholder={`Hasta $${listedPrice}`}
+              className={`flex-1 rounded-card border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 ${counterError ? 'border-danger-400 focus:border-danger-400' : 'border-ink-200 focus:border-primary-500'}`}
+              autoFocus
+            />
+            <button
+              type="submit"
+              disabled={counteringOffer || !counterPriceInput || !!counterError}
+              className="bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+            >
+              {counteringOffer ? '...' : 'Enviar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowCounterForm(false); setCounterPriceInput(''); }}
+              className="text-sm text-ink-500 hover:text-ink-700 px-2 py-1.5"
+            >
+              Cancelar
+            </button>
+          </div>
+          {counterError && (
+            <p className="text-xs text-danger-600">{counterError}</p>
+          )}
+        </form>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-ink-200/60">
@@ -133,15 +231,25 @@ export default function PostulationCard({
             </a>
           )}
         </div>
-        {canAccept && (
-          <button
-            onClick={onAccept}
-            disabled={accepting}
-            className="bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
-          >
-            {accepting ? 'Asignando...' : 'Elegir transportista'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canCounter && !showCounterForm && (
+            <button
+              onClick={() => setShowCounterForm(true)}
+              className="border border-primary-600 text-primary-700 hover:bg-primary-50 text-sm font-medium px-4 py-2 rounded-lg transition"
+            >
+              Contra-ofertar
+            </button>
+          )}
+          {canAccept && (status === 'PENDING' || (status === 'NEGOTIATING' && lastOfferBy === 'TRANSPORTER')) && (
+            <button
+              onClick={onAccept}
+              disabled={accepting}
+              className="bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
+            >
+              {accepting ? 'Asignando...' : 'Elegir transportista'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ const STATUS_TONES: Record<string, Tone> = {
   DELIVERED: 'success',
   CANCELLED: 'danger',
   PENDING: 'neutral',
+  NEGOTIATING: 'warning',
   ACCEPTED: 'info',
   IN_PROGRESS: 'primary',
   COMPLETED: 'success',

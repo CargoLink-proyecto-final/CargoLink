@@ -102,5 +102,9 @@ export const postulationsApi = {
   getForLoad: (loadId: string) => api.get(`/loads/${loadId}/postulations`),
   getMy: (params?: { status?: string }) => api.get('/postulations/my', { params }),
   accept: (postulationId: string) => api.post(`/postulations/${postulationId}/accept`),
+  counterOffer: (postulationId: string, price: number) =>
+    api.post(`/postulations/${postulationId}/counter-offer`, { price }),
+  acceptOffer: (postulationId: string) =>
+    api.post(`/postulations/${postulationId}/accept-offer`),
   withdraw: (postulationId: string) => api.delete(`/postulations/${postulationId}`),
 };

@@ -19,16 +19,27 @@ export default function PostulateModal({
   const [message, setMessage] = useState('');
   const [proposedPrice, setProposedPrice] = useState('');
 
+  const parsedPrice = proposedPrice ? Number(proposedPrice) : undefined;
+  const priceError =
+    proposedPrice !== '' && parsedPrice != null && (
+      parsedPrice <= 0
+        ? 'El precio debe ser mayor a 0'
+        : parsedPrice <= listedPrice
+        ? `Debe ser mayor al precio listado (${formatCurrency(listedPrice)}). Si aceptás ese precio, dejá el campo vacío.`
+        : null
+    );
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (priceError) return;
     const trimmedMessage = message.trim();
-    const parsedPrice = proposedPrice ? Number(proposedPrice) : undefined;
+    const validPrice =
+      parsedPrice != null && !Number.isNaN(parsedPrice) && parsedPrice > listedPrice
+        ? parsedPrice
+        : undefined;
     onSubmit({
       message: trimmedMessage || undefined,
-      proposedPrice:
-        parsedPrice != null && !Number.isNaN(parsedPrice) && parsedPrice > 0
-          ? parsedPrice
-          : undefined,
+      proposedPrice: validPrice,
     });
   }
 
@@ -75,16 +86,20 @@ export default function PostulateModal({
           <input
             id="postulation-price"
             type="number"
-            min={1}
-            step={1}
+            min={0}
+            step="any"
             value={proposedPrice}
             onChange={(e) => setProposedPrice(e.target.value)}
-            placeholder={String(listedPrice)}
-            className="w-full rounded-card border border-ink-200 p-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            placeholder={`Mayor a ${formatCurrency(listedPrice)}`}
+            className={`w-full rounded-card border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 ${priceError ? 'border-danger-400 focus:border-danger-400' : 'border-ink-200 focus:border-primary-500'}`}
           />
-          <p className="text-xs text-ink-400">
-            Dejá vacío para aceptar el precio listado.
-          </p>
+          {priceError ? (
+            <p className="text-xs text-danger-600">{priceError}</p>
+          ) : (
+            <p className="text-xs text-ink-400">
+              Dejá vacío para aceptar el precio listado. Si querés negociar, ingresá un precio estrictamente mayor.
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-2">
@@ -98,7 +113,7 @@ export default function PostulateModal({
           </button>
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !!priceError}
             className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
           >
             {submitting ? 'Enviando...' : 'Enviar postulación'}
