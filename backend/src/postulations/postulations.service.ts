@@ -56,6 +56,8 @@ export class PostulationsService {
             status: PostulationStatus.PENDING,
             message: dto.message ?? null,
             proposedPrice: dto.proposedPrice ?? null,
+            counterOfferPrice: null,
+            lastOfferBy: null,
           },
         });
       }
@@ -162,6 +164,12 @@ export class PostulationsService {
     if (postulation.load.status !== LoadStatus.PUBLISHED) {
       throw new BadRequestException('La carga ya no está disponible');
     }
+    if (
+      postulation.status === PostulationStatus.NEGOTIATING &&
+      postulation.lastOfferBy === 'SHIPPER'
+    ) {
+      throw new BadRequestException('Esperá la respuesta del transportista antes de aceptar');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const finalPrice =
@@ -236,7 +244,8 @@ export class PostulationsService {
     if (postulation.lastOfferBy === 'SHIPPER' && isShipper) {
       throw new BadRequestException('Ya enviaste una contra-oferta, esperá la respuesta del transportista');
     }
-    if (postulation.lastOfferBy === 'TRANSPORTER' && isTransporter) {
+    // Transporter blocks: already replied via lastOfferBy, OR initial PENDING state (their postulation IS their offer)
+    if (isTransporter && (postulation.lastOfferBy === 'TRANSPORTER' || postulation.status === PostulationStatus.PENDING)) {
       throw new BadRequestException('Ya enviaste tu oferta, esperá la respuesta del dador de carga');
     }
 
