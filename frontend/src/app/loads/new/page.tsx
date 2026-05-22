@@ -240,6 +240,14 @@ export default function NewLoadPage() {
       );
       if ('error' in dest) { setError(`Destino: ${dest.error}`); return; }
 
+      if (
+        Math.abs(origin.lat - dest.lat) < 0.0001 &&
+        Math.abs(origin.lng - dest.lng) < 0.0001
+      ) {
+        setError('El origen y el destino no pueden ser el mismo lugar');
+        return;
+      }
+
       await loadsApi.create({
         title: data.title,
         description: data.description,
@@ -395,7 +403,7 @@ export default function NewLoadPage() {
                   {...register('deliveryDate', {
                     validate: (v) => {
                       if (!v || !pickupDateValue) return true;
-                      return v >= pickupDateValue || 'Debe ser posterior o igual a la recogida';
+                      return v > pickupDateValue || 'Debe ser posterior a la recogida';
                     },
                   })}
                   className={inputClass}
