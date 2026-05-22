@@ -173,9 +173,11 @@ export class AuthService {
       data: { resetToken, resetTokenExp },
     });
 
-    // In production, send email with reset link containing the token
-    // For development, log the token
-    console.log(`Password reset token for ${email}: ${resetToken}`);
+    try {
+      await this.mailService.sendPasswordResetEmail(user.email, user.firstName, resetToken);
+    } catch (err) {
+      this.logger.error(`Failed to send password reset email to ${user.email}`, err as Error);
+    }
 
     return { message: 'Si el correo existe, se ha enviado un enlace de restablecimiento' };
   }
