@@ -264,11 +264,6 @@ export class PostulationsService {
           'El transportista no propuso un precio, no hay nada que negociar.',
         );
       }
-      if (dto.price > postulation.load.price) {
-        throw new BadRequestException(
-          `El precio no puede superar el precio listado ($${postulation.load.price}). Si querés pagar más, aceptá la oferta del transportista directamente.`,
-        );
-      }
       if (dto.price >= transporterOffer) {
         throw new BadRequestException(
           `El precio debe ser menor a la oferta del transportista ($${transporterOffer}). Si estás de acuerdo con ese precio, aceptá la postulación directamente.`,
@@ -277,14 +272,19 @@ export class PostulationsService {
     }
 
     if (isTransporter) {
-      if (dto.price <= postulation.load.price) {
+      // The floor for the transporter is the shipper's latest counter-offer (if any),
+      // or the listed price when no counter-offer exists yet.
+      const shipperFloor =
+        postulation.counterOfferPrice != null
+          ? postulation.counterOfferPrice
+          : postulation.load.price;
+      if (dto.price <= shipperFloor) {
+        const floorLabel =
+          postulation.counterOfferPrice != null
+            ? `la contra-oferta del dador ($${postulation.counterOfferPrice})`
+            : `el precio listado ($${postulation.load.price})`;
         throw new BadRequestException(
-          `El precio debe ser mayor al precio listado ($${postulation.load.price}). Si aceptás ese precio, retirá tu postulación y volvé a postularte sin precio.`,
-        );
-      }
-      if (postulation.counterOfferPrice != null && dto.price <= postulation.counterOfferPrice) {
-        throw new BadRequestException(
-          `El precio debe ser mayor a la contra-oferta del dador ($${postulation.counterOfferPrice}). Si estás de acuerdo con ese precio, aceptá la contra-oferta directamente.`,
+          `El precio debe ser mayor a ${floorLabel}. Si estás de acuerdo con ese precio, aceptá la oferta directamente.`,
         );
       }
     }
