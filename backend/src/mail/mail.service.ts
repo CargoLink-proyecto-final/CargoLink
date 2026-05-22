@@ -74,4 +74,31 @@ export class MailService {
     const preview = nodemailer.getTestMessageUrl(info);
     if (preview) this.logger.log(`Verification email preview: ${preview}`);
   }
+
+  async sendPasswordResetEmail(to: string, firstName: string, token: string): Promise<void> {
+    const frontend = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+    const link = `${frontend}/auth/reset-password?token=${encodeURIComponent(token)}`;
+    const transporter = await this.getTransporter();
+    const info = await transporter.sendMail({
+      from: this.fromAddress,
+      to,
+      subject: 'Restablecer contraseña en CargoLink',
+      text:
+        `Hola ${firstName},\n\n` +
+        `Recibimos una solicitud para restablecer la contraseña de tu cuenta.\n\n` +
+        `Para crear una nueva contraseña, abrí el siguiente enlace:\n\n` +
+        `${link}\n\n` +
+        `El enlace expira en 1 hora.\n\n` +
+        `Si no solicitaste este cambio, podés ignorar este correo.\n`,
+      html:
+        `<p>Hola ${firstName},</p>` +
+        `<p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>` +
+        `<p>Para crear una nueva contraseña, hacé clic en el siguiente enlace:</p>` +
+        `<p><a href="${link}">${link}</a></p>` +
+        `<p>El enlace expira en 1 hora.</p>` +
+        `<p>Si no solicitaste este cambio, podés ignorar este correo.</p>`,
+    });
+    const preview = nodemailer.getTestMessageUrl(info);
+    if (preview) this.logger.log(`Password reset email preview: ${preview}`);
+  }
 }
