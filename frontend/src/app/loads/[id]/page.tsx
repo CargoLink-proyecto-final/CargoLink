@@ -9,7 +9,7 @@ import { loadsApi, postulationsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useRoute } from '@/lib/useRoute';
 import Link from 'next/link';
-import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils';
+import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import {
   MapPin,
   Package,
@@ -230,7 +230,7 @@ export default function LoadDetailPage() {
           <div>
             <h1 className="text-2xl font-bold">{load.title}</h1>
             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(load.status)}`}>
-              {load.status}
+              {getStatusLabel(load.status)}
             </span>
           </div>
           <div className="flex gap-2">
@@ -417,7 +417,7 @@ export default function LoadDetailPage() {
                 <div className="text-sm">
                   <p className="font-medium">{load.trip.carrier?.firstName} {load.trip.carrier?.lastName}</p>
                   <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(load.trip.status)}`}>
-                    {load.trip.status}
+                    {getStatusLabel(load.trip.status)}
                   </span>
                 </div>
               </>
