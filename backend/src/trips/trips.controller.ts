@@ -38,7 +38,9 @@ export class TripsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List trips with filters' })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'List all trips (Admin only)' })
   findAll(
     @Query('status') status?: TripStatus,
     @Query('page') page?: number,

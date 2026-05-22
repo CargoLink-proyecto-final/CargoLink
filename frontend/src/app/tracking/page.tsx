@@ -21,6 +21,7 @@ export default function TrackingPage() {
       if (user?.role === 'TRANSPORTER') return tripsApi.getMy({ status: 'IN_PROGRESS' }).then((r) => r.data);
       return tripsApi.getAll({ status: 'IN_PROGRESS' }).then((r) => r.data);
     },
+    enabled: !!user,
     refetchInterval: 10000,
   });
 
