@@ -75,8 +75,6 @@ export default function PostulationCard({
     counterPriceInput !== '' && (
       counterParsed <= 0
         ? 'El precio debe ser mayor a 0'
-        : counterParsed > listedPrice
-        ? `No puede superar el precio listado ($${listedPrice}). Si querés pagar más, aceptá la oferta del transportista.`
         : transporterCurrentOffer != null && counterParsed >= transporterCurrentOffer
         ? `Debe ser menor a la oferta del transportista ($${transporterCurrentOffer}). Si aceptás ese precio, usá "Elegir transportista".`
         : null
@@ -85,7 +83,6 @@ export default function PostulationCard({
   function handleCounterSubmit(e: FormEvent) {
     e.preventDefault();
     if (!counterParsed || counterParsed <= 0) return;
-    if (counterParsed > listedPrice) return;
     if (transporterCurrentOffer != null && counterParsed >= transporterCurrentOffer) return;
     onCounterOffer(counterParsed);
     setShowCounterForm(false);
@@ -189,7 +186,7 @@ export default function PostulationCard({
               step="any"
               value={counterPriceInput}
               onChange={(e) => setCounterPriceInput(e.target.value)}
-              placeholder={`Hasta $${listedPrice}`}
+              placeholder={`Menos de $${transporterCurrentOffer ?? listedPrice}`}
               className={`flex-1 rounded-card border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 ${counterError ? 'border-danger-400 focus:border-danger-400' : 'border-ink-200 focus:border-primary-500'}`}
               autoFocus
             />

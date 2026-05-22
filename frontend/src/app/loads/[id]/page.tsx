@@ -27,14 +27,12 @@ import type { PostulationWithLoad } from '@/types';
 const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
 
 function NegotiationResponder({
-  listedPrice,
   counterOfferPrice,
   onAccept,
   accepting,
   onCounter,
   countering,
 }: {
-  listedPrice: number;
   counterOfferPrice: number;
   onAccept: () => void;
   accepting: boolean;
@@ -49,8 +47,6 @@ function NegotiationResponder({
     counterInput !== '' && (
       counterParsed <= 0
         ? 'El precio debe ser mayor a 0'
-        : counterParsed <= listedPrice
-        ? `Debe ser mayor al precio listado ($${listedPrice}). Si aceptás ese precio, retirá tu postulación y volvé a postularte sin precio.`
         : counterParsed <= counterOfferPrice
         ? `Debe ser mayor a la contra-oferta del dador ($${counterOfferPrice}). Si aceptás ese precio, usá "Aceptar".`
         : null
@@ -59,7 +55,6 @@ function NegotiationResponder({
   function handleCounter(e: FormEvent) {
     e.preventDefault();
     if (!counterParsed || counterParsed <= 0) return;
-    if (counterParsed <= listedPrice) return;
     if (counterParsed <= counterOfferPrice) return;
     onCounter(counterParsed);
     setShowCounterInput(false);
@@ -77,7 +72,7 @@ function NegotiationResponder({
               step="any"
               value={counterInput}
               onChange={(e) => setCounterInput(e.target.value)}
-              placeholder={`Mín $${counterOfferPrice}`}
+              placeholder={`Más de $${counterOfferPrice}`}
               className={`flex-1 rounded-card border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 ${counterError ? 'border-danger-400 focus:border-danger-400' : 'border-ink-200 focus:border-primary-500'}`}
               autoFocus
             />
@@ -346,7 +341,6 @@ export default function LoadDetailPage() {
                   El dador de carga propuso {formatCurrency(myPostulation.counterOfferPrice)}
                 </p>
                 <NegotiationResponder
-                  listedPrice={load.price}
                   counterOfferPrice={myPostulation.counterOfferPrice}
                   onAccept={() => acceptOfferMutation.mutate(myPostulation.id)}
                   accepting={acceptOfferMutation.isPending}
