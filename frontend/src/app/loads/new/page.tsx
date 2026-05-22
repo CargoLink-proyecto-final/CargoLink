@@ -1,12 +1,16 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { loadsApi } from '@/lib/api';
-import { geocodeStructured, reverseGeocode } from '@/lib/routing';
+import { geocodeStructured, reverseGeocode, type NominatimAddressDetail } from '@/lib/routing';
+
+// Leaflet touches window — load client-side only.
+const LocationPicker = dynamic(() => import('@/components/maps/LocationPicker'), { ssr: false });
 
 const CARGO_TYPES = [
   'Electrónica y tecnología',
@@ -52,6 +56,62 @@ function looseMatch(userInput: string, nominatimValue: string, displayName: stri
   const nd = normalize(displayName);
   if (nb.includes(na) || na.includes(nb) || nd.includes(na)) return true;
   return (PLACE_ALIASES[na] ?? []).some((alias) => nb.includes(alias) || nd.includes(alias));
+}
+
+// Stricter than looseMatch: compares ONLY against the resolved locality value,
+// never the full display name. The display name carries administrative
+// subdivisions (e.g. "Pedanía Pilar") that would otherwise let a typed city
+// like "Pilar" falsely match a result whose actual locality is "Laguna Larga".
+function strictPlaceMatch(userInput: string, nominatimValue: string): boolean {
+  const na = normalize(userInput);
+  const nb = normalize(nominatimValue);
+  if (!na || !nb) return false;
+  if (nb.includes(na) || na.includes(nb)) return true;
+  return (PLACE_ALIASES[na] ?? []).some((alias) => nb.includes(alias));
+}
+
+// Cross-checks the entered address against the geocoded result and returns a
+// human-readable list of inconsistencies (empty if everything lines up).
+// Shared by the manual "Verificar dirección" button and the submit-time guard.
+function computeMismatches(
+  parts: { city?: string; state?: string; country?: string; postalCode?: string },
+  result: { displayName: string; address: NominatimAddressDetail },
+): string[] {
+  const mismatches: string[] = [];
+  const addr = result.address;
+  const { city, state, country, postalCode } = parts;
+
+  // Country cross-validation
+  const nominatimCountry = addr.country ?? '';
+  if (country?.trim() && nominatimCountry && !looseMatch(country, nominatimCountry, result.displayName)) {
+    mismatches.push(`País: ingresaste "${country}" pero la dirección pertenece a "${nominatimCountry}"`);
+  }
+
+  // Province/state cross-validation
+  const nominatimState = addr.state ?? addr.province ?? '';
+  if (state?.trim() && nominatimState && !looseMatch(state, nominatimState, result.displayName)) {
+    mismatches.push(`Provincia: ingresaste "${state}" pero se encontró "${nominatimState}"`);
+  }
+
+  // City cross-validation — Nominatim uses city/town/village/hamlet depending on settlement size.
+  // Use the strict matcher: the typed city must match the actual locality, not an
+  // administrative subdivision that merely appears in the display name.
+  const nominatimCity = addr.city ?? addr.town ?? addr.village ?? addr.hamlet ?? addr.municipality ?? addr.suburb ?? '';
+  if (city?.trim() && nominatimCity && !strictPlaceMatch(city, nominatimCity)) {
+    mismatches.push(`Ciudad: ingresaste "${city}" pero se encontró "${nominatimCity}"`);
+  }
+
+  // Postal code cross-validation: compare the 4-digit numeric core
+  const nominatimCP = addr.postcode?.trim() ?? '';
+  if (postalCode?.trim() && nominatimCP) {
+    const userDigits = /\d{4}/.exec(postalCode.trim())?.[0] ?? '';
+    const nominatimDigits = /\d{4}/.exec(nominatimCP)?.[0] ?? '';
+    if (userDigits && nominatimDigits && userDigits !== nominatimDigits) {
+      mismatches.push(`Código postal: ingresaste "${postalCode.trim()}" pero se encontró "${nominatimCP}"`);
+    }
+  }
+
+  return mismatches;
 }
 
 interface LoadForm {
@@ -120,6 +180,16 @@ export default function NewLoadPage() {
   const [destMode, setDestMode] = useState<LocationMode>('address');
   const [originVerification, setOriginVerification] = useState<VerificationState>({ status: 'idle' });
   const [destVerification, setDestVerification] = useState<VerificationState>({ status: 'idle' });
+  // Pin coords from the map picker. Set after a successful "Verificar dirección"
+  // (starts at the geocoded point) and overridden when the user drags the pin.
+  // When set, these win over the raw geocode at submit — letting the user nail
+  // the exact spot even where OSM has no house-number data.
+  const [originPin, setOriginPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [destPin, setDestPin] = useState<{ lat: number; lng: number } | null>(null);
+  // Mismatches surfaced at submit time. They hard-block creation: pressing
+  // "Crear" with any mismatch opens a modal asking the user to fix the address.
+  const [submitMismatches, setSubmitMismatches] = useState<string[]>([]);
+  const [showMismatchModal, setShowMismatchModal] = useState(false);
 
   const minPickup = useMemo(() => toLocalDatetimeString(new Date()), []);
 
@@ -130,6 +200,7 @@ export default function NewLoadPage() {
   const verifyAddress = async (
     prefix: 'origin' | 'dest',
     setVerification: React.Dispatch<React.SetStateAction<VerificationState>>,
+    setPin: React.Dispatch<React.SetStateAction<{ lat: number; lng: number } | null>>,
   ) => {
     const v = getValues();
     const isOrigin = prefix === 'origin';
@@ -140,54 +211,29 @@ export default function NewLoadPage() {
     const country = isOrigin ? v.originCountry : v.destCountry;
     const postalCode = isOrigin ? v.originPostalCode : v.destPostalCode;
 
-    if (!street?.trim() || !city?.trim()) {
+    if (!street?.trim() || !city?.trim() || !postalCode?.trim()) {
       setVerification({ status: 'error' });
+      setPin(null);
       return;
     }
     setVerification({ status: 'loading' });
     const streetFull = [street, streetNumber].filter(Boolean).join(' ');
     try {
       const result = await geocodeStructured({ street: streetFull, city, state, postalcode: postalCode });
-      if (!result) { setVerification({ status: 'error' }); return; }
+      if (!result) { setVerification({ status: 'error' }); setPin(null); return; }
 
-      const mismatches: string[] = [];
-      const addr = result.address;
-
-      // Country cross-validation
-      const nominatimCountry = addr.country ?? '';
-      if (country?.trim() && nominatimCountry && !looseMatch(country, nominatimCountry, result.displayName)) {
-        mismatches.push(`País: ingresaste "${country}" pero la dirección pertenece a "${nominatimCountry}"`);
-      }
-
-      // Province/state cross-validation
-      const nominatimState = addr.state ?? addr.province ?? '';
-      if (state?.trim() && nominatimState && !looseMatch(state, nominatimState, result.displayName)) {
-        mismatches.push(`Provincia: ingresaste "${state}" pero se encontró "${nominatimState}"`);
-      }
-
-      // City cross-validation — Nominatim uses city/town/village/hamlet depending on settlement size
-      const nominatimCity = addr.city ?? addr.town ?? addr.village ?? addr.hamlet ?? addr.municipality ?? addr.suburb ?? '';
-      if (city?.trim() && nominatimCity && !looseMatch(city, nominatimCity, result.displayName)) {
-        mismatches.push(`Ciudad: ingresaste "${city}" pero se encontró "${nominatimCity}"`);
-      }
-
-      // Postal code cross-validation: compare the 4-digit numeric core
-      const nominatimCP = addr.postcode?.trim() ?? '';
-      if (postalCode?.trim() && nominatimCP) {
-        const userDigits = /\d{4}/.exec(postalCode.trim())?.[0] ?? '';
-        const nominatimDigits = /\d{4}/.exec(nominatimCP)?.[0] ?? '';
-        if (userDigits && nominatimDigits && userDigits !== nominatimDigits) {
-          mismatches.push(`Código postal: ingresaste "${postalCode.trim()}" pero se encontró "${nominatimCP}"`);
-        }
-      }
+      const mismatches = computeMismatches({ city, state, country, postalCode }, result);
 
       if (mismatches.length > 0) {
         setVerification({ status: 'mismatch', displayName: result.displayName, mismatches });
       } else {
         setVerification({ status: 'ok', displayName: result.displayName });
       }
+      // Drop the pin at the geocoded point; the user can drag it to be exact.
+      setPin({ lat: result.lat, lng: result.lng });
     } catch {
       setVerification({ status: 'error' });
+      setPin(null);
     }
   };
 
@@ -197,7 +243,8 @@ export default function NewLoadPage() {
     lat: number | undefined,
     lng: number | undefined,
     coordsLabel?: string,
-  ): Promise<{ address: string; lat: number; lng: number } | { error: string }> => {
+    pinOverride?: { lat: number; lng: number } | null,
+  ): Promise<{ address: string; lat: number; lng: number; mismatches: string[] } | { error: string }> => {
     if (mode === 'coords') {
       const latN = Number(lat);
       const lngN = Number(lng);
@@ -206,20 +253,27 @@ export default function NewLoadPage() {
       }
       const resolved = await reverseGeocode(latN, lngN);
       const label = coordsLabel?.trim();
-      return { address: label ?? resolved ?? `Coordenadas: ${latN}, ${lngN}`, lat: latN, lng: lngN };
+      return { address: label ?? resolved ?? `Coordenadas: ${latN}, ${lngN}`, lat: latN, lng: lngN, mismatches: [] };
     }
     if (!parts.street?.trim() || !parts.city?.trim()) {
       return { error: 'Calle y Ciudad son obligatorias en modo Dirección' };
     }
     if (!parts.state?.trim()) return { error: 'Provincia es obligatoria en modo Dirección' };
     if (!parts.country?.trim()) return { error: 'País es obligatorio en modo Dirección' };
+    if (!parts.postalCode?.trim()) return { error: 'Código Postal es obligatorio en modo Dirección' };
 
     const streetFull = [parts.street, parts.streetNumber].filter(Boolean).join(' ');
     const result = await geocodeStructured({ street: streetFull, city: parts.city, state: parts.state, postalcode: parts.postalCode });
     if (!result) {
       return { error: `No se pudo resolver "${formatAddress(parts)}". Verificá los campos o cambiá a modo Coordenadas.` };
     }
-    return { address: formatAddress(parts), lat: result.lat, lng: result.lng };
+    const mismatches = computeMismatches(
+      { city: parts.city, state: parts.state, country: parts.country, postalCode: parts.postalCode },
+      result,
+    );
+    // A dragged pin takes precedence over the geocoded point for exactness.
+    const coords = pinOverride ?? { lat: result.lat, lng: result.lng };
+    return { address: formatAddress(parts), lat: coords.lat, lng: coords.lng, mismatches };
   };
 
   const onSubmit = async (data: LoadForm) => {
@@ -229,14 +283,14 @@ export default function NewLoadPage() {
       const origin = await resolveLocation(
         originMode,
         { street: data.originStreet, streetNumber: data.originStreetNumber, city: data.originCity, state: data.originState, country: data.originCountry, postalCode: data.originPostalCode },
-        data.originLat, data.originLng, data.originCoordsLabel,
+        data.originLat, data.originLng, data.originCoordsLabel, originPin,
       );
       if ('error' in origin) { setError(`Origen: ${origin.error}`); return; }
 
       const dest = await resolveLocation(
         destMode,
         { street: data.destStreet, streetNumber: data.destStreetNumber, city: data.destCity, state: data.destState, country: data.destCountry, postalCode: data.destPostalCode },
-        data.destLat, data.destLng, data.destCoordsLabel,
+        data.destLat, data.destLng, data.destCoordsLabel, destPin,
       );
       if ('error' in dest) { setError(`Destino: ${dest.error}`); return; }
 
@@ -245,6 +299,18 @@ export default function NewLoadPage() {
         Math.abs(origin.lng - dest.lng) < 0.0001
       ) {
         setError('El origen y el destino no pueden ser el mismo lugar');
+        return;
+      }
+
+      // Hard block: if the resolved location disagrees with what the user typed,
+      // surface the inconsistencies in a modal and refuse to create the load.
+      const allMismatches = [
+        ...origin.mismatches.map((m) => `Origen — ${m}`),
+        ...dest.mismatches.map((m) => `Destino — ${m}`),
+      ];
+      if (allMismatches.length > 0) {
+        setSubmitMismatches(allMismatches);
+        setShowMismatchModal(true);
         return;
       }
 
@@ -281,6 +347,21 @@ export default function NewLoadPage() {
         <h1 className="text-2xl font-bold mb-6">Crear Nueva Carga</h1>
 
         {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">{error}</div>}
+
+        {submitMismatches.length > 0 && (
+          <div className="bg-amber-50 text-amber-700 p-3 rounded-lg mb-4 text-sm space-y-1">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertTriangle size={16} className="shrink-0" />
+              La ubicación encontrada no coincide con lo que ingresaste:
+            </div>
+            <ul className="pl-6 list-disc space-y-0.5">
+              {submitMismatches.map((m) => <li key={m}>{m}</li>)}
+            </ul>
+            <p className="text-xs text-amber-600 pt-1">
+              Corregí la dirección para poder crear la carga.
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Detalles */}
@@ -332,10 +413,13 @@ export default function NewLoadPage() {
           <LocationCard
             title="Origen"
             mode={originMode}
-            onModeChange={(m) => { setOriginMode(m); setOriginVerification({ status: 'idle' }); }}
+            onModeChange={(m) => { setOriginMode(m); setOriginVerification({ status: 'idle' }); setOriginPin(null); setSubmitMismatches([]); }}
             verification={originVerification}
-            onVerify={() => verifyAddress('origin', setOriginVerification)}
-            onFieldChange={() => setOriginVerification({ status: 'idle' })}
+            onVerify={() => verifyAddress('origin', setOriginVerification, setOriginPin)}
+            onFieldChange={() => { setOriginVerification({ status: 'idle' }); setOriginPin(null); setSubmitMismatches([]); }}
+            pin={originPin}
+            pinColor="#22c55e"
+            onPinChange={(lat, lng) => setOriginPin({ lat, lng })}
             streetInput={<input {...register('originStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. Corrientes" />}
             streetError={errors.originStreet?.message}
             streetNumberInput={<input {...register('originStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 1234" />}
@@ -346,7 +430,7 @@ export default function NewLoadPage() {
             stateError={errors.originState?.message}
             countryInput={<input {...register('originCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
             countryError={errors.originCountry?.message}
-            postalCodeInput={<input {...register('originPostalCode', { pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 1043 o C1043AAU' } })} className={inputClass} placeholder="Ej., 1043 o C1043AAU" />}
+            postalCodeInput={<input {...register('originPostalCode', { required: 'Requerido', pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 1043 o C1043AAU' } })} className={inputClass} placeholder="Ej., 1043 o C1043AAU" />}
             postalCodeError={errors.originPostalCode?.message}
             latInput={<input type="number" step="any" {...register('originLat')} className={inputClass} placeholder="-34.6037" />}
             lngInput={<input type="number" step="any" {...register('originLng')} className={inputClass} placeholder="-58.3816" />}
@@ -357,10 +441,13 @@ export default function NewLoadPage() {
           <LocationCard
             title="Destino"
             mode={destMode}
-            onModeChange={(m) => { setDestMode(m); setDestVerification({ status: 'idle' }); }}
+            onModeChange={(m) => { setDestMode(m); setDestVerification({ status: 'idle' }); setDestPin(null); setSubmitMismatches([]); }}
             verification={destVerification}
-            onVerify={() => verifyAddress('dest', setDestVerification)}
-            onFieldChange={() => setDestVerification({ status: 'idle' })}
+            onVerify={() => verifyAddress('dest', setDestVerification, setDestPin)}
+            onFieldChange={() => { setDestVerification({ status: 'idle' }); setDestPin(null); setSubmitMismatches([]); }}
+            pin={destPin}
+            pinColor="#ef4444"
+            onPinChange={(lat, lng) => setDestPin({ lat, lng })}
             streetInput={<input {...register('destStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. San Martín" />}
             streetError={errors.destStreet?.message}
             streetNumberInput={<input {...register('destStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 567" />}
@@ -371,7 +458,7 @@ export default function NewLoadPage() {
             stateError={errors.destState?.message}
             countryInput={<input {...register('destCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
             countryError={errors.destCountry?.message}
-            postalCodeInput={<input {...register('destPostalCode', { pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 5000 o X5000AAA' } })} className={inputClass} placeholder="Ej., 5000 o X5000AAA" />}
+            postalCodeInput={<input {...register('destPostalCode', { required: 'Requerido', pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 5000 o X5000AAA' } })} className={inputClass} placeholder="Ej., 5000 o X5000AAA" />}
             postalCodeError={errors.destPostalCode?.message}
             latInput={<input type="number" step="any" {...register('destLat')} className={inputClass} placeholder="-31.4201" />}
             lngInput={<input type="number" step="any" {...register('destLng')} className={inputClass} placeholder="-64.1888" />}
@@ -422,6 +509,41 @@ export default function NewLoadPage() {
           </button>
         </form>
       </div>
+
+      {showMismatchModal && (
+        <div
+          // z above Leaflet's panes/controls (~1000) so the modal isn't covered by the map.
+          className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mismatch-modal-title"
+        >
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle size={20} className="shrink-0" />
+              <h2 id="mismatch-modal-title" className="font-semibold text-lg text-gray-800">
+                Corregí la dirección
+              </h2>
+            </div>
+            <p className="text-sm text-gray-600">
+              La ubicación encontrada no coincide con los datos que ingresaste. Revisá y corregí
+              los siguientes campos antes de crear la carga:
+            </p>
+            <ul className="pl-5 list-disc space-y-1 text-sm text-amber-700 bg-amber-50 rounded-lg p-3">
+              {submitMismatches.map((m) => <li key={m}>{m}</li>)}
+            </ul>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setShowMismatchModal(false)}
+                className="bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-2 rounded-lg transition"
+              >
+                Corregir dirección
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
@@ -429,6 +551,7 @@ export default function NewLoadPage() {
 function LocationCard({
   title, mode, onModeChange,
   verification, onVerify, onFieldChange,
+  pin, pinColor, onPinChange,
   streetInput, streetError,
   streetNumberInput, streetNumberError,
   cityInput, cityError,
@@ -443,6 +566,9 @@ function LocationCard({
   verification: VerificationState;
   onVerify: () => void;
   onFieldChange: () => void;
+  pin: { lat: number; lng: number } | null;
+  pinColor: string;
+  onPinChange: (lat: number, lng: number) => void;
   streetInput: React.ReactNode;
   streetError?: string;
   streetNumberInput: React.ReactNode;
@@ -505,7 +631,7 @@ function LocationCard({
             {countryError && <p className="text-red-500 text-xs mt-1">{countryError}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal <span className="text-red-500">*</span></label>
             {postalCodeInput}
             {postalCodeError && <p className="text-red-500 text-xs mt-1">{postalCodeError}</p>}
           </div>
@@ -553,6 +679,17 @@ function LocationCard({
             </p>
           )}
         </div>
+
+        {/* Map picker — appears once geocoding lands a point. Lets the user
+            drag the pin to the exact spot when the address is only approximate. */}
+        {pin && (
+          <div className="pt-1 space-y-1">
+            <p className="text-xs text-gray-500">
+              Arrastrá el pin o tocá el mapa para ajustar la ubicación exacta.
+            </p>
+            <LocationPicker lat={pin.lat} lng={pin.lng} color={pinColor} onChange={onPinChange} />
+          </div>
+        )}
       </div>
 
       {/* Coords mode */}
