@@ -15,7 +15,7 @@ interface DateRange { from: string; to: string }
 const EMPTY_RANGE: DateRange = { from: '', to: '' };
 
 const DATE_MIN = '2020-01-01';
-const DATE_MAX = '2030-12-31';
+const DATE_MAX = `${new Date().getFullYear() + 5}-12-31`;
 
 const CARGO_TYPES = [
   'Electrónica y tecnología',
