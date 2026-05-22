@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -14,6 +14,20 @@ import { LoadStatus } from '@/types';
 interface DateRange { from: string; to: string }
 const EMPTY_RANGE: DateRange = { from: '', to: '' };
 
+const DATE_MIN = '2020-01-01';
+const DATE_MAX = `${new Date().getFullYear() + 5}-12-31`;
+
+const CARGO_TYPES = [
+  'Electrónica y tecnología',
+  'Alimentos y bebidas',
+  'Materiales de construcción',
+  'Muebles y artículos del hogar',
+  'Ropa y textiles',
+  'Maquinaria e industria',
+  'Mercadería general',
+  'Otro',
+] as const;
+
 const ROLE_TITLE: Record<string, { eyebrow: string; title: string; italic: string }> = {
   CARGO_GENERATOR: { eyebrow: 'Tu inventario',           title: 'Mis',     italic: 'cargas' },
   TRANSPORTER:     { eyebrow: 'Para tomar',              title: 'Cargas',  italic: 'disponibles' },
@@ -24,6 +38,7 @@ export default function LoadsPage() {
   const user = useAuthStore((s) => s.user);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [cargoType, setCargoType] = useState('');
   const [createdRange, setCreatedRange] = useState<DateRange>(EMPTY_RANGE);
   const [pickupRange, setPickupRange] = useState<DateRange>(EMPTY_RANGE);
@@ -31,9 +46,14 @@ export default function LoadsPage() {
   const [datesOpen, setDatesOpen] = useState(false);
   const [page, setPage] = useState(1);
 
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const { data, isLoading } = useQuery({
     queryKey: [
-      'loads', statusFilter, cargoType, page,
+      'loads', statusFilter, cargoType, debouncedSearch, page,
       createdRange.from, createdRange.to,
       pickupRange.from, pickupRange.to,
       deliveryRange.from, deliveryRange.to,
@@ -42,6 +62,7 @@ export default function LoadsPage() {
       const params: any = { page, limit: 20 };
       if (statusFilter) params.status = statusFilter;
       if (cargoType) params.cargoType = cargoType;
+      if (debouncedSearch) params.q = debouncedSearch;
       if (createdRange.from) params.createdFrom = createdRange.from;
       if (createdRange.to) params.createdTo = createdRange.to;
       if (pickupRange.from) params.pickupFrom = pickupRange.from;
@@ -54,12 +75,7 @@ export default function LoadsPage() {
     },
   });
 
-  const loads = (data?.loads || []).filter((l: any) =>
-    !search ||
-    l.title.toLowerCase().includes(search.toLowerCase()) ||
-    l.originAddress.toLowerCase().includes(search.toLowerCase()) ||
-    l.destAddress.toLowerCase().includes(search.toLowerCase())
-  );
+  const loads = data?.loads || [];
 
   const statuses: LoadStatus[] = ['PUBLISHED', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'];
 
@@ -121,12 +137,14 @@ export default function LoadsPage() {
             </div>
             <div className="flex items-center gap-2">
               <Filter size={15} className="text-ink-400" />
-              <input
+              <select
                 value={cargoType}
                 onChange={(e) => { setCargoType(e.target.value); setPage(1); }}
-                placeholder="Tipo de carga…"
-                className="px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
-              />
+                className="px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
+              >
+                <option value="">Todos los tipos</option>
+                {CARGO_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
             {user?.role !== 'TRANSPORTER' && (
               <select
@@ -301,6 +319,8 @@ function DateRangeField({ label, range, onChange }: DateRangeFieldProps) {
         <input
           type="date"
           value={range.from}
+          min={DATE_MIN}
+          max={range.to || DATE_MAX}
           onChange={(e) => onChange('from', e.target.value)}
           className="px-2.5 py-1.5 border border-ink-200 rounded-md text-[12.5px] font-mono outline-none focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 transition"
         />
@@ -308,6 +328,8 @@ function DateRangeField({ label, range, onChange }: DateRangeFieldProps) {
         <input
           type="date"
           value={range.to}
+          min={range.from || DATE_MIN}
+          max={DATE_MAX}
           onChange={(e) => onChange('to', e.target.value)}
           className="px-2.5 py-1.5 border border-ink-200 rounded-md text-[12.5px] font-mono outline-none focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 transition"
         />
