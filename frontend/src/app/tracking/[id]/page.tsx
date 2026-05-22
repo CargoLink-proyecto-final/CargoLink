@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { tripsApi } from '@/lib/api';
-import { formatDate, getStatusColor } from '@/lib/utils';
+import { formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import { useRoute } from '@/lib/useRoute';
 import Link from 'next/link';
 
@@ -58,7 +58,7 @@ export default function TrackingDetailPage() {
           <div>
             <h1 className="text-2xl font-bold">{trip.load?.title || 'Seguimiento del Viaje'}</h1>
             <div className="flex items-center gap-2 mt-1">
-              <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>{trip.status}</span>
+              <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>{getStatusLabel(trip.status)}</span>
               <span className="text-sm text-gray-500">
                 {trip.carrier?.firstName} {trip.carrier?.lastName}
               </span>

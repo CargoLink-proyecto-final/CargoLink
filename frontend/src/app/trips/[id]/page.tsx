@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { tripsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils';
+import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import { useRoute } from '@/lib/useRoute';
 import { MapPin, Truck, Calendar, Star, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
@@ -148,7 +148,7 @@ export default function TripDetailPage() {
           <div>
             <h1 className="text-2xl font-bold">{trip.load?.title || 'Detalles del Viaje'}</h1>
             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>
-              {trip.status}
+              {getStatusLabel(trip.status)}
             </span>
           </div>
           <div className="flex gap-2">
