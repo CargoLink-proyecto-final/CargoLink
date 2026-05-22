@@ -52,6 +52,7 @@ export class LoadsService {
     limit?: number;
     shipperId?: string;
     cargoType?: string;
+    q?: string;
     minWeight?: number;
     maxWeight?: number;
     minPrice?: number;
@@ -70,6 +71,19 @@ export class LoadsService {
     if (params?.status) where.status = params.status;
     if (params?.shipperId) where.shipperId = params.shipperId;
     if (params?.cargoType) where.cargoType = { contains: params.cargoType, mode: 'insensitive' };
+    if (params?.q) {
+      const q = params.q;
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        {
+          OR: [
+            { title: { contains: q, mode: 'insensitive' } },
+            { originAddress: { contains: q, mode: 'insensitive' } },
+            { destAddress: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+      ];
+    }
     if (params?.minWeight || params?.maxWeight) {
       where.weight = {};
       if (params?.minWeight) where.weight.gte = params.minWeight;
