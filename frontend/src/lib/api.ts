@@ -72,6 +72,7 @@ export const tripsApi = {
   accept: (loadId: string) => api.post(`/trips/accept/${loadId}`),
   getAll: (params?: any) => api.get('/trips', { params }),
   getMy: (params?: any) => api.get('/trips/my', { params }),
+  getMyLoads: (params?: any) => api.get('/trips/my-loads', { params }),
   getById: (id: string) => api.get(`/trips/${id}`),
   start: (id: string) => api.patch(`/trips/${id}/start`),
   complete: (id: string) => api.patch(`/trips/${id}/complete`),

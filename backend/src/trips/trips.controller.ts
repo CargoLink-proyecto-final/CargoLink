@@ -38,7 +38,9 @@ export class TripsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List trips with filters' })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'List all trips (Admin only)' })
   findAll(
     @Query('status') status?: TripStatus,
     @Query('page') page?: number,
@@ -58,6 +60,19 @@ export class TripsController {
     @Query('limit') limit?: number,
   ) {
     return this.tripsService.findAll({ carrierId: userId, status, page, limit });
+  }
+
+  @Get('my-loads')
+  @UseGuards(RolesGuard)
+  @Roles('CARGO_GENERATOR')
+  @ApiOperation({ summary: 'List trips for my loads (Shipper)' })
+  findMyLoadTrips(
+    @CurrentUser('id') userId: string,
+    @Query('status') status?: TripStatus,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.tripsService.findAll({ shipperId: userId, status, page, limit });
   }
 
   @Get(':id')
