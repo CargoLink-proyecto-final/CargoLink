@@ -43,6 +43,7 @@ export class LoadsController {
   findAll(
     @Query('status') status?: LoadStatus,
     @Query('cargoType') cargoType?: string,
+    @Query('q') q?: string,
     @Query('minWeight') minWeight?: number,
     @Query('maxWeight') maxWeight?: number,
     @Query('minPrice') minPrice?: number,
@@ -57,7 +58,7 @@ export class LoadsController {
     @Query('limit') limit?: number,
   ) {
     return this.loadsService.findAll({
-      status, cargoType,
+      status, cargoType, q,
       minWeight: minWeight ? Number(minWeight) : undefined,
       maxWeight: maxWeight ? Number(maxWeight) : undefined,
       minPrice: minPrice ? Number(minPrice) : undefined,
@@ -71,6 +72,7 @@ export class LoadsController {
   @ApiOperation({ summary: 'List available loads for carriers with filters' })
   findAvailable(
     @Query('cargoType') cargoType?: string,
+    @Query('q') q?: string,
     @Query('minWeight') minWeight?: number,
     @Query('maxWeight') maxWeight?: number,
     @Query('minPrice') minPrice?: number,
@@ -86,7 +88,7 @@ export class LoadsController {
   ) {
     return this.loadsService.findAll({
       status: LoadStatus.PUBLISHED,
-      cargoType,
+      cargoType, q,
       minWeight: minWeight ? Number(minWeight) : undefined,
       maxWeight: maxWeight ? Number(maxWeight) : undefined,
       minPrice: minPrice ? Number(minPrice) : undefined,
@@ -102,6 +104,9 @@ export class LoadsController {
   @ApiOperation({ summary: 'List my loads (Shipper)' })
   findMyLoads(
     @CurrentUser('id') userId: string,
+    @Query('status') status?: LoadStatus,
+    @Query('cargoType') cargoType?: string,
+    @Query('q') q?: string,
     @Query('createdFrom') createdFrom?: string,
     @Query('createdTo') createdTo?: string,
     @Query('pickupFrom') pickupFrom?: string,
@@ -113,6 +118,7 @@ export class LoadsController {
   ) {
     return this.loadsService.findAll({
       shipperId: userId,
+      status, cargoType, q,
       createdFrom, createdTo, pickupFrom, pickupTo, deliveryFrom, deliveryTo,
       page, limit,
     });

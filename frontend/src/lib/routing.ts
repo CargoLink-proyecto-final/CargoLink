@@ -80,32 +80,133 @@ export async function reverseGeocode(
  * search. Yields better matches than free-text when callers can split
  * the address up. Returns null if no match.
  */
+export interface NominatimAddressDetail {
+  country?: string;
+  country_code?: string;
+  state?: string;
+  province?: string;
+  county?: string;
+  city?: string;
+  town?: string;
+  village?: string;
+  hamlet?: string;
+  municipality?: string;
+  suburb?: string;
+  postcode?: string;
+}
+
+interface RawNominatimResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+  address?: NominatimAddressDetail;
+}
+
+const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/search';
+// Nominatim's public API asks for ≤1 req/sec; space out fallback attempts.
+const RATE_LIMIT_MS = 1100;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+function normLite(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+function localityOf(a: NominatimAddressDetail): string {
+  return a.city ?? a.town ?? a.village ?? a.hamlet ?? a.municipality ?? a.suburb ?? '';
+}
+
+// Among candidates, prefer the one whose actual locality matches the typed
+// city — OSM often returns a same-street hit in a neighbouring town first
+// (e.g. "José Hernández 706" exists in Laguna Larga but the user means Pilar).
+function pickBest(results: RawNominatimResult[], city?: string): RawNominatimResult | null {
+  if (!results.length) return null;
+  const c = normLite(city?.trim() ?? '');
+  if (c) {
+    const match = results.find((r) => {
+      const loc = normLite(localityOf(r.address ?? {}));
+      return loc !== '' && (loc.includes(c) || c.includes(loc));
+    });
+    if (match) return match;
+  }
+  return results[0];
+}
+
+async function fetchNominatim(params: URLSearchParams): Promise<RawNominatimResult[]> {
+  try {
+    const res = await fetch(`${NOMINATIM_BASE}?${params.toString()}`, { headers: { 'Accept-Language': 'es' } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as RawNominatimResult[];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Geocodes structured address components via Nominatim (Argentina-only).
+ *
+ * Uses a layered strategy because OSM coverage of Argentine house numbers is
+ * patchy: an exact structured hit is preferred, but when it fails we broaden to
+ * free-text and finally to a street-level match (house number dropped) so the
+ * user gets the right street/city instead of a "no existe". Across every layer
+ * we prefer the candidate whose locality matches the typed city. Returns null
+ * only if nothing resolves at all.
+ */
 export async function geocodeStructured(parts: {
   street?: string;
   city?: string;
   state?: string;
   postalcode?: string;
-}): Promise<{ lat: number; lng: number; displayName: string } | null> {
-  const params = new URLSearchParams({ format: 'json', limit: '1' });
-  let hasField = false;
-  if (parts.street?.trim()) { params.set('street', parts.street.trim()); hasField = true; }
-  if (parts.city?.trim()) { params.set('city', parts.city.trim()); hasField = true; }
-  if (parts.state?.trim()) { params.set('state', parts.state.trim()); hasField = true; }
-  if (parts.postalcode?.trim()) { params.set('postalcode', parts.postalcode.trim()); hasField = true; }
-  if (!hasField) return null;
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
-    const res = await fetch(url, { headers: { 'Accept-Language': 'es' } });
-    if (!res.ok) return null;
-    const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
-    if (!data.length) return null;
-    const lat = parseFloat(data[0].lat);
-    const lng = parseFloat(data[0].lon);
-    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
-    return { lat, lng, displayName: data[0].display_name };
-  } catch {
-    return null;
+}): Promise<{ lat: number; lng: number; displayName: string; address: NominatimAddressDetail } | null> {
+  const street = parts.street?.trim() ?? '';
+  const city = parts.city?.trim() ?? '';
+  const state = parts.state?.trim() ?? '';
+  // Argentine CPAs (e.g. "C1043AAU") skew the match — keep only the 4-digit core.
+  const postalDigits = /\d{4}/.exec(parts.postalcode?.trim() ?? '')?.[0] ?? '';
+  // Street name without its trailing house number(s) — handles both the number
+  // typed into the street field and a duplicate in the separate number field.
+  const streetName = street.replace(/(\s+\d+[A-Za-z]?)+\s*$/, '').trim();
+
+  if (!street && !city && !state && !postalDigits) return null;
+
+  const base = () => {
+    // countrycodes=ar keeps Nominatim from matching same-named places abroad.
+    const p = new URLSearchParams({ format: 'json', limit: '5', addressdetails: '1', countrycodes: 'ar' });
+    if (city) p.set('city', city);
+    if (state) p.set('state', state);
+    return p;
+  };
+
+  // Layer 1 — exact structured search (street incl. number, with postal code).
+  const p1 = base();
+  if (street) p1.set('street', street);
+  if (postalDigits) p1.set('postalcode', postalDigits);
+  let results = await fetchNominatim(p1);
+
+  // Layer 2 — free-text query: forgiving of duplicated numbers and patchy data.
+  if (!results.length) {
+    const q = [street, city, state, postalDigits, 'Argentina'].filter(Boolean).join(', ');
+    if (q) {
+      await sleep(RATE_LIMIT_MS);
+      const p2 = new URLSearchParams({ format: 'json', limit: '5', addressdetails: '1', countrycodes: 'ar', q });
+      results = await fetchNominatim(p2);
+    }
   }
+
+  // Layer 3 — street-level match: drop the house number to land on the street/city.
+  if (!results.length && streetName && streetName !== street) {
+    await sleep(RATE_LIMIT_MS);
+    const p3 = base();
+    p3.set('street', streetName);
+    results = await fetchNominatim(p3);
+  }
+
+  const best = pickBest(results, city);
+  if (!best) return null;
+  const lat = parseFloat(best.lat);
+  const lng = parseFloat(best.lon);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  return { lat, lng, displayName: best.display_name, address: best.address ?? {} };
 }
 
 /**

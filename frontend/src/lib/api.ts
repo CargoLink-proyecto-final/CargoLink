@@ -20,7 +20,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
+    const requestUrl: string = error.config?.url || '';
+    const isAuthEndpoint = requestUrl.includes('/auth/');
+    if (error.response?.status === 401 && typeof window !== 'undefined' && !isAuthEndpoint) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/auth/login';
@@ -70,6 +72,7 @@ export const tripsApi = {
   accept: (loadId: string) => api.post(`/trips/accept/${loadId}`),
   getAll: (params?: any) => api.get('/trips', { params }),
   getMy: (params?: any) => api.get('/trips/my', { params }),
+  getMyLoads: (params?: any) => api.get('/trips/my-loads', { params }),
   getById: (id: string) => api.get(`/trips/${id}`),
   start: (id: string) => api.patch(`/trips/${id}/start`),
   complete: (id: string) => api.patch(`/trips/${id}/complete`),
@@ -102,5 +105,9 @@ export const postulationsApi = {
   getForLoad: (loadId: string) => api.get(`/loads/${loadId}/postulations`),
   getMy: (params?: { status?: string }) => api.get('/postulations/my', { params }),
   accept: (postulationId: string) => api.post(`/postulations/${postulationId}/accept`),
+  counterOffer: (postulationId: string, price: number) =>
+    api.post(`/postulations/${postulationId}/counter-offer`, { price }),
+  acceptOffer: (postulationId: string) =>
+    api.post(`/postulations/${postulationId}/accept-offer`),
   withdraw: (postulationId: string) => api.delete(`/postulations/${postulationId}`),
 };

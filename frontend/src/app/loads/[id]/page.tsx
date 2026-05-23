@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -9,7 +9,7 @@ import { loadsApi, postulationsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useRoute } from '@/lib/useRoute';
 import Link from 'next/link';
-import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils';
+import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import {
   MapPin,
   Package,
@@ -25,6 +25,96 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import type { PostulationWithLoad } from '@/types';
 
 const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
+
+function NegotiationResponder({
+  counterOfferPrice,
+  onAccept,
+  accepting,
+  onCounter,
+  countering,
+}: {
+  counterOfferPrice: number;
+  onAccept: () => void;
+  accepting: boolean;
+  onCounter: (price: number) => void;
+  countering: boolean;
+}) {
+  const [showCounterInput, setShowCounterInput] = useState(false);
+  const [counterInput, setCounterInput] = useState('');
+
+  const counterParsed = Number(counterInput);
+  const counterError =
+    counterInput !== '' && (
+      counterParsed <= 0
+        ? 'El precio debe ser mayor a 0'
+        : counterParsed <= counterOfferPrice
+        ? `Debe ser mayor a la contra-oferta del dador ($${counterOfferPrice}). Si aceptás ese precio, usá "Aceptar".`
+        : null
+    );
+
+  function handleCounter(e: FormEvent) {
+    e.preventDefault();
+    if (!counterParsed || counterParsed <= 0) return;
+    if (counterParsed <= counterOfferPrice) return;
+    onCounter(counterParsed);
+    setShowCounterInput(false);
+    setCounterInput('');
+  }
+
+  return (
+    <div className="space-y-2">
+      {showCounterInput ? (
+        <form onSubmit={handleCounter} className="space-y-1">
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              step="any"
+              value={counterInput}
+              onChange={(e) => setCounterInput(e.target.value)}
+              placeholder={`Más de $${counterOfferPrice}`}
+              className={`flex-1 rounded-card border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 ${counterError ? 'border-danger-400 focus:border-danger-400' : 'border-ink-200 focus:border-primary-500'}`}
+              autoFocus
+            />
+            <button
+              type="submit"
+              disabled={countering || !counterInput || !!counterError}
+              className="bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+            >
+              {countering ? '...' : 'Enviar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowCounterInput(false); setCounterInput(''); }}
+              className="text-sm text-ink-500 hover:text-ink-700 px-2 py-1.5"
+            >
+              Cancelar
+            </button>
+          </div>
+          {counterError && (
+            <p className="text-xs text-danger-600">{counterError}</p>
+          )}
+        </form>
+      ) : (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onAccept}
+            disabled={accepting}
+            className="bg-success-600 hover:bg-success-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+          >
+            {accepting ? 'Aceptando...' : `Aceptar ${formatCurrency(counterOfferPrice)}`}
+          </button>
+          <button
+            onClick={() => setShowCounterInput(true)}
+            className="border border-primary-600 text-primary-700 hover:bg-primary-50 text-sm font-medium px-3 py-1.5 rounded-lg transition"
+          >
+            Contra-ofertar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function LoadDetailPage() {
   const params = useParams();
@@ -80,6 +170,22 @@ export default function LoadDetailPage() {
     },
   });
 
+  const acceptOfferMutation = useMutation({
+    mutationFn: (postulationId: string) => postulationsApi.acceptOffer(postulationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-postulation', id, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['load', id] });
+    },
+  });
+
+  const transporterCounterOfferMutation = useMutation({
+    mutationFn: ({ postulationId, price }: { postulationId: string; price: number }) =>
+      postulationsApi.counterOffer(postulationId, price),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-postulation', id, user?.id] });
+    },
+  });
+
   const cancelMutation = useMutation({
     mutationFn: () => loadsApi.cancel(id),
     onSuccess: () => {
@@ -106,11 +212,16 @@ export default function LoadDetailPage() {
   }
 
   const canPostulate =
-    isTransporter && load.status === 'PUBLISHED' && !myPostulation;
+    isTransporter &&
+    load.status === 'PUBLISHED' &&
+    (!myPostulation || myPostulation.status === 'WITHDRAWN');
   const canWithdraw =
     isTransporter &&
     load.status === 'PUBLISHED' &&
-    myPostulation?.status === 'PENDING';
+    (myPostulation?.status === 'PENDING' || myPostulation?.status === 'NEGOTIATING');
+
+  const hasPendingCounterOffer =
+    myPostulation?.status === 'NEGOTIATING' && myPostulation?.lastOfferBy === 'SHIPPER';
 
   return (
     <DashboardLayout>
@@ -119,7 +230,7 @@ export default function LoadDetailPage() {
           <div>
             <h1 className="text-2xl font-bold">{load.title}</h1>
             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(load.status)}`}>
-              {load.status}
+              {getStatusLabel(load.status)}
             </span>
           </div>
           <div className="flex gap-2">
@@ -200,25 +311,49 @@ export default function LoadDetailPage() {
           </div>
         )}
 
-        {isTransporter && myPostulation && (
-          <div className="card p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-ink-600">Tu postulación:</span>
-              <StatusBadge status={myPostulation.status} />
-              {myPostulation.proposedPrice != null && (
-                <span className="text-sm text-ink-600">
-                  Propusiste {formatCurrency(myPostulation.proposedPrice)}
-                </span>
+        {isTransporter && myPostulation && myPostulation.status !== 'WITHDRAWN' && (
+          <div className="card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-ink-600">Tu postulación:</span>
+                <StatusBadge status={myPostulation.status} />
+              </div>
+              {canWithdraw && (
+                <button
+                  onClick={() => withdrawMutation.mutate(myPostulation.id)}
+                  disabled={withdrawMutation.isPending}
+                  className="text-sm font-medium text-danger-700 hover:text-danger-800 disabled:opacity-50"
+                >
+                  {withdrawMutation.isPending ? 'Retirando...' : 'Retirar postulación'}
+                </button>
               )}
             </div>
-            {canWithdraw && (
-              <button
-                onClick={() => withdrawMutation.mutate(myPostulation.id)}
-                disabled={withdrawMutation.isPending}
-                className="text-sm font-medium text-danger-700 hover:text-danger-800 disabled:opacity-50"
-              >
-                {withdrawMutation.isPending ? 'Retirando...' : 'Retirar postulación'}
-              </button>
+
+            {myPostulation.proposedPrice != null && (
+              <p className="text-sm text-ink-600">
+                Tu oferta: <span className="font-medium">{formatCurrency(myPostulation.proposedPrice)}</span>
+              </p>
+            )}
+
+            {hasPendingCounterOffer && myPostulation.counterOfferPrice != null && (
+              <div className="rounded-card border border-warning-400/40 bg-warning-50 p-3 space-y-2">
+                <p className="text-sm font-medium text-warning-800">
+                  El dador de carga propuso {formatCurrency(myPostulation.counterOfferPrice)}
+                </p>
+                <NegotiationResponder
+                  counterOfferPrice={myPostulation.counterOfferPrice}
+                  onAccept={() => acceptOfferMutation.mutate(myPostulation.id)}
+                  accepting={acceptOfferMutation.isPending}
+                  onCounter={(price) =>
+                    transporterCounterOfferMutation.mutate({ postulationId: myPostulation.id, price })
+                  }
+                  countering={transporterCounterOfferMutation.isPending}
+                />
+              </div>
+            )}
+
+            {myPostulation.status === 'NEGOTIATING' && myPostulation.lastOfferBy === 'TRANSPORTER' && (
+              <p className="text-sm text-ink-400 italic">Contra-oferta enviada — esperando respuesta del dador de carga…</p>
             )}
           </div>
         )}
@@ -282,7 +417,7 @@ export default function LoadDetailPage() {
                 <div className="text-sm">
                   <p className="font-medium">{load.trip.carrier?.firstName} {load.trip.carrier?.lastName}</p>
                   <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(load.trip.status)}`}>
-                    {load.trip.status}
+                    {getStatusLabel(load.trip.status)}
                   </span>
                 </div>
               </>

@@ -40,6 +40,7 @@ export class TripsService {
 
   async findAll(params?: {
     carrierId?: string;
+    shipperId?: string;
     status?: TripStatus;
     page?: number;
     limit?: number;
@@ -49,6 +50,7 @@ export class TripsService {
     const where: any = {};
 
     if (params?.carrierId) where.carrierId = params.carrierId;
+    if (params?.shipperId) where.load = { shipperId: params.shipperId };
     if (params?.status) where.status = params.status;
 
     const [trips, total] = await Promise.all([

@@ -16,6 +16,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PostulationsService } from './postulations.service';
 import { CreatePostulationDto } from './dto/create-postulation.dto';
+import { CounterOfferDto } from './dto/counter-offer.dto';
 
 @ApiTags('Postulations')
 @ApiBearerAuth()
@@ -62,6 +63,26 @@ export class PostulationsController {
   @ApiOperation({ summary: 'Accept a postulation and assign the trip (Shipper only)' })
   accept(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.postulationsService.accept(id, userId);
+  }
+
+  @Post('postulations/:id/counter-offer')
+  @UseGuards(RolesGuard)
+  @Roles('CARGO_GENERATOR', 'TRANSPORTER')
+  @ApiOperation({ summary: 'Send a counter-offer on a postulation (Shipper or Transporter)' })
+  counterOffer(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: string },
+    @Body() dto: CounterOfferDto,
+  ) {
+    return this.postulationsService.counterOffer(id, user.id, user.role, dto);
+  }
+
+  @Post('postulations/:id/accept-offer')
+  @UseGuards(RolesGuard)
+  @Roles('TRANSPORTER')
+  @ApiOperation({ summary: "Accept the shipper's counter-offer (Transporter only)" })
+  acceptOffer(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.postulationsService.acceptOffer(id, userId);
   }
 
   @Delete('postulations/:id')

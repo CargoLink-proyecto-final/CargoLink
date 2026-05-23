@@ -30,6 +30,14 @@ export default function PostulationsPanel({ loadId, listedPrice, canAccept }: Pr
     },
   });
 
+  const counterOfferMutation = useMutation({
+    mutationFn: ({ postulationId, price }: { postulationId: string; price: number }) =>
+      postulationsApi.counterOffer(postulationId, price),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['postulations', loadId] });
+    },
+  });
+
   return (
     <div className="card p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -61,10 +69,15 @@ export default function PostulationsPanel({ loadId, listedPrice, canAccept }: Pr
               key={p.id}
               postulation={p}
               listedPrice={listedPrice}
-              canAccept={canAccept && p.status === 'PENDING'}
+              canAccept={canAccept && (p.status === 'PENDING' || p.status === 'NEGOTIATING')}
               onAccept={() => acceptMutation.mutate(p.id)}
-              accepting={
-                acceptMutation.isPending && acceptMutation.variables === p.id
+              accepting={acceptMutation.isPending && acceptMutation.variables === p.id}
+              onCounterOffer={(price) =>
+                counterOfferMutation.mutate({ postulationId: p.id, price })
+              }
+              counteringOffer={
+                counterOfferMutation.isPending &&
+                counterOfferMutation.variables?.postulationId === p.id
               }
             />
           ))}

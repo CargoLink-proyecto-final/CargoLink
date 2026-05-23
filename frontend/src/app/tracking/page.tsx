@@ -4,16 +4,24 @@ import dynamic from 'next/dynamic';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { tripsApi } from '@/lib/api';
-import { getStatusColor } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth';
+import { getStatusColor, getStatusLabel } from '@/lib/utils';
 import { fetchRoute } from '@/lib/routing';
 import Link from 'next/link';
 
 const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
 
 export default function TrackingPage() {
+  const user = useAuthStore((s) => s.user);
+
   const { data: tripsData } = useQuery({
-    queryKey: ['tracking-trips'],
-    queryFn: () => tripsApi.getAll({ status: 'IN_PROGRESS' }).then((r) => r.data),
+    queryKey: ['tracking-trips', user?.id, user?.role],
+    queryFn: () => {
+      if (user?.role === 'CARGO_GENERATOR') return tripsApi.getMyLoads({ status: 'IN_PROGRESS' }).then((r) => r.data);
+      if (user?.role === 'TRANSPORTER') return tripsApi.getMy({ status: 'IN_PROGRESS' }).then((r) => r.data);
+      return tripsApi.getAll({ status: 'IN_PROGRESS' }).then((r) => r.data);
+    },
+    enabled: !!user,
     refetchInterval: 10000,
   });
 
@@ -86,7 +94,7 @@ export default function TrackingPage() {
                     </p>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>
-                    {trip.status}
+                    {getStatusLabel(trip.status)}
                   </span>
                 </Link>
               ))}
