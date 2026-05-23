@@ -63,10 +63,21 @@ export default function LocationPicker({ lat, lng, color = '#22c55e', onChange }
     wrapperRef.current.innerHTML = '';
     wrapperRef.current.appendChild(mapDiv);
 
-    const map = L.map(mapDiv, { center: [lat, lng], zoom: 16 });
+    const map = L.map(mapDiv, {
+      center: [lat, lng],
+      zoom: 16,
+      // Hard stop at maxBounds (set right below).
+      maxBoundsViscosity: 1.0,
+    });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
+
+    // 10 km square box around the pin so the user can refine within the
+    // city but not wander to another province while picking the location.
+    const initBounds = L.latLng(lat, lng).toBounds(10000);
+    map.setMaxBounds(initBounds);
+    map.setMinZoom(map.getBoundsZoom(initBounds));
 
     const marker = L.marker([lat, lng], { icon: createPinIcon(color), draggable: true }).addTo(map);
 
@@ -103,6 +114,11 @@ export default function LocationPicker({ lat, lng, color = '#22c55e', onChange }
     if (!mapRef.current || !markerRef.current) return;
     markerRef.current.setLatLng([lat, lng]);
     mapRef.current.setView([lat, lng], 16);
+    // Re-anchor the 10 km box on the new point so the user can't pan to
+    // wherever the previous geocode landed.
+    const bounds = L.latLng(lat, lng).toBounds(10000);
+    mapRef.current.setMaxBounds(bounds);
+    mapRef.current.setMinZoom(mapRef.current.getBoundsZoom(bounds));
   }, [lat, lng]);
 
   return (

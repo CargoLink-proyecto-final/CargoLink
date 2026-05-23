@@ -90,6 +90,8 @@ export default function MapView({
     const map = L.map(mapDiv, {
       center: center as L.LatLngExpression,
       zoom,
+      // Hard stop at maxBounds (set later in applyBoundsAndConstraints).
+      maxBoundsViscosity: 1.0,
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -106,7 +108,7 @@ export default function MapView({
         // Draw whatever data is available right now after size is correct
         drawMarkers(markersLayerRef.current!, markersRef.current);
         drawRoutes(routesLayerRef.current!, routesRef.current);
-        fitBounds(map, markersRef.current, routesRef.current);
+        applyBoundsAndConstraints(map, markersRef.current, routesRef.current);
       }
     }, 250);
 
@@ -131,10 +133,10 @@ export default function MapView({
     drawRoutes(routesLayerRef.current, routes);
   }, [routes]);
 
-  // Fit bounds whenever data changes
+  // Fit bounds + lock viewport whenever data changes
   useEffect(() => {
     if (!mapRef.current) return;
-    fitBounds(mapRef.current, markers, routes);
+    applyBoundsAndConstraints(mapRef.current, markers, routes);
   }, [markers, routes]);
 
   return <div ref={wrapperRef} style={{ height: '100%', width: '100%' }} />;
@@ -163,11 +165,19 @@ function drawRoutes(layer: L.LayerGroup, routes: RouteData[]) {
   });
 }
 
-function fitBounds(map: L.Map, markers: MapMarker[], routes: RouteData[]) {
+// Fit the view to the route AND lock panning/min-zoom to a 30%-padded box
+// around it — keeps the user from wandering off-screen where the polyline
+// is still drawn but no longer visible.
+function applyBoundsAndConstraints(map: L.Map, markers: MapMarker[], routes: RouteData[]) {
   const points: L.LatLngExpression[] = [];
   markers.forEach((m) => points.push([m.lat, m.lng]));
   routes.forEach((r) => r.coordinates.forEach((c) => points.push(c)));
-  if (points.length >= 2) {
-    map.fitBounds(L.latLngBounds(points), { padding: [50, 50], maxZoom: 14 });
-  }
+  if (points.length < 2) return;
+
+  const bounds = L.latLngBounds(points);
+  map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+
+  const padded = bounds.pad(0.3);
+  map.setMaxBounds(padded);
+  map.setMinZoom(map.getBoundsZoom(padded));
 }
