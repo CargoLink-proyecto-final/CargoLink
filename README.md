@@ -1,367 +1,76 @@
 # CargoLink
 
-Digital platform for road freight transportation management connecting shippers and carriers.
+Plataforma digital de gestión de transporte de carga por carretera que conecta dadores de carga (shippers) con transportistas (carriers).
 
-## Architecture
+## Stack
 
-```
-CargoLink/
-├── backend/          # NestJS REST API + WebSocket
-├── frontend/         # Next.js web application
-├── mobile/           # React Native (Expo) mobile app
-└── README.md
-```
+| Capa | Tecnología |
+|---|---|
+| Mobile | React Native + Expo (SDK 50) + TypeScript |
+| Web | Next.js 14 (App Router) + React 18 + TypeScript + Tailwind |
+| Backend | NestJS 10 + Prisma 5 + JWT + Socket.IO |
+| Base de datos | PostgreSQL 15 |
+| Mapas | Leaflet (web), react-native-maps (mobile) |
+| Chat | WebSockets (Socket.IO) |
 
-## Tech Stack
+## Roles
 
-| Layer    | Technology                                         |
-|----------|----------------------------------------------------|
-| Mobile   | React Native, Expo, TypeScript, Zustand            |
-| Web      | Next.js 14, React 18, TypeScript, Tailwind CSS     |
-| Backend  | NestJS, Prisma ORM, JWT Auth, Socket.IO            |
-| Database | PostgreSQL                                         |
-| Maps     | Leaflet (web), React Native Maps (mobile)          |
-| Chat     | WebSockets (Socket.IO)                             |
+- **Shipper** (`CARGO_GENERATOR`) — publica loads, recibe postulaciones, sigue el viaje, califica al carrier.
+- **Carrier** (`TRANSPORTER`) — ve loads disponibles, se postula, maneja trips, reporta GPS, califica al shipper.
+- **Admin** (`ADMIN`) — vista global, asigna manualmente, exporta el registro, gestiona usuarios.
 
-## User Roles
-
-- **Shipper** - Publishes loads, tracks shipments
-- **Carrier** - Browses/accepts loads, manages trips, GPS tracking
-- **Admin** - Manages users, monitors all loads and trips
-
----
-
-## Setup Instructions
-
-### Option A: Docker Compose (Recommended)
-
-The fastest way to get the full stack running. A single command builds all containers, runs database migrations, and seeds demo data automatically.
-
-#### Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) (v20+)
-- [Docker Compose](https://docs.docker.com/compose/install/) (v2+, included with Docker Desktop)
-
-#### 1. Configure environment
+## Quick start (Docker Compose)
 
 ```bash
 cp .env.example .env
-```
+# Editar .env: setear POSTGRES_PASSWORD y JWT_SECRET (requeridos)
 
-Edit `.env` with your values:
-
-```env
-# PostgreSQL
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=changeme          # REQUIRED — choose a secure password
-POSTGRES_DB=cargolink
-
-# Backend
-JWT_SECRET=changeme-use-a-long-random-string   # REQUIRED — random secret for JWT signing
-JWT_EXPIRATION=7d
-CORS_ORIGIN=http://localhost:3000
-```
-
-#### 2. Build and start
-
-```bash
 docker compose up -d
 ```
 
-This will:
-1. Pull the PostgreSQL 15 image
-2. Build the backend (NestJS) and frontend (Next.js) images using multi-stage Dockerfiles
-3. Wait for PostgreSQL to pass its health check
-4. Run all Prisma migrations (`prisma migrate deploy`)
-5. Seed the database with demo data (users + sample load)
-6. Start the NestJS API server and the Next.js frontend
+Endpoints:
 
-#### 3. Verify
+- Frontend: http://localhost:3000
+- API REST: http://localhost:3001/api
+- Swagger: http://localhost:3001/api/docs
+- PostgreSQL: localhost:5432
 
-```bash
-# Check all containers are running
-docker compose ps
+Cuentas demo (password `password123`):
 
-# Check backend logs (migrations + seed output)
-docker compose logs backend
+| Email | Rol |
+|---|---|
+| `admin@cargolink.com` | ADMIN |
+| `shipper@example.com` | CARGO_GENERATOR |
+| `carrier@example.com` | TRANSPORTER |
 
-# Check frontend logs
-docker compose logs frontend
-```
+Para dev local sin Docker, mobile, o cualquier detalle más allá del happy path: [`docs/primeros-pasos.md`](./docs/primeros-pasos.md).
 
-Once running:
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:3001
-- **Swagger docs:** http://localhost:3001/api/docs
-- **PostgreSQL:** localhost:5432
+## Documentación
 
-#### Database seeding
+Toda la documentación técnica vive bajo [`docs/`](./docs/). Índice en [`docs/README.md`](./docs/README.md).
 
-Seeding runs automatically on every container start via `docker-entrypoint.sh`. Users are created with `upsert` (insert-or-skip), so they won't be duplicated. The sample load uses `create`, so it may be duplicated if the seed runs again — use `docker compose down -v` for a clean reset if needed.
+| Documento | Cubre |
+|---|---|
+| [`arquitectura.md`](./docs/arquitectura.md) | Overview técnico, diagrama, flujo end-to-end. |
+| [`primeros-pasos.md`](./docs/primeros-pasos.md) | Setup Docker + dev local, troubleshooting. |
+| [`docker.md`](./docs/docker.md) | Compose, Dockerfiles, env vars. |
+| [`backend.md`](./docs/backend.md) | NestJS: módulos, guards, mail service. |
+| [`api.md`](./docs/api.md) | Referencia REST completa. |
+| [`websockets.md`](./docs/websockets.md) | Socket.IO `/chat`. |
+| [`base-de-datos.md`](./docs/base-de-datos.md) | Prisma schema, migraciones, seed. |
+| [`autenticacion.md`](./docs/autenticacion.md) | JWT, guards, roles, password reset. |
+| [`frontend.md`](./docs/frontend.md) | Next.js, componentes, estado. |
+| [`mobile.md`](./docs/mobile.md) | Expo, screens, GPS, push. |
+| [`ci-cd.md`](./docs/ci-cd.md) | GitHub Actions + GHCR. |
+| [`deployment.md`](./docs/deployment.md) | Producción, backups, rollback. |
+| [`workflow-claude-code.md`](./docs/workflow-claude-code.md) | `.claude/` tooling. |
+| [`contribuir.md`](./docs/contribuir.md) | Branches, commits, PRs, secretos. |
 
-**Demo accounts** (all use password: `password123`):
+## Workflow para colaborar
 
-| Email | Role | Name | Company |
-|-------|------|------|---------|
-| `admin@cargolink.com` | ADMIN | Admin CargoLink | — |
-| `shipper@example.com` | CARGO_GENERATOR | Juan García | Logística Sur S.A. |
-| `carrier@example.com` | TRANSPORTER | Carlos Martínez | Transporte Rápido |
+Reglas operativas en [`CLAUDE.md`](./CLAUDE.md). Resumen: gitflow con `main`/`develop`/feature branches, conventional commits en inglés, PRs siempre contra `develop`, releases (`develop → main`) los mergea manualmente el mantenedor humano. Detalle completo en [`docs/contribuir.md`](./docs/contribuir.md).
 
-A sample load ("Electrónica a Córdoba") is also created, associated to the shipper account.
+## Otros recursos
 
-To re-seed manually (e.g., after wiping the database):
-
-```bash
-docker compose exec backend node dist/prisma/seed.js
-```
-
-#### Common Docker commands
-
-```bash
-# Stop all containers
-docker compose down
-
-# Stop and remove database volume (full reset)
-docker compose down -v
-
-# Rebuild images after code changes
-docker compose up -d --build
-
-# Run migrations manually
-docker compose exec backend npx prisma migrate deploy
-
-# Open a shell inside the backend container
-docker compose exec backend sh
-
-# View real-time logs
-docker compose logs -f backend
-```
-
-#### Startup flow diagram
-
-```
-docker compose up
-       │
-       ▼
-  PostgreSQL starts
-       │ health check: pg_isready
-       ▼
-  Backend container starts
-       │
-       ├─ 1. prisma migrate deploy  (apply pending migrations)
-       ├─ 2. node dist/prisma/seed.js  (upsert demo data)
-       └─ 3. node dist/src/main  (start NestJS server on :3001)
-       │
-       ▼
-  Frontend container starts
-       └─ node server.js  (Next.js on :3000)
-```
-
----
-
-### Option B: Local development (without Docker)
-
-#### Prerequisites
-
-- Node.js 20+
-- PostgreSQL 15+
-- npm
-
-#### 1. Backend
-
-```bash
-cd backend
-cp .env.example .env
-# Edit .env with your PostgreSQL connection string
-
-npm install
-npx prisma generate
-npx prisma migrate dev --name init
-npm run prisma:seed    # Seeds demo data
-npm run start:dev      # Runs on http://localhost:3001
-```
-
-**Swagger docs:** http://localhost:3001/api/docs
-
-**Demo accounts** (password: `password123`):
-- Admin: `admin@cargolink.com`
-- Shipper: `shipper@example.com`
-- Carrier: `carrier@example.com`
-
-#### 2. Web App (Frontend)
-
-```bash
-cd frontend
-npm install
-cp .env.example .env.local
-# Edit .env.local if the backend runs on a different port/host
-# Default: NEXT_PUBLIC_API_URL=http://localhost:3002/api
-npm run dev            # Runs on http://localhost:3003
-```
-
-**Available scripts:**
-- `npm run dev` — Start development server
-- `npm run build` — Create optimized production build
-- `npm run start` — Serve the production build
-- `npm run lint` — Run ESLint
-
-**Prerequisites:**
-- The backend must be running first (`cd backend && npm run start:dev`)
-- Node.js 20+
-
-#### 3. Mobile App
-
-```bash
-cd mobile
-npm install
-npx expo start         # Scan QR with Expo Go app
-```
-
-> For physical device testing, update the API_URL in `src/services/api.ts` to your machine's local IP.
-
----
-
-## API Endpoints
-
-### Auth
-| Method | Endpoint                  | Description             |
-|--------|---------------------------|-------------------------|
-| POST   | /api/auth/register        | Register new user       |
-| POST   | /api/auth/login           | Login                   |
-| POST   | /api/auth/forgot-password | Request password reset  |
-| POST   | /api/auth/reset-password  | Reset password w/ token |
-
-### Users
-| Method | Endpoint                    | Description                  |
-|--------|-----------------------------|------------------------------|
-| GET    | /api/users/me               | Get current profile          |
-| PATCH  | /api/users/me               | Update profile               |
-| GET    | /api/users                  | List users (Admin)           |
-| GET    | /api/users/:id              | Get user by ID               |
-| PATCH  | /api/users/:id/toggle-active | Toggle active (Admin)       |
-
-### Loads
-| Method | Endpoint              | Description                    |
-|--------|-----------------------|--------------------------------|
-| POST   | /api/loads            | Create load (Shipper)          |
-| GET    | /api/loads            | List all loads                 |
-| GET    | /api/loads/available  | List available loads           |
-| GET    | /api/loads/my         | List my loads (Shipper)        |
-| GET    | /api/loads/:id        | Get load details               |
-| PATCH  | /api/loads/:id        | Update load (Shipper)          |
-| DELETE | /api/loads/:id        | Cancel load (Shipper)          |
-
-### Trips
-| Method | Endpoint                  | Description                   |
-|--------|---------------------------|-------------------------------|
-| POST   | /api/trips/accept/:loadId | Accept load (Carrier)         |
-| GET    | /api/trips                | List trips                    |
-| GET    | /api/trips/my             | List my trips (Carrier)       |
-| GET    | /api/trips/:id            | Get trip details              |
-| PATCH  | /api/trips/:id/start      | Start trip (Carrier)          |
-| PATCH  | /api/trips/:id/complete   | Complete trip (Carrier)       |
-| PATCH  | /api/trips/:id/location   | Update GPS location (Carrier) |
-
-### Messages
-| Method | Endpoint                         | Description              |
-|--------|----------------------------------|--------------------------|
-| POST   | /api/messages/:receiverId        | Send message             |
-| GET    | /api/messages/conversations      | List conversations       |
-| GET    | /api/messages/conversation/:userId | Get conversation       |
-| PATCH  | /api/messages/read/:senderId     | Mark as read             |
-
-### Ratings
-| Method | Endpoint                 | Description              |
-|--------|--------------------------|--------------------------|
-| POST   | /api/ratings             | Rate a completed trip    |
-| GET    | /api/ratings/user/:userId | Get user ratings        |
-
-### Request/Response Examples
-
-**Register:**
-```json
-POST /api/auth/register
-{
-  "email": "user@example.com",
-  "password": "StrongPass123",
-  "firstName": "John",
-  "lastName": "Doe",
-  "role": "CARGO_GENERATOR",
-  "phone": "+1234567890",
-  "companyName": "Acme Logistics"
-}
-```
-
-**Create Load:**
-```json
-POST /api/loads
-{
-  "title": "Electronics to Córdoba",
-  "originAddress": "Av. Corrientes 1234, CABA",
-  "originLat": -34.6037,
-  "originLng": -58.3816,
-  "destAddress": "Av. Colón 567, Córdoba",
-  "destLat": -31.4201,
-  "destLng": -64.1888,
-  "cargoType": "Electronics",
-  "weight": 5000,
-  "pickupDate": "2024-03-01T08:00:00Z",
-  "price": 250000
-}
-```
-
-**Response:**
-```json
-{
-  "id": "uuid",
-  "title": "Electronics to Córdoba",
-  "status": "PUBLISHED",
-  "shipper": { "id": "uuid", "firstName": "John", "lastName": "Doe" },
-  "createdAt": "2024-01-15T10:00:00Z"
-}
-```
-
----
-
-## Database Schema
-
-### Tables
-- **users** - All user accounts with role (CARGO_GENERATOR/TRANSPORTER/ADMIN)
-- **loads** - Freight loads published by shippers
-- **trips** - Trips created when a carrier accepts a load
-- **messages** - Real-time chat messages between users
-- **ratings** - Post-trip ratings and reviews
-
-### Key Relationships
-- User (Shipper) → has many → Loads
-- User (Carrier) → has many → Trips
-- Load → has one → Trip
-- Trip → has many → Ratings
-- User → has many → Messages (sent/received)
-
----
-
-## Deployment Suggestions
-
-| Component | Recommended Services                      |
-|-----------|-------------------------------------------|
-| Mobile    | Expo EAS Build + App Store / Play Store   |
-| Web       | Vercel or Netlify                         |
-| Backend   | Railway, Render, or AWS (ECS/Lambda)      |
-| Database  | Supabase, Railway PostgreSQL, or AWS RDS  |
-
-### Environment Variables
-
-**Backend (.env):**
-```
-DATABASE_URL=postgresql://user:pass@host:5432/cargolink
-JWT_SECRET=your-production-secret
-JWT_EXPIRATION=7d
-PORT=3001
-CORS_ORIGIN=https://your-domain.com
-```
-
-**Web (.env.local):**
-```
-NEXT_PUBLIC_API_URL=https://api.your-domain.com/api
-```
+- [`PLAN_GANTT.md`](./PLAN_GANTT.md) — timeline del proyecto.
+- [`CLAUDE.md`](./CLAUDE.md) — guía de trabajo para Claude Code (también útil para humanos colaboradores).
