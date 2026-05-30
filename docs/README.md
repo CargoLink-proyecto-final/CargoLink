@@ -16,7 +16,7 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 | [`autenticacion.md`](./autenticacion.md) | Flujo register/verify/login, JWT, guards, roles, password reset, token storage frontend/mobile. |
 | [`frontend.md`](./frontend.md) | Next.js 14 App Router, rutas, componentes, estado (Zustand + React Query), Tailwind. |
 | [`mobile.md`](./mobile.md) | Expo SDK 50, screens por rol, navegación, GPS, push notifications, permisos. |
-| [`ci-cd.md`](./ci-cd.md) | GitHub Actions, imágenes en GHCR, tags `dev`/`prod`, caché. |
+| [`ci-cd.md`](./ci-cd.md) | GitHub Actions → deploy a Cloud Run (`dev`/`prod`), Artifact Registry, Workload Identity Federation. |
 | [`deployment.md`](./deployment.md) | Variables de entorno de prod, servicios recomendados, migraciones, healthchecks, rollback. |
 | [`workflow-claude-code.md`](./workflow-claude-code.md) | `.claude/` tooling — hooks, skills, agents, slash-commands. |
 | [`contribuir.md`](./contribuir.md) | Gitflow, naming de ramas, conventional commits, flujo de PR/release, secretos. |
