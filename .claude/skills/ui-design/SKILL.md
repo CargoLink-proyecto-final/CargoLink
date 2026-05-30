@@ -1,6 +1,6 @@
 ---
 name: ui-design
-description: Use when designing UI/UX — building visual interfaces from scratch, choosing color palettes, typography, spacing, aesthetic direction, dashboards, dark/light modes, charts and data visualization, accessibility, or redesigning existing screens. Also use when implementing frontend components, pages, hooks, layouts, styles, or tests in this repo's Next.js/React/Tailwind stack.
+description: Use when designing UI/UX — building visual interfaces from scratch, choosing color palettes, typography, spacing, aesthetic direction, dashboards, dark/light modes, maps and data visualization, accessibility, or redesigning existing screens. Also use when implementing frontend components, pages, hooks, stores, layouts, or styles in this repo's stack (Next.js 14 App Router, React 18, TypeScript strict, Tailwind, zustand, TanStack Query, react-leaflet, socket.io-client, lucide-react), or React Native + Expo for mobile.
 ---
 
 # Skill: UI Design
@@ -103,50 +103,69 @@ These tag a design as "AI-generated SaaS default". Each includes what to do inst
 
 ## Implementation conventions (this repo)
 
-Stack: Next.js 15 (App Router, standalone) · React 19 · TypeScript `strict: true` · Tailwind 4.
+CargoLink is a road-freight logistics platform: shippers (`CARGO_GENERATOR`) publish loads, carriers (`TRANSPORTER`) postulate and run trips with live GPS tracking; plus chat, ratings, and an `ADMIN` role. Design examples should be logistics ones — loads list, load detail with postulations, trip map tracking, postulation/negotiation cards, ratings, chat — not generic SaaS filler.
 
-### Folder structure
+### Web stack
+
+Next.js 14 (App Router, standalone output) · React 18 · TypeScript `strict: true` · Tailwind 3. State: **zustand** (global, e.g. auth) + **@tanstack/react-query** (server state / data fetching). HTTP: **axios**. Forms: **react-hook-form + zod**. Maps: **leaflet / react-leaflet**. Realtime: **socket.io-client**. Icons: **lucide-react**. Class helpers: **clsx / tailwind-merge**. Dates: **date-fns**.
+
+### Folder structure (`frontend/src/`)
 
 ```
 frontend/src/
-├── app/            App Router routes (page.tsx, layout.tsx, route.ts). Nested dirs for nested routes.
-├── components/     Reusable components (PascalCase.tsx). Subdirs by feature (brechas/, pronostico/).
-├── contexts/       Providers + hooks (AuthContext.tsx, FiltersContext.tsx).
-├── lib/            Data hooks, shared utils, __tests__/.
-└── utils/          Pure utilities (no React).
+├── app/            App Router routes (page.tsx, layout.tsx). Nested dirs for nested routes.
+│                   Routes: /auth/*, /dashboard/{admin,carrier,shipper}, /loads, /loads/[id],
+│                   /tracking/[id], /messages, /trips/[id], /register, /users.
+├── components/     Reusable components (PascalCase.tsx), grouped by feature:
+│                   chat/, layout/ (DashboardLayout, Sidebar), loads/, maps/ (MapView, LocationPicker),
+│                   postulations/ (PostulationCard, PostulateModal), register/, trips/, ui/ (StatCard, StatusBadge).
+├── lib/            api.ts (axios client + per-domain API modules), helpers.
+├── store/          zustand stores (auth.ts).
+└── types/          shared interfaces.
 ```
+
+`components/ui/` holds the design primitives (`StatCard`, `StatusBadge`) — reuse them instead of re-styling status pills / metric cards per screen.
 
 ### Naming
 
-- **Components**: `PascalCase.tsx`. **Hooks**: `useCamelCase.ts`. **Utils**: `camelCase.ts`.
-- **Routes**: `app/<segment>/page.tsx`, `app/<segment>/layout.tsx`.
-- **Contexts**: `XxxContext.tsx` — one file per context (provider + hook).
+- **Components**: `PascalCase.tsx`. **Hooks**: `useCamelCase.ts`. **Utils / stores**: `camelCase.ts`.
+- **Routes**: `app/<segment>/page.tsx`, `app/<segment>/layout.tsx`, dynamic `app/<segment>/[id]/page.tsx`.
 
 ### Client vs Server Components
 
-Components in App Router are Server Components by default. Add `'use client'` as the **first line** only when using hooks (`useState`, `useEffect`, `useRouter`, contexts).
+Components in App Router are Server Components by default. Add `'use client'` as the **first line** only when using hooks (`useState`, `useEffect`, `useRouter`), zustand/react-query, leaflet, or sockets. Map and realtime components are always client components.
 
 ### Props and types
 
 Always type props with a separate `interface`. No `React.FC` — destructure props in the function signature. `strict: true` means: no implicit `any`, handle `null`/`undefined` explicitly, avoid `any` (comment why if unavoidable). Alias `@/*` → `src/*` for imports.
 
-### Exports
+### State
 
-**Default export** for components (one per file). **Named exports** for hooks, utils, types.
+- **zustand** for global client state (auth: `src/store/auth.ts`, persisted to `localStorage`, hydrated from `Providers.tsx`). Don't reach for Context API or Redux — the repo uses zustand.
+- **@tanstack/react-query** for all server data. Components call the per-domain API objects in `src/lib/api.ts` (`loadsApi`, `tripsApi`, `postulationsApi`, `messagesApi`, `ratingsApi`, …) wrapped in `useQuery` / `useMutation`. Don't fetch with bare `useEffect` + `axios`.
+- Realtime chat/tracking updates come over `socket.io-client`; reconcile them into the react-query cache or local state.
 
-### State — Context API
+### Forms
 
-The repo uses Context API for shared state (no Redux, no Zustand). Pattern: provider + `use<Feature>()` hook in `src/contexts/<Feature>Context.tsx`. Don't introduce another state library without an ADR.
+`react-hook-form` + `zod` resolvers for validation. Mirror the backend DTO constraints (e.g. `proposedPrice > 0`, rating `score` 1–5) so the client rejects bad input before the request.
 
 ### Styles
 
-Tailwind 4 classes inline in JSX. No CSS modules, no styled-components. Reuse existing patterns for common UI (spinners, loading states).
+Tailwind classes inline in JSX. No CSS modules, no styled-components. Compose conditional classes with `clsx` / `tailwind-merge`. Reuse existing patterns for common UI (spinners, loading states, `StatusBadge` for load/trip/postulation statuses).
 
-For projects without a full design system, define a minimal set of design tokens as CSS variables (`--spacing-sm: 8px; --spacing-md: 16px; --color-accent: ...`) in the global CSS. This allows quick, global updates without enterprise-grade framework overhead. In Tailwind 4, `@theme` directives serve this purpose.
+For projects without a full design system, define a minimal set of design tokens (Tailwind theme extension in `tailwind.config.ts`, or CSS variables in `globals.css`) so colors/spacing update globally.
+
+### Maps (Leaflet)
+
+Maps use **react-leaflet** (not Mapbox/Google). `components/maps/MapView.tsx` draws origin (green) / destination (red) / current carrier position (blue) markers; `LocationPicker.tsx` returns `{ lat, lng, address }` via Nominatim reverse-geocoding for the create-load form. When designing the tracking screen, treat the map as the focal element and overlay trip status + ETA, not the other way around.
+
+### Mobile (`mobile/`)
+
+React Native 0.73 + Expo SDK 50. Navigation: react-navigation. Maps: react-native-maps. Location: expo-location (carrier GPS updates). Notifications: expo-notifications. State/HTTP/realtime mirror the web: zustand + axios + socket.io-client. Design mobile-first for the carrier flow (on the road): large tap targets (≥44px), one primary action per screen, glanceable trip status.
 
 ### Testing
 
-Vitest + @testing-library/react. Tests in `src/lib/__tests__/` or co-located as `ComponentName.test.tsx`. If a component has non-trivial logic, write at least a happy-path test.
+There is **no frontend test suite configured** (no Vitest, no `test` script beyond `next lint`). Verify UI changes by running the app (`npm run dev`, port 3003) and `npm run lint`. If automated frontend tests get added later, coordinate the setup — don't assume Vitest exists today.
 
 ## Delivery checklist
 
@@ -161,7 +180,7 @@ Run this before declaring a design done. Each item is a hard gate.
 - [ ] Color palette has a neutral foundation (4 background levels, strokes ~85% white) and functional scales — not single hex values.
 - [ ] Light and dark modes have independent palettes (not inverses), with shades more spaced apart in dark mode.
 - [ ] Semantic colors (red destructive, green success, etc.) are respected even when off-brand.
-- [ ] Charts read in 3 seconds without explanation.
+- [ ] Maps / data views read in 3 seconds without explanation (markers, route, status are obvious).
 - [ ] All redundant elements removed (extra lines, labels, arrows).
 - [ ] WCAG AA contrast met on all text/background combinations.
 - [ ] Tap targets ≥44px on mobile.
@@ -169,11 +188,11 @@ Run this before declaring a design done. Each item is a hard gate.
 
 ### Implementation
 
-- [ ] `'use client'` only where hooks or interactivity require it.
+- [ ] `'use client'` only where hooks, zustand/react-query, leaflet, or sockets require it.
 - [ ] Props typed with `interface`, no `any`.
-- [ ] `npm run lint` passes with no type warnings.
+- [ ] Server data fetched via react-query + the `src/lib/api.ts` modules (not bare `useEffect` + axios); forms use react-hook-form + zod.
+- [ ] `npm run lint` passes with no type warnings; `npm run build` compiles under `strict`.
 - [ ] Responsive tested (at least mobile + desktop).
-- [ ] Non-trivial logic has a Vitest test.
 - [ ] No `console.log` or debug code left behind.
-- [ ] Styles use Tailwind classes (no inline CSS except dynamic values).
+- [ ] Styles use Tailwind classes (no inline CSS except dynamic values); conditional classes via clsx/tailwind-merge.
 - [ ] Imports use `@/*` alias where appropriate.

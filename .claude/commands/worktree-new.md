@@ -30,25 +30,24 @@ El usuario quiere crear un worktree aislado para trabajar en otra feature en par
    git worktree add "$WT" -b "<type>/<slug>" origin/develop
    ```
 
-6. **Copiar `.env.dev` y `.env.prod` del repo principal** si existen (son gitignored; no se propagan solos):
+6. **Copiar `.env` del repo principal** si existe (es gitignored; no se propaga solo):
    ```bash
-   [ -f "$REPO/docker/.env.dev" ] && cp "$REPO/docker/.env.dev" "$WT/docker/.env.dev"
-   [ -f "$REPO/docker/.env.prod" ] && cp "$REPO/docker/.env.prod" "$WT/docker/.env.prod"
+   [ -f "$REPO/.env" ] && cp "$REPO/.env" "$WT/.env"
    ```
-   Si no hay `.env.*` en el repo principal, no avises — no es un error.
+   Si no hay `.env` en el repo principal, no avises — no es un error.
 
 7. **Reportá al usuario**:
    ```
    ✓ Worktree creado en <WT>
    ✓ Rama: <type>/<slug> (desde origin/develop)
-   ✓ Copié docker/.env.dev (si existía)
+   ✓ Copié .env (si existía)
 
    Para abrir otra sesión Claude en el worktree:
      cd <WT> && claude
 
-   Advertencia: la DB Docker y el stack compose son compartidos. No
-   corrás migraciones ni levantes el stack simultáneamente desde dos
-   worktrees (ver CLAUDE.md sección Worktrees).
+   Advertencia: la DB Docker (container `postgres`) y el stack compose son
+   compartidos. No corrás `prisma migrate` ni levantes el stack
+   simultáneamente desde dos worktrees (ver CLAUDE.md sección Worktrees).
    ```
 
 **No** hagas `cd` ni lances Claude vos. Los hooks no pueden redirigir la sesión actual; el usuario abre la segunda.

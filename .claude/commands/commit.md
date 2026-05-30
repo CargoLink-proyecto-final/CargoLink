@@ -17,7 +17,7 @@ El usuario quiere commitear. Seguí este flujo exacto — no lo abrevies:
    - `git diff --cached` (y `--stat` para overview).
    - Identificá:
      - **type**: `fix` si arregla bug, `feat` si agrega funcionalidad, `refactor` si reorganiza sin cambiar comportamiento, `chore` si es housekeeping/config/deps, `docs`, `test`, `style` (formato), `perf`, `ci`, `build`.
-     - **scope** (opcional pero preferido): el módulo/componente tocado. Inferí de las rutas modificadas (ej: archivos en `backend/gestion_licencias/` → `scope: gestion-licencias`; archivos en `frontend/app/dashboard/` → `scope: dashboard`). Kebab-case, minúsculas.
+     - **scope** (opcional pero preferido): el módulo/componente tocado. Inferí de las rutas modificadas (ej: archivos en `backend/src/loads/` → `scope: loads`; archivos en `backend/src/trips/` → `scope: trips`; archivos en `frontend/app/dashboard/` → `scope: dashboard`). Kebab-case, minúsculas.
      - **description**: en **inglés**, minúsculas, imperativo, sin punto final, 1 línea idealmente ≤72 chars.
    - Si el diff es grande o hetero, considerá sugerir **dividir en varios commits** en vez de uno grande.
 

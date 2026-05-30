@@ -182,9 +182,9 @@ Formato esperado:
   description: en inglés, minúsculas, imperativo, sin punto final.
 
 Ejemplos válidos:
-  feat: migrate lote detail module
-  fix(gestion-licencias): scope admin licencias to user's org by default
-  chore(docker): lower resource limits for local dev
+  feat(loads): add load filtering by status
+  fix(trips): correct GPS coordinate rounding
+  chore(docker): align compose ports with env
 
 Reintentá con un mensaje corregido.
 EOF
