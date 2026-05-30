@@ -1,0 +1,28 @@
+# Copiá este archivo a terraform.tfvars y completá los valores.
+# terraform.tfvars está gitignoreado (puede contener datos sensibles).
+
+# ─── Requerido ───
+project_id = "cargolink-xxxxxx" # ID exacto de tu proyecto GCP
+
+# ─── Imágenes (ver README §"Flujo de deploy en 2 fases") ───
+# FASE 1: solo backend. Dejá frontend_image vacío.
+backend_image  = "southamerica-east1-docker.pkg.dev/cargolink-xxxxxx/cargolink/cargolink-backend:v1"
+frontend_image = ""
+
+# FASE 2: descomentá tras buildear el frontend con la URL del backend.
+# frontend_image = "southamerica-east1-docker.pkg.dev/cargolink-xxxxxx/cargolink/cargolink-frontend:v1"
+
+# ─── Opcionales (tienen defaults razonables) ───
+# region                 = "southamerica-east1"
+# db_tier                = "db-f1-micro"
+# db_deletion_protection = false
+# jwt_expiration         = "7d"
+
+# ─── SMTP (opcional — vacío = fallback Ethereal, no envía mails reales) ───
+# Para Gmail: 2FA + App Password (https://myaccount.google.com/apppasswords)
+# smtp_host     = "smtp.gmail.com"
+# smtp_port     = "587"
+# smtp_secure   = "false"
+# smtp_user     = "tu-cuenta@gmail.com"
+# smtp_password = "xxxx xxxx xxxx xxxx"
+# smtp_from     = "CargoLink <tu-cuenta@gmail.com>"
