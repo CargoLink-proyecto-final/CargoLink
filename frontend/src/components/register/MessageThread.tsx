@@ -46,14 +46,14 @@ export default function MessageThread({ tripId, messageCount, enabled }: Props) 
   const messages = data?.messages ?? [];
 
   return (
-    <div className="space-y-2 max-h-96 overflow-y-auto pr-2 scrollbar-thin">
+    <div className="space-y-2 max-h-64 sm:max-h-96 overflow-y-auto pr-2 scrollbar-thin">
       {messages.map((m) => {
         const isMine = m.senderId === currentUserId;
         return (
           <div key={m.id} className={cn('flex flex-col', isMine ? 'items-end' : 'items-start')}>
             <div
               className={cn(
-                'max-w-[78%] rounded-2xl px-3.5 py-2 text-[13px] shadow-card',
+                'max-w-[85%] sm:max-w-[78%] rounded-2xl px-3.5 py-2 text-[13px] shadow-card',
                 isMine
                   ? 'bg-ink-900 text-surface-raised rounded-br-sm'
                   : 'bg-surface-raised border border-ink-200/70 text-ink-800 rounded-bl-sm',

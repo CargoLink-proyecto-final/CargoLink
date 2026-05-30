@@ -51,7 +51,7 @@ export default function PostulateModal({
     >
       <form
         onSubmit={handleSubmit}
-        className="card w-full max-w-md p-6 space-y-4 bg-surface-raised"
+        className="card w-full max-w-sm sm:max-w-md p-6 space-y-4 bg-surface-raised"
       >
         <div>
           <p className="eyebrow">Postularme</p>

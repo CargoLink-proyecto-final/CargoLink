@@ -59,7 +59,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col lg:flex-row">
       {/* Left — editorial visual side */}
-      <aside className="relative lg:w-[46%] bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 text-surface-raised overflow-hidden">
+      <aside className="relative hidden lg:block lg:w-[46%] bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 text-surface-raised overflow-hidden">
         <div className="absolute inset-0 pointer-events-none opacity-40"
              style={{
                backgroundImage:

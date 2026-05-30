@@ -51,7 +51,7 @@ export default function RegisterRow({ item }: Props) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="font-display text-[18px] text-ink-900 truncate">{item.title}</span>
+            <span className="font-display text-[16px] sm:text-[18px] text-ink-900 truncate">{item.title}</span>
             <StatusBadge status={item.status} />
           </div>
           <p className="text-[12px] text-ink-500 mt-1.5 truncate flex items-center gap-1.5">
@@ -60,7 +60,7 @@ export default function RegisterRow({ item }: Props) {
             <span className="text-ink-400">→</span>
             <span className="font-medium text-ink-700">{item.destAddress}</span>
           </p>
-          <div className="text-[12px] text-ink-600 mt-2 flex flex-wrap gap-x-5 gap-y-1">
+          <div className="text-[12px] text-ink-600 mt-2 flex flex-wrap gap-x-3 sm:gap-x-5 gap-y-1">
             <span className="inline-flex items-center gap-1.5">
               <Package size={12} className="text-ink-400" />
               {item.cargoType} · <span className="font-mono">{item.weight} kg</span>
@@ -87,7 +87,7 @@ export default function RegisterRow({ item }: Props) {
 
       {expanded && (
         <div className="card-divider px-5 py-5 bg-surface-sunk/30 space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-[13px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-5 text-[13px]">
             <Section title="Carga">
               <Row label="Tipo" value={item.cargoType} />
               <Row label="Peso" value={<span className="font-mono">{item.weight} kg</span>} />

@@ -54,7 +54,7 @@ export default function TrackingDetailPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">{trip.load?.title || 'Seguimiento del Viaje'}</h1>
             <div className="flex items-center gap-2 mt-1">
@@ -72,7 +72,7 @@ export default function TrackingDetailPage() {
           </Link>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ height: '500px', zIndex: 1 }}>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ height: 'clamp(280px, 55vh, 500px)', zIndex: 1 }}>
           <MapView markers={markers} routes={routes} zoom={10} />
         </div>
 

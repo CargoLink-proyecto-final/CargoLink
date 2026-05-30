@@ -226,14 +226,14 @@ export default function LoadDetailPage() {
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">{load.title}</h1>
             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(load.status)}`}>
               {getStatusLabel(load.status)}
             </span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {canPostulate && (
               <button
                 onClick={() => setShowPostulateModal(true)}
@@ -374,7 +374,7 @@ export default function LoadDetailPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
             <h2 className="font-semibold flex items-center gap-2"><Package size={18} /> Detalles de la Carga</h2>
             {load.description && <p className="text-sm text-gray-600">{load.description}</p>}
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div><span className="text-gray-500">Tipo:</span> <span className="font-medium">{load.cargoType}</span></div>
               <div><span className="text-gray-500">Peso:</span> <span className="font-medium">{load.weight} kg</span></div>
               {load.volume && <div><span className="text-gray-500">Volumen:</span> <span className="font-medium">{load.volume} m3</span></div>}

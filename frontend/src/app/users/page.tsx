@@ -76,8 +76,8 @@ export default function UsersPage() {
                       <th className="px-4 py-3 font-medium">Usuario</th>
                       <th className="px-4 py-3 font-medium">Correo</th>
                       <th className="px-4 py-3 font-medium">Rol</th>
-                      <th className="px-4 py-3 font-medium">Empresa</th>
-                      <th className="px-4 py-3 font-medium">Registro</th>
+                      <th className="px-4 py-3 font-medium hidden md:table-cell">Empresa</th>
+                      <th className="px-4 py-3 font-medium hidden md:table-cell">Registro</th>
                       <th className="px-4 py-3 font-medium">Estado</th>
                       <th className="px-4 py-3 font-medium">Acciones</th>
                     </tr>
@@ -90,8 +90,8 @@ export default function UsersPage() {
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-1 rounded-full ${roleColors[u.role]}`}>{u.role}</span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{u.companyName || '-'}</td>
-                        <td className="px-4 py-3 text-gray-500">{formatDate(u.createdAt)}</td>
+                        <td className="px-4 py-3 text-gray-600 hidden md:table-cell">{u.companyName || '-'}</td>
+                        <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{formatDate(u.createdAt)}</td>
                         <td className="px-4 py-3">
                           <span className={`flex items-center gap-1 text-xs ${u.isActive ? 'text-green-600' : 'text-red-500'}`}>
                             <span className={`w-2 h-2 rounded-full ${u.isActive ? 'bg-green-400' : 'bg-red-400'}`} />
@@ -121,8 +121,8 @@ export default function UsersPage() {
                 <div className="flex items-center justify-between p-4 border-t border-gray-100">
                   <span className="text-sm text-gray-500">Página {data.page} de {data.totalPages}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Anterior</button>
-                    <button onClick={() => setPage((p) => p + 1)} disabled={page >= data.totalPages} className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Siguiente</button>
+                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-2 sm:px-3 py-1 text-xs sm:text-sm border rounded-lg disabled:opacity-50">Anterior</button>
+                    <button onClick={() => setPage((p) => p + 1)} disabled={page >= data.totalPages} className="px-2 sm:px-3 py-1 text-xs sm:text-sm border rounded-lg disabled:opacity-50">Siguiente</button>
                   </div>
                 </div>
               )}
