@@ -313,6 +313,12 @@ resource "google_cloud_run_v2_service" "backend" {
     google_secret_manager_secret_version.jwt_secret,
     google_secret_manager_secret_iam_member.database_url,
     google_secret_manager_secret_iam_member.jwt_secret,
+    # SMTP es condicional (count). Referenciar el recurso completo cubre 0 o 1
+    # instancias: con SMTP deshabilitado no agrega dependencia; con SMTP
+    # habilitado garantiza que el secret version + IAM existan antes de que el
+    # backend monte el secret (evita "secret version latest not found").
+    google_secret_manager_secret_version.smtp_password,
+    google_secret_manager_secret_iam_member.smtp_password,
     google_project_iam_member.sql_client,
     google_sql_database.main,
     google_sql_user.main,
