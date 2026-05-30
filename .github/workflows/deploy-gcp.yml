@@ -1,25 +1,24 @@
 name: Deploy to GCP (Cloud Run)
 
-# Deploy continuo a Cloud Run:
-#   - merge/push a develop → entorno dev  (cargolink-dev-*)
-#   - merge/push a main    → entorno prod (cargolink-*)
-# Auth keyless vía Workload Identity Federation (sin keys en GitHub).
-# La infra (Cloud SQL, secrets, env vars, scaling) la maneja Terraform en
-# infra/gcp/; este workflow solo builda la imagen y la despliega con
-# `gcloud run deploy` (Terraform ignora cambios de imagen — ver main.tf).
+# Deploy continuo a Cloud Run, con jobs separados para ver en el grafo de
+# Actions qué entorno deploya y cuál se saltea según la rama:
+#   build-and-push (siempre)
+#        ├── deploy-dev   → corre solo en push a develop  (el de prod queda skipped)
+#        └── deploy-prod  → corre solo en push a main      (el de dev queda skipped)
+# Auth keyless vía Workload Identity Federation. La infra la maneja Terraform
+# (infra/gcp/); este workflow solo builda y deploya la imagen (ignore_changes).
 
 on:
   push:
     branches: [develop, main]
 
-# Evita deploys solapados en la misma rama (el último gana).
 concurrency:
   group: deploy-gcp-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
   contents: read
-  id-token: write # requerido para WIF (OIDC)
+  id-token: write # WIF (OIDC)
 
 env:
   PROJECT_ID: cargo-link-2026
@@ -28,8 +27,13 @@ env:
   DEPLOYER_SA: github-deployer@cargo-link-2026.iam.gserviceaccount.com
 
 jobs:
-  deploy:
+  # ── Build & push de las imágenes del entorno que corresponde a la rama ──
+  build-and-push:
     runs-on: ubuntu-latest
+    outputs:
+      env_name: ${{ steps.env.outputs.name }}
+      backend_image: ${{ steps.be.outputs.image }}
+      frontend_image: ${{ steps.fe.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,9 +42,9 @@ jobs:
         id: env
         run: |
           if [[ "${{ github.ref_name }}" == "main" ]]; then
-            echo "name=prod"        >>"$GITHUB_OUTPUT"
-            echo "infix="           >>"$GITHUB_OUTPUT"
-            echo "ar_repo=cargolink" >>"$GITHUB_OUTPUT"
+            echo "name=prod"            >>"$GITHUB_OUTPUT"
+            echo "infix="               >>"$GITHUB_OUTPUT"
+            echo "ar_repo=cargolink"     >>"$GITHUB_OUTPUT"
           else
             echo "name=dev"             >>"$GITHUB_OUTPUT"
             echo "infix=dev-"           >>"$GITHUB_OUTPUT"
@@ -49,7 +53,6 @@ jobs:
           echo "sha=${GITHUB_SHA::7}" >>"$GITHUB_OUTPUT"
 
       - name: Authenticate to GCP (WIF, keyless)
-        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
@@ -87,22 +90,68 @@ jobs:
           docker push "$IMG"
           echo "image=$IMG" >>"$GITHUB_OUTPUT"
 
-      - name: Deploy backend to Cloud Run
-        run: |
-          gcloud run deploy "cargolink-${{ steps.env.outputs.infix }}backend" \
-            --image="${{ steps.be.outputs.image }}" \
-            --region="${{ env.REGION }}" \
-            --quiet
+  # ── Deploy a DEV (solo push a develop; en main queda skipped) ──
+  deploy-dev:
+    needs: build-and-push
+    if: github.ref_name == 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to GCP (WIF, keyless)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
 
-      - name: Deploy frontend to Cloud Run
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy backend (dev)
         run: |
-          gcloud run deploy "cargolink-${{ steps.env.outputs.infix }}frontend" \
-            --image="${{ steps.fe.outputs.image }}" \
-            --region="${{ env.REGION }}" \
-            --quiet
+          gcloud run deploy cargolink-dev-backend \
+            --image="${{ needs.build-and-push.outputs.backend_image }}" \
+            --region="${{ env.REGION }}" --quiet
+
+      - name: Deploy frontend (dev)
+        run: |
+          gcloud run deploy cargolink-dev-frontend \
+            --image="${{ needs.build-and-push.outputs.frontend_image }}" \
+            --region="${{ env.REGION }}" --quiet
 
       - name: Summary
         run: |
-          echo "### Deploy a ${{ steps.env.outputs.name }} ✅" >>"$GITHUB_STEP_SUMMARY"
-          echo "- Backend: $(gcloud run services describe cargolink-${{ steps.env.outputs.infix }}backend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
-          echo "- Frontend: $(gcloud run services describe cargolink-${{ steps.env.outputs.infix }}frontend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
+          echo "### Deploy a dev ✅" >>"$GITHUB_STEP_SUMMARY"
+          echo "- Backend: $(gcloud run services describe cargolink-dev-backend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
+          echo "- Frontend: $(gcloud run services describe cargolink-dev-frontend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
+
+  # ── Deploy a PROD (solo push a main; en develop queda skipped) ──
+  deploy-prod:
+    needs: build-and-push
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to GCP (WIF, keyless)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy backend (prod)
+        run: |
+          gcloud run deploy cargolink-backend \
+            --image="${{ needs.build-and-push.outputs.backend_image }}" \
+            --region="${{ env.REGION }}" --quiet
+
+      - name: Deploy frontend (prod)
+        run: |
+          gcloud run deploy cargolink-frontend \
+            --image="${{ needs.build-and-push.outputs.frontend_image }}" \
+            --region="${{ env.REGION }}" --quiet
+
+      - name: Summary
+        run: |
+          echo "### Deploy a prod ✅" >>"$GITHUB_STEP_SUMMARY"
+          echo "- Backend: $(gcloud run services describe cargolink-backend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
+          echo "- Frontend: $(gcloud run services describe cargolink-frontend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
