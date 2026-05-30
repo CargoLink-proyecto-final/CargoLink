@@ -3,6 +3,17 @@ variable "project_id" {
   type        = string
 }
 
+variable "environment" {
+  description = "Entorno a desplegar. 'prod' conserva los nombres actuales (cargolink-*); cualquier otro valor (ej. 'dev') prefija los recursos (cargolink-dev-*) y usa un Artifact Registry propio. Se maneja con workspaces de Terraform (default = prod, workspace dev = dev)."
+  type        = string
+  default     = "prod"
+
+  validation {
+    condition     = contains(["prod", "dev"], var.environment)
+    error_message = "environment debe ser 'prod' o 'dev'."
+  }
+}
+
 variable "region" {
   description = "Región GCP. southamerica-east1 (São Paulo) es la más cercana a Argentina."
   type        = string

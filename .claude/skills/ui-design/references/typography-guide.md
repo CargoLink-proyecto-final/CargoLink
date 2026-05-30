@@ -4,13 +4,13 @@
 
 ## Font selection by domain and audience
 
-The most common typography mistake is choosing a font because it "looks cool" without considering who will read it and in what context. A serif display font signals editorial luxury — on a precision agriculture platform, it signals "wrong audience." Use this matrix to narrow the field before browsing specimens.
+The most common typography mistake is choosing a font because it "looks cool" without considering who will read it and in what context. A serif display font signals editorial luxury — on a logistics or fleet-ops platform, it signals "wrong audience." Use this matrix to narrow the field before browsing specimens.
 
-### Agriculture / industrial / field tools
+### Logistics / industrial / field tools
 
 **Signal:** authority, clarity, no-nonsense reliability.
 
-Farmers, agronomists, and field technicians need data-dense interfaces that read fast. Typography should disappear into the content, not call attention to itself.
+Carriers, dispatchers, and field operators (often on a phone, in a truck) need data-dense interfaces that read fast. Typography should disappear into the content, not call attention to itself.
 
 - **Display:** DM Sans (bold weights), Satoshi, Manrope. Geometric sans with wide apertures and clear letterforms.
 - **Body:** Same family at regular weight. One font family is enough.

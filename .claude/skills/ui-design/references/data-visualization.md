@@ -2,6 +2,8 @@
 
 **Load when:** designing charts, graphs, or any data display. Pairs with `dashboards.md` (where to place charts) and `color-system.md` § "Layer 3 — Semantic communication" (OKLCH for series colors).
 
+> **This repo (CargoLink):** the primary data visualization is the **map** — trip tracking, load origin/destination, carrier GPS position — built with **leaflet / react-leaflet** (`components/maps/`). There is **no charting library installed** (no Recharts/Chart.js/D3). The guidance below is generic, useful if a metrics dashboard ever needs charts (e.g. trips/month, ratings distribution); if so, propose adding a lib (Recharts is a common React fit) — don't assume one already exists. For maps, apply the same legibility principles: clear markers, semantic state colors (origin/destination/current position), no decorative clutter.
+
 ## Legibility first
 
 - **Avoid curved lines** in line charts: they obscure exact data points.

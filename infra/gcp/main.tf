@@ -13,6 +13,14 @@
 ###############################################################################
 
 locals {
+  # prod conserva los nombres actuales (sin infijo) → no recrea los recursos ya
+  # desplegados. Cualquier otro entorno (dev) prefija con "<env>-".
+  # Ej: cargolink-backend (prod) vs cargolink-dev-backend (dev).
+  infix = var.environment == "prod" ? "" : "${var.environment}-"
+
+  # Artifact Registry por entorno: "cargolink" (prod, ya existente) / "cargolink-dev".
+  ar_repo_id = var.environment == "prod" ? "cargolink" : "cargolink-${var.environment}"
+
   # APIs de GCP que hay que habilitar en el proyecto.
   apis = [
     "run.googleapis.com",
@@ -48,8 +56,8 @@ resource "google_project_service" "apis" {
 # ──────────────────────────── Artifact Registry ────────────────────────────
 resource "google_artifact_registry_repository" "docker" {
   location      = var.region
-  repository_id = "cargolink"
-  description   = "Imágenes Docker de CargoLink (backend + frontend)"
+  repository_id = local.ar_repo_id
+  description   = "Imágenes Docker de CargoLink ${var.environment} (backend + frontend)"
   format        = "DOCKER"
 
   depends_on = [google_project_service.apis]
@@ -70,7 +78,7 @@ resource "random_password" "jwt" {
 
 # ──────────────────────────── Cloud SQL ────────────────────────────
 resource "google_sql_database_instance" "main" {
-  name                = "cargolink-db"
+  name                = "cargolink-${local.infix}db"
   database_version    = "POSTGRES_15"
   region              = var.region
   deletion_protection = var.db_deletion_protection
@@ -110,7 +118,7 @@ resource "google_sql_user" "main" {
 
 # ──────────────────────────── Secret Manager ────────────────────────────
 resource "google_secret_manager_secret" "database_url" {
-  secret_id = "cargolink-database-url"
+  secret_id = "cargolink-${local.infix}database-url"
   replication {
     auto {}
   }
@@ -123,7 +131,7 @@ resource "google_secret_manager_secret_version" "database_url" {
 }
 
 resource "google_secret_manager_secret" "jwt_secret" {
-  secret_id = "cargolink-jwt-secret"
+  secret_id = "cargolink-${local.infix}jwt-secret"
   replication {
     auto {}
   }
@@ -137,7 +145,7 @@ resource "google_secret_manager_secret_version" "jwt_secret" {
 
 resource "google_secret_manager_secret" "smtp_password" {
   count     = local.smtp_enabled ? 1 : 0
-  secret_id = "cargolink-smtp-password"
+  secret_id = "cargolink-${local.infix}smtp-password"
   replication {
     auto {}
   }
@@ -152,7 +160,7 @@ resource "google_secret_manager_secret_version" "smtp_password" {
 
 # ──────────────────────────── Service Account de runtime ────────────────────────────
 resource "google_service_account" "run" {
-  account_id   = "cargolink-run"
+  account_id   = "cargolink-${local.infix}run"
   display_name = "CargoLink Cloud Run runtime"
 }
 
@@ -185,9 +193,15 @@ resource "google_secret_manager_secret_iam_member" "smtp_password" {
 
 # ──────────────────────────── Cloud Run: backend ────────────────────────────
 resource "google_cloud_run_v2_service" "backend" {
-  name     = "cargolink-backend"
+  name     = "cargolink-${local.infix}backend"
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
+
+  # CI (GitHub Actions) actualiza la imagen vía `gcloud run deploy`. Terraform
+  # ignora cambios de imagen para no pisar lo que despliega el pipeline.
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
+  }
 
   template {
     service_account = google_service_account.run.email
@@ -313,6 +327,12 @@ resource "google_cloud_run_v2_service" "backend" {
     google_secret_manager_secret_version.jwt_secret,
     google_secret_manager_secret_iam_member.database_url,
     google_secret_manager_secret_iam_member.jwt_secret,
+    # SMTP es condicional (count). Referenciar el recurso completo cubre 0 o 1
+    # instancias: con SMTP deshabilitado no agrega dependencia; con SMTP
+    # habilitado garantiza que el secret version + IAM existan antes de que el
+    # backend monte el secret (evita "secret version latest not found").
+    google_secret_manager_secret_version.smtp_password,
+    google_secret_manager_secret_iam_member.smtp_password,
     google_project_iam_member.sql_client,
     google_sql_database.main,
     google_sql_user.main,
@@ -331,9 +351,14 @@ resource "google_cloud_run_v2_service_iam_member" "backend_public" {
 resource "google_cloud_run_v2_service" "frontend" {
   count = local.frontend_deployed ? 1 : 0
 
-  name     = "cargolink-frontend"
+  name     = "cargolink-${local.infix}frontend"
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
+
+  # CI actualiza la imagen vía `gcloud run deploy` (ver backend).
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
+  }
 
   template {
     scaling {

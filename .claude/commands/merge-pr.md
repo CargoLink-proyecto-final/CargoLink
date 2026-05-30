@@ -9,7 +9,7 @@ El usuario quiere mergear un PR a `develop`. Seguí este flujo de forma estricta
 
 - Este comando **solo mergea a `develop`**. Si el PR apunta a `main` → PARATE y avisá: "ese merge lo hace el mantenedor humano manualmente, no Claude". El hook `PreToolUse` además bloquea duro `gh pr merge` sobre PRs a main — aunque intentes bypassearlo, te rechaza.
 - El usuario **tiene que confirmar** antes de que mergees. Nunca mergees sin `AskUserQuestion` explícita.
-- Método de merge: **siempre `--merge` (merge commit)**, nunca squash ni rebase. Es la política del repo (ADR-0005).
+- Método de merge: **siempre `--merge` (merge commit)**, nunca squash ni rebase. Es la política del repo.
 - Delete branch: **siempre `--delete-branch`**. No dejar basura en `origin`.
 
 ## Flujo
@@ -61,7 +61,7 @@ gh pr merge <N> --merge --delete-branch
 
 **Sin excepciones** en los flags: siempre merge commit, siempre delete branch remota.
 
-Sobre el `gh pr review --approve` formal: **no lo hago** — el PR lo abrió Claude con el token del user, que es el autor, y GitHub rechaza self-approve. Esto queda documentado en ADR-0005 como upgrade path cuando haya bot/reviewer distinto.
+Sobre el `gh pr review --approve` formal: **no lo hago** — el PR lo abrió Claude con el token del user, que es el autor, y GitHub rechaza self-approve. Es un upgrade path cuando haya bot/reviewer distinto.
 
 ### 6. Sync local + cleanup de rama local
 
@@ -123,7 +123,7 @@ Si hay worktree secundario detectado:
    - Si vacío → worktree limpio.
    - Si no vacío → hay cambios sin commitear o untracked. Guardalo para mostrarle al user antes de pedirle confirmación.
 
-3. **Aviso operacional sobre Docker**: `worktree remove` borra el directorio pero **no para containers**. Si el user había levantado el stack docker dev desde ese path, mostrá un warning recomendando `docker compose down` desde ese worktree (o `docker stop $(docker ps -q --filter "name=dev_plataforma")` para containers dev levantados desde cualquier worktree). No lo ejecutes vos — solo avisá.
+3. **Aviso operacional sobre Docker**: `worktree remove` borra el directorio pero **no para containers**. Si el user había levantado el stack docker desde ese path, mostrá un warning recomendando `docker compose down` desde ese worktree. No lo ejecutes vos — solo avisá.
 
 4. **Pedir confirmación con `AskUserQuestion`**:
    - Header: `Worktree`

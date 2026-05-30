@@ -1,6 +1,6 @@
 # Terraform — nunca commitear state ni vars con secretos
 .terraform/
-.terraform.lock.hcl
+# .terraform.lock.hcl SÍ se versiona (provider versions reproducibles).
 *.tfstate
 *.tfstate.*
 *.tfvars

@@ -1,51 +1,51 @@
-# Guía de trabajo para Claude — RindePlus/Plataforma
+# Guía de trabajo para Claude — CargoLink
 
 Estas reglas rigen cómo Claude (y quien use Claude Code en este repo) debe operar sobre el código, las ramas, los commits, los PRs y la arquitectura de asistencia de IA. Un hook `UserPromptSubmit` inyecta en cada turno el estado actual de git (rama, status, feature branches abiertas). **Leelo antes de actuar.**
 
-## Qué es RindePlus
+## Qué es CargoLink
 
-**Plataforma de análisis de rendimiento agrícola**. El producto calcula rinde esperado y real por lote, analiza brechas (estándar e inteligentes), integra datos climáticos e índices satelitales, y sirve a clientes que son organizaciones agrícolas (Aapresid, Agroconsultor, Crea, RindePlus). Dominio = agronomía + data + tooling empresarial.
+**Plataforma digital de gestión de transporte de carga por carretera (road freight)**. Conecta dadores de carga (shippers, rol `CARGO_GENERATOR`) con transportistas (carriers, rol `TRANSPORTER`), más un rol `ADMIN`. El flujo central: un shipper publica una carga (`Load`), los carriers se postulan (`Postulation`, con negociación de precio), al asignarse se abre un viaje (`Trip`) con tracking GPS, hay chat por WebSockets (`Message`) y al cerrar el viaje ambas partes se califican (`Rating`). Dominio = logística de transporte de cargas.
 
-Este mínimo de contexto alcanza para la mayoría de las tareas. Para detalle de dominio (cultivos, unidades, índices, campañas) existe la skill `agronomia` (una vez promovida desde `.claude/skills-draft/` a `.claude/skills/`).
+Este mínimo de contexto alcanza para la mayoría de las tareas. Para detalle de dominio (estados de carga/viaje/postulación, flujo de bidding, tracking) existe la skill `logistica` como borrador no-indexado en `.claude/skills-draft/logistica/`.
 
 ## Stack técnico
 
 | Capa | Stack |
 |---|---|
-| **Frontend** | Next.js 15.5.9 (App Router, standalone) · React 19 · TypeScript `strict: true` · Tailwind · react-leaflet · recharts |
-| **Backend** | FastAPI 0.104.1 · Python 3.12 · SQLAlchemy 2.0 · Alembic · Pydantic · psycopg2 · gunicorn + UvicornWorker |
-| **Base de datos** | PostgreSQL 15 |
-| **Infra / dev** | Docker Compose dev/prod (puertos xx35/xx30) · imágenes multi-stage en GHCR |
-| **Tests** | vitest (frontend) |
+| **Mobile** | React Native 0.73 · Expo SDK 50 · TypeScript · react-navigation · react-native-maps · expo-location · expo-notifications · zustand · axios · socket.io-client |
+| **Web** (`frontend/`) | Next.js 14 (App Router) · React 18 · TypeScript `strict: true` · Tailwind · zustand · @tanstack/react-query · axios · react-hook-form · zod · leaflet/react-leaflet · socket.io-client · lucide-react |
+| **Backend** (`backend/`) | NestJS 10 · Prisma 5 · JWT (@nestjs/jwt + passport-jwt) · Socket.IO (@nestjs/websockets) · Swagger · class-validator/class-transformer · bcrypt · nodemailer |
+| **Base de datos** | PostgreSQL 15 (vía Prisma — schema en `backend/prisma/schema.prisma`, migraciones en `backend/prisma/migrations/`, seed en `backend/prisma/seed.ts`) |
+| **Infra / dev** | Único `docker-compose.yml` en la raíz (`postgres` :5432, `backend` :3001, `frontend` :3000) para dev local · prod en GCP Cloud Run + Cloud SQL, imágenes multi-stage en Artifact Registry |
+| **Tests** | jest (backend) |
 
 Comandos útiles de referencia:
 
-- Frontend: `cd frontend && npm run lint`, `cd frontend && npm test`, `cd frontend && npm run build`.
-- Backend: `docker exec dev_plataforma_backend pytest <args>` si hay suite. Alembic vía `docker exec dev_plataforma_backend alembic upgrade head`.
-- Stack completo: `cd docker && ./up-dev.sh -d`, `./down-dev.sh`.
-- Logs: `docker logs dev_plataforma_backend --tail 50`.
+- Web: `cd frontend && npm run lint`, `cd frontend && npm run build`. Dev local: `npm run dev` (puerto 3003).
+- Backend: `cd backend && npm test` (jest), `npm run lint` (eslint). Prisma: `npm run prisma:generate`, `npm run prisma:migrate` (`prisma migrate dev`), `npm run prisma:seed`, `npm run prisma:studio`.
+- Stack completo: `docker compose up -d`, `docker compose down`. Endpoints locales: Frontend http://localhost:3000, API http://localhost:3001/api, Swagger http://localhost:3001/api/docs, Postgres localhost:5432.
+- Logs: `docker compose logs backend`, `docker compose logs frontend`.
+- Migraciones dentro del contenedor: `docker compose exec backend npx prisma migrate deploy` (es lo que corre el `docker-entrypoint.sh` al startup).
 
-El frontend tiene ~154 archivos TS/TSX y 0 JS/JSX: todo tipado estricto. Respetá la configuración `strict` del `tsconfig.json`.
+Todo el código es TypeScript (web, mobile y backend). No hay Python en ningún lado. Respetá la configuración `strict` del `tsconfig.json` del frontend.
 
 ### Plugins opcionales recomendados (opt-in per-usuario)
 
-Cada colaborador puede instalarlos en su máquina; no se versionan en el repo porque son herramientas genéricas del entorno, no convenciones del producto. Ambos vienen del marketplace oficial de Anthropic y dan diagnostics de tipos en tiempo real:
+Cada colaborador puede instalarlo en su máquina; no se versiona en el repo porque es una herramienta genérica del entorno, no una convención del producto. Viene del marketplace oficial de Anthropic y da diagnostics de tipos en tiempo real:
 
 ```bash
 /plugin install typescript-lsp@claude-plugins-official
-/plugin install pyright-lsp@claude-plugins-official
 ```
 
 | Plugin | Para qué sirve |
 |---|---|
-| `typescript-lsp` | Chequeo de tipos post-edit sobre los archivos `.ts`/`.tsx` del frontend (`strict: true` está activo — los errores de tipos son duros). |
-| `pyright-lsp` | Chequeo de tipos en el backend Python 3.12. |
+| `typescript-lsp` | Chequeo de tipos post-edit sobre los archivos `.ts`/`.tsx` de web, mobile y backend (todo TypeScript; `strict: true` activo en el frontend — los errores de tipos son duros). |
 
-No recomendamos otros plugins del marketplace oficial porque se superponen con nuestras propias piezas (`/commit`, `/pr`, el futuro `qa-engineer`, etc.). Si encontrás un plugin que sí sume valor y no duplica, proponelo y evaluamos.
+No recomendamos otros plugins del marketplace oficial porque se superponen con nuestras propias piezas (`/commit`, `/pr`, `qa-engineer`, etc.). Si encontrás un plugin que sí sume valor y no duplica, proponelo y evaluamos.
 
 ## Arquitectura de IA en este repo
 
-Adoptamos **un main agent** (vos) apoyado en **skills on-demand** + **un único subagente de QA** para la pasada de validación (sin permisos de modificación). La decisión está documentada en [`docs/adr/0001-main-skills-qa-architecture.md`](./docs/adr/0001-main-skills-qa-architecture.md).
+Adoptamos **un main agent** (vos) apoyado en **skills on-demand** + **dos subagentes con rol específico** (uno de QA por feature, uno de análisis de release), ambos sin permisos de modificación.
 
 Por qué este diseño:
 - Las tareas típicas del producto cruzan frontend + backend + DB en el mismo cambio. Un agente por capa obliga a coordinar, sin beneficio claro.
@@ -62,53 +62,48 @@ Por qué este diseño:
 
 > Los `SKILL.md` son fuente de verdad. Esto es solo un índice de triggers.
 >
-> **Estado:** todas las skills técnicas están en construcción. La skill de dominio `agronomia` está como borrador no-indexado en `.claude/skills-draft/agronomia/` hasta que el equipo agronómico la revise (ver [`docs/adr/0002-agronomia-skill-con-content-editable.md`](./docs/adr/0002-agronomia-skill-con-content-editable.md)).
+> **Estado:** las skills técnicas están en construcción. La skill de dominio `logistica` está como borrador no-indexado en `.claude/skills-draft/logistica/` hasta que el equipo de producto la revise.
 
 | Skill | Path | Trigger principal |
 |---|---|---|
-| `ui-design` | `.claude/skills/ui-design/SKILL.md` | Diseño UI/UX + implementación frontend: paletas de color, tipografía, dirección estética, dashboards, charts, accesibilidad, rediseños. También componentes React, páginas Next.js, hooks, layouts, estilos Tailwind, estado con Context API, testing con Vitest. |
-| `backend-endpoint` | `.claude/skills/backend-endpoint/SKILL.md` | Crear, modificar o testear endpoints FastAPI, schemas Pydantic, dependencias, autenticación o autorización. |
-| `db-migration` | `.claude/skills/db-migration/SKILL.md` | Cambios de schema o data con Alembic: nueva migración, backfill, rollback, coordinación con deploy. |
-| `self-review-checklist` | `.claude/skills/self-review-checklist/SKILL.md` | Antes de dar por cerrada una tarea — checklist de tests, lint, diff limpio, secretos, criterios de aceptación. |
+| `ui-design` | `.claude/skills/ui-design/SKILL.md` | Diseño UI/UX + implementación frontend: paletas de color, tipografía, dirección estética, dashboards, charts, mapas, accesibilidad, rediseños. También componentes React, páginas Next.js, hooks, layouts, estilos Tailwind, estado con zustand/react-query, y pantallas mobile React Native/Expo. |
+| `backend-endpoint` | `.claude/skills/backend-endpoint/SKILL.md` | Crear, modificar o testear endpoints NestJS: controllers, services, DTOs (class-validator), queries Prisma, guards JWT/autorización por rol, decoradores Swagger. Módulos bajo `backend/src/`. |
+| `db-migration` | `.claude/skills/db-migration/SKILL.md` | Cambios de schema o data con Prisma: editar `schema.prisma`, `prisma migrate dev`, `prisma migrate deploy`, seed, rollback. Toca `backend/prisma/`. |
+| `self-review-checklist` | `.claude/skills/self-review-checklist/SKILL.md` | Antes de dar por cerrada una tarea — checklist de tests (jest), lint (eslint/next lint), diff limpio, secretos, criterios de aceptación. |
 
 ## Subagentes
 
-Este repo tiene **dos** subagentes con roles distintos. Ambos con tools allowlist y sin permisos destructivos (ver ADRs 0003 y 0006).
+Este repo tiene **dos** subagentes con roles distintos. Ambos con tools allowlist y sin permisos destructivos.
 
 ### `qa-engineer` — feature → develop
 
-**Rol:** pasada formal de QA al cerrar una feature o fix. Revisa el diff individual del PR: tests, lint, convenciones, edge cases, criterios de aceptación, y **aplica los criterios de la skill `db-migration`** cuando el diff toca `backend/alembic/versions/**`.
+**Rol:** pasada formal de QA al cerrar una feature o fix. Revisa el diff individual del PR: tests, lint, convenciones, edge cases, criterios de aceptación, y **aplica los criterios de la skill `db-migration`** cuando el diff toca `backend/prisma/migrations/**`.
 
 **Cuándo se invoca:** automáticamente por `/pr` antes de abrir el PR. Si reporta BLOQUEANTES, `/pr` aborta y el main resuelve.
 
 **Salida:** `APROBADO` o lista priorizada de bloqueantes (archivo, línea, tipo de problema).
 
-**Herramientas:** `Read`, `Grep`, `Glob`, `Bash` (solo test/lint). Sin `Write`/`Edit`. Decisión en [`docs/adr/0003-qa-engineer-sin-permisos-destructivos.md`](./docs/adr/0003-qa-engineer-sin-permisos-destructivos.md).
+**Herramientas:** `Read`, `Grep`, `Glob`, `Bash` (solo test/lint). Sin `Write`/`Edit`.
 
 **Path:** [`.claude/agents/qa-engineer.md`](./.claude/agents/qa-engineer.md).
 
 ### `release-engineer` — develop → main
 
-**Rol:** análisis **agregado** del release antes de abrir el PR `develop → main`. No revisa código individual (eso ya pasó por `qa-engineer` en cada PR previo). Emite un **informe estructurado** con: migraciones incluidas clasificadas por riesgo (🟢/🟡/🔴), breaking changes detectados en la API, release notes borrador desde conventional commits agrupados por tipo, y checklist operacional para el mantenedor humano.
+**Rol:** análisis **agregado** del release antes de abrir el PR `develop → main`. No revisa código individual (eso ya pasó por `qa-engineer` en cada PR previo). Emite un **informe estructurado** con: migraciones Prisma incluidas clasificadas por riesgo (🟢/🟡/🔴), breaking changes detectados en la API NestJS (endpoints removidos, DTOs alterados, columnas de modelos Prisma eliminadas), release notes borrador desde conventional commits agrupados por tipo, y checklist operacional para el mantenedor humano.
 
 **Cuándo se invoca:** automáticamente por `/release` antes de `gh pr create`. Su output es el body del PR de release.
 
 **Salida:** informe Markdown con 5 secciones fijas (Resumen / Migraciones / Breaking changes / Release notes / Checklist operacional).
 
-**Herramientas:** `Read`, `Grep`, `Glob`, `Bash` (solo `git diff`, `git log`, `gh pr view/list`). Sin `Write`/`Edit`, sin `gh pr merge/create/review`, sin `alembic`. Decisión en [`docs/adr/0006-release-engineer-subagent.md`](./docs/adr/0006-release-engineer-subagent.md).
+**Herramientas:** `Read`, `Grep`, `Glob`, `Bash` (solo `git diff`, `git log`, `gh pr view/list`). Sin `Write`/`Edit`, sin `gh pr merge/create/review`.
 
 **Path:** [`.claude/agents/release-engineer.md`](./.claude/agents/release-engineer.md).
 
-## Decisiones arquitectónicas (ADRs)
+## Decisiones estructurales
 
-Las decisiones estructurales del repo (arquitectura, stack, patrones, políticas) viven en [`docs/adr/`](./docs/adr/) siguiendo el patrón Michael Nygard: un archivo por decisión, numerado (`NNNN-titulo.md`), con 5 secciones estándar.
+Las decisiones técnicas del repo (arquitectura, stack, patrones, políticas) se documentan en [`docs/`](./docs/) — ver el índice en [`docs/README.md`](./docs/README.md). El workflow de Claude Code tiene su propio mapa narrativo en [`docs/workflow-claude-code.md`](./docs/workflow-claude-code.md).
 
-**Reglas:**
-- **Antes de proponer un cambio arquitectónico**, revisá si hay un ADR relevante que lo cubre o lo contradice.
-- **Si decidís algo estructural** (elección de framework, patrón arquitectónico, modelo de datos con impacto amplio, política de branching/deploy), **creá un ADR nuevo** siguiendo [`docs/adr/template.md`](./docs/adr/template.md) y referencialo desde el PR.
-- **No editar un ADR aceptado** — si la decisión cambia, creás un ADR nuevo con estado `Aceptado` y al viejo le ponés `Superseded by ADR-<nuevo>`.
-
-Ver [`docs/adr/README.md`](./docs/adr/README.md) para convenciones y criterio de cuándo amerita un ADR.
+**Regla:** antes de proponer un cambio estructural (elección de framework, patrón arquitectónico, modelo de datos con impacto amplio, política de branching/deploy), revisá si la doc existente lo cubre o lo contradice; si decidís algo nuevo, dejalo escrito en `docs/` y referencialo desde el PR.
 
 ## Branch model — gitflow
 
@@ -136,22 +131,23 @@ Formato: `<type>/<kebab-case-description>`
 `type` ∈ `{feat, fix, chore, refactor, docs, test}`.
 
 Ejemplos:
-- `fix/empresas-dropdown-license-bypass`
-- `feat/migrate-lote-detail-module`
-- `chore/upgrade-nextjs-to-15`
+- `fix/trips-gps-coordinate-rounding`
+- `feat/loads-status-filtering`
+- `chore/align-compose-ports`
 
 ## Commits — conventional commits en inglés
 
 Formato: `type(scope): description`
 
 - Tipos: los mismos que los de rama.
-- `scope`: opcional, minúsculas, entre paréntesis. Ej. `(gestion-licencias)`, `(empresas-dropdown)`.
+- `scope`: opcional, minúsculas, entre paréntesis. Ej. `(loads)`, `(trips)`, `(auth)`, `(docker)`.
 - `description`: **en inglés**, minúsculas, imperativo, sin punto final.
 
-Ejemplos (tomados del historial real):
-- `feat: migrate lote detail module + fix endpoint/frontend field mismatches`
-- `fix(gestion-licencias): scope admin licencias to user's org by default`
-- `fix(empresas-dropdown): unify license bypass handling`
+Ejemplos:
+- `feat(loads): add load filtering by status`
+- `fix(trips): correct GPS coordinate rounding`
+- `fix(auth): scope carrier dashboard to own trips`
+- `chore(docker): align compose ports with env`
 
 No uses `--no-verify` ni `--no-gpg-sign` a menos que el usuario lo pida explícitamente.
 
@@ -265,7 +261,7 @@ Pregunta: `¿Aislar la rama en un worktree?` · Header: `Worktree`
 
 Opciones según estado:
 
-- Siempre: **Crear nuevo worktree** — description: `Directorio hermano \`../Plataforma-<slug>\`. Útil si ya hay otra sesión Claude activa.`
+- Siempre: **Crear nuevo worktree** — description: `Directorio hermano \`../CargoLink-<slug>\`. Útil si ya hay otra sesión Claude activa.`
 - Solo si hay worktrees secundarios vivos (`git worktree list --porcelain` devuelve más que el principal): **Usar worktree existente** — description: `Elegís cuál en el próximo paso.`
 - Siempre: **No usar worktree** — description: `Trabajo en el repo principal.`
 
@@ -288,7 +284,7 @@ Después de que los selectores resuelvan, ejecutás la combinación (reusando lo
 | Rama | Worktree | Acción |
 |---|---|---|
 | Crear nueva | No worktree | `git fetch origin` + `git checkout -b <type>/<slug> origin/develop`. |
-| Crear nueva | Crear nuevo worktree | `git worktree add "$WT" -b <type>/<slug> origin/develop` + copiar `docker/.env.{dev,prod}` si existen. Reportá que el user tiene que abrir otra sesión Claude en el worktree — **no hagas `cd` vos**. |
+| Crear nueva | Crear nuevo worktree | `git worktree add "$WT" -b <type>/<slug> origin/develop` + copiar el `.env` raíz si existe. Reportá que el user tiene que abrir otra sesión Claude en el worktree — **no hagas `cd` vos**. |
 | Crear nueva | Worktree existente | Pedí al user `cd` al worktree; dentro, `git checkout -b <type>/<slug> origin/develop`. Avisá si el worktree tiene otra rama check-out-eada (posible conflicto). |
 | Existente | No worktree | `git checkout <rama>` si es local; `git checkout -b <rama> origin/<rama>` si es solo remota. |
 | Existente | Crear nuevo worktree | `git worktree add "$WT" <rama>` si la rama es local; `git worktree add "$WT" -b <rama> origin/<rama>` si es solo remota (evita worktree en detached-HEAD). |
@@ -313,7 +309,7 @@ Orden end-to-end al terminar el trabajo de una feature:
 5. **`/merge-pr <N>`** → una vez abierto, pide confirmación explícita al user para mergear a `develop`, mergea con `--merge --delete-branch` y limpia la rama local. Ofrece abrir `/release` después si hay cosas en develop que aún no están en main.
 6. **`/release`** (opcional, cuando corresponda hacer release) → abre PR `develop → main`. **Nunca aprueba ni mergea** — el merge a main lo hace el mantenedor humano manualmente desde GitHub.
 
-Ver ADR-0005 (`docs/adr/0005-release-flow-enforcement.md`) para la racional completa de por qué el flow es obligatorio.
+Para la racional completa del workflow, ver [`docs/workflow-claude-code.md`](./docs/workflow-claude-code.md).
 
 ## Flujo de PR
 
@@ -337,23 +333,19 @@ Cuando `develop` tiene cambios listos para producción:
 
 1. **`/release`** confirma con el user y delega al subagente **`release-engineer`**.
 2. **`release-engineer`** produce un informe estructurado con:
-   - **Migraciones incluidas** clasificadas por riesgo (🟢 bajo / 🟡 medio / 🔴 alto). Importante porque el deploy a prod corre `alembic upgrade head` automáticamente al arrancar el container — todo lo listado ahí se va a aplicar sin intervención manual.
-   - **Breaking changes** detectados en la API (endpoints removidos, schemas Pydantic alterados, columnas de models eliminadas).
+   - **Migraciones Prisma incluidas** clasificadas por riesgo (🟢 bajo / 🟡 medio / 🔴 alto). Importante porque el contenedor del backend corre `npx prisma migrate deploy` automáticamente al arrancar (en el `docker-entrypoint.sh`) — todo lo listado ahí se va a aplicar sin intervención manual cuando el server levante la imagen `:prod`.
+   - **Breaking changes** detectados en la API NestJS (endpoints removidos, DTOs alterados, columnas de modelos Prisma eliminadas).
    - **Release notes** borrador desde conventional commits agrupados por tipo (feat / fix / refactor / docs / tests / chore).
    - **Checklist operacional** para el mantenedor humano (rollback plan, coordinación, smoke test post-deploy, comunicación).
-   - **Si hay migraciones 🟡/🔴**, el checklist incluye como **OBLIGATORIO** tomar backup de prod DB antes del merge, y para migraciones 🔴 también probar restore en entorno paralelo. Ver skill [`db-migration`](./.claude/skills/db-migration/SKILL.md) § "Regla dura — Backup antes de aplicar".
+   - **Si hay migraciones 🟡/🔴** (cambios destructivos: drop column/table, renames), el checklist incluye como recomendación fuerte tomar un backup manual de la DB de prod antes del merge. El repo **no** automatiza backups — ver [`docs/deployment.md`](./docs/deployment.md) y [`docs/base-de-datos.md`](./docs/base-de-datos.md) § "Backups y restore".
 3. `/release` abre el PR `develop → main` con ese informe como body.
 4. **Claude no mergea ni aprueba ese PR.** Regla dura — está en el hook, en este documento y en el slash-command. El merge a `main` lo hace el mantenedor humano desde GitHub con su propia cuenta.
-5. El user revisa el PR (con visibilidad concreta de lo que va a pasar en prod gracias al informe), lo aprueba con su cuenta (o con la de otro reviewer), y lo mergea manualmente.
-6. **Al mergear a `main`, el deploy a prod es automático** (ver ADR-0007). El workflow `.github/workflows/docker-build-push.yml` builda la imagen `:prod` y dispara `scripts/deploy/prod.sh` en el server via SSH + Cloudflare Access:
-   - **Backup obligatorio** de la DB prod (pg_dump) + rotación (últimos 10).
-   - `docker compose pull` + `up -d` del stack prod.
-   - Espera healthcheck del backend + smoke tests.
-   - **Rollback completo** si algún paso falla (imagen vieja + restore del backup).
+5. El user revisa el PR (con visibilidad concreta de lo que va a pasar gracias al informe), lo aprueba con su cuenta (o con la de otro reviewer), y lo mergea manualmente.
+6. **Al mergear a `main`, el deploy a prod es automático.** El workflow [`.github/workflows/deploy-gcp.yml`](./.github/workflows/deploy-gcp.yml) buildea las imágenes Docker de backend y frontend, las pushea a Artifact Registry y corre `gcloud run deploy` contra el entorno **prod** de Cloud Run (servicios `cargolink-backend`/`cargolink-frontend`, DB `cargolink-db`) en el proyecto GCP `cargo-link-2026`. Auth keyless vía Workload Identity Federation (sin keys en GitHub), TLS automático en las URLs `*.run.app`. Detalle en [`docs/ci-cd.md`](./docs/ci-cd.md).
 
-**Deploy continuo al stack dev**: el mismo server corre también los containers `dev_plataforma_*`. Cada merge a `develop` dispara un job paralelo `deploy-dev` que corre `scripts/deploy/dev.sh` — pull de `:dev` + up del stack dev + smoke tests + rollback de imagen si falla. **Sin backup por default** (datos dev regenerables desde el backup SQL del repo); opt-in con `DEV_BACKUP=1`.
+**Entorno `dev`**: el merge a `develop` dispara el mismo workflow contra el entorno **dev** (servicios `cargolink-dev-*`, imágenes en el repo `cargolink-dev` de Artifact Registry), cada uno con su propia DB y secrets.
 
-**Por qué el merge a main es manual pero el deploy después es automático**: el merge es la decisión humana ("quiero que esto entre a prod"); el deploy es la ejecución mecánica de esa decisión, con safeguards (backup, smoke tests, rollback). Automatizarlo elimina el error humano de "olvidé tomar backup". Para develop, el merge del PR ya es la aprobación del cambio → el deploy al stack dev es inmediato sin ceremonia extra.
+**Por qué el merge a main es manual**: es la decisión humana ("quiero que esto entre a prod"). El merge dispara el deploy automático a Cloud Run prod, pero la decisión de mergear sigue en manos del mantenedor.
 
 ## Slash-commands disponibles
 
@@ -375,10 +367,6 @@ Release:
 Mantenimiento:
 - `/prune-branches` — borra ramas locales ya mergeadas a develop (con confirmación).
 
-Integración con upstream:
-- `/upstream-pending` — lista commits del upstream pendientes de portear.
-- `/upstream-port` — portea un commit upstream adaptado a la estructura de este repo.
-
 Para onboarding rápido del equipo, ver [`.claude/README.md`](./.claude/README.md) — mapa de la carpeta y ownership de cada pieza.
 
 ## Worktrees para trabajo paralelo
@@ -388,9 +376,9 @@ Cuando querés tener dos sesiones Claude editando features distintas sin pisarse
 **Compatibilidad**: cada worktree tiene su propia rama/HEAD; hooks, slash-commands y `CLAUDE.md` se propagan por git una vez mergeados a `develop`.
 
 **Advertencia — recursos compartidos entre worktrees**:
-- La **DB Docker** (`dev_plataforma_postgres`) es una sola. **No** corran `alembic upgrade` simultáneamente desde dos worktrees — se pisan el schema.
-- El stack Docker usa `COMPOSE_PROJECT_NAME=plataforma-dev` (fijo en `.env.dev`). **Solo un worktree** puede tener el stack levantado a la vez.
-- Para stacks paralelos reales, cambiá `COMPOSE_PROJECT_NAME` y los puertos (xx35 → xx45) en el `.env.dev` del worktree. No viene resuelto por default.
+- La **DB Postgres** (contenedor `postgres` del `docker-compose.yml`) es una sola. **No** corran `prisma migrate` simultáneamente desde dos worktrees — se pisan el schema.
+- El stack `docker compose` es único. **Solo un worktree** puede tener el stack levantado a la vez.
+- Para stacks paralelos reales, cambiá `COMPOSE_PROJECT_NAME` y los puertos en el `.env` del worktree. No viene resuelto por default.
 
 ## Validación de commits fuera de Claude Code
 
@@ -404,18 +392,18 @@ Lo hace cada dev en su clone/worktree. Dentro de Claude Code el hook `PreToolUse
 
 ## Convenciones de lenguaje
 
-- **Español**: `CLAUDE.md`, skills (SKILL.md, content/), ADRs (`docs/adr/`), `.claude/README.md`, comentarios internos que expliquen **por qué** algo se hace.
+- **Español**: `CLAUDE.md`, skills (SKILL.md, content/), docs (`docs/`), `.claude/README.md`, comentarios internos que expliquen **por qué** algo se hace.
 - **Inglés**: nombres de variables, funciones, clases, archivos de código, commits, títulos de PR. El código en este repo se lee en inglés; los commits del historial son todos en inglés.
 - **Mixto OK**: body de PR puede ser español (contexto del cambio) aunque el título sea inglés.
 
-Evitar: mezclar idiomas dentro de un mismo identificador (`calcularRinde`, `calcularYield` — elegí uno y aplicá consistente al módulo).
+Evitar: mezclar idiomas dentro de un mismo identificador (`crearViaje`, `createTrip` — elegí uno y aplicá consistente al módulo).
 
 ## Secretos y datos sensibles
 
 **Nunca commitear**:
-- Archivos `.env`, `.env.dev`, `.env.prod`, `.env.local` (todos los variantes).
-- Tokens de API (GitHub, OpenAI, weather APIs, etc.), llaves privadas, credenciales de DB o de servicios externos.
-- Backups SQL con datos productivos reales (como `backup_plataforma_*.sql`).
+- Archivos `.env`, `.env.local` (todos los variantes). El repo versiona `.env.example` como plantilla — ese sí.
+- Tokens de API (GitHub, etc.), llaves privadas, `JWT_SECRET`, `POSTGRES_PASSWORD`, credenciales SMTP o de servicios externos.
+- Backups SQL con datos productivos reales (como `backup-*.sql`, ver `docs/base-de-datos.md`).
 - Logs con PII o credenciales.
 
 **Antes de `/commit`**: revisá `git diff --cached`. Si hay duda, parar.

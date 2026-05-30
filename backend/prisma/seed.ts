@@ -8,19 +8,20 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@cargolink.com' },
-    update: {},
+    update: { emailVerified: true },
     create: {
       email: 'admin@cargolink.com',
       password,
       firstName: 'Admin',
       lastName: 'CargoLink',
       role: Role.ADMIN,
+      emailVerified: true,
     },
   });
 
   const shipper = await prisma.user.upsert({
     where: { email: 'shipper@example.com' },
-    update: {},
+    update: { emailVerified: true },
     create: {
       email: 'shipper@example.com',
       password,
@@ -29,12 +30,13 @@ async function main() {
       phone: '+5491155551234',
       role: Role.CARGO_GENERATOR,
       companyName: 'Logística Sur S.A.',
+      emailVerified: true,
     },
   });
 
   const carrier = await prisma.user.upsert({
     where: { email: 'carrier@example.com' },
-    update: {},
+    update: { emailVerified: true },
     create: {
       email: 'carrier@example.com',
       password,
@@ -43,6 +45,7 @@ async function main() {
       phone: '+5491155555678',
       role: Role.TRANSPORTER,
       companyName: 'Transporte Rápido',
+      emailVerified: true,
     },
   });
 

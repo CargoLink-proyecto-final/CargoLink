@@ -65,7 +65,7 @@ Invocá al subagente `release-engineer` pasándole:
 El subagente devuelve un **informe Markdown estructurado** con 5 secciones fijas:
 - Resumen del release (commits, fechas, contribuidores).
 - Migraciones incluidas con clasificación de riesgo (🟢/🟡/🔴).
-- Breaking changes detectados (endpoints eliminados, schemas Pydantic modificados, columnas de models eliminadas).
+- Breaking changes detectados (endpoints NestJS eliminados/renombrados, DTOs o validación class-validator alterados, campos de modelos Prisma eliminados).
 - Release notes (borrador) agrupados por tipo desde conventional commits.
 - Checklist operacional para el mantenedor humano.
 
@@ -89,9 +89,9 @@ El body = el informe completo del `release-engineer` **+ un pie con notas y disc
 
 ## Notas
 
-Este PR fue **abierto por Claude Code** siguiendo el flujo `/release`. El merge a `main` es responsabilidad del mantenedor humano y **no se hace desde Claude Code** (regla dura del workflow; ver ADR-0005).
+Este PR fue **abierto por Claude Code** siguiendo el flujo `/release`. El merge a `main` es responsabilidad del mantenedor humano y **no se hace desde Claude Code** (regla dura del workflow).
 
-El deploy a prod corre `alembic upgrade head` automáticamente al arrancar el container — las migraciones listadas arriba se aplicarán sin intervención manual. Revisá las 🔴 y 🟡 antes de aprobar el merge.
+Al mergear a `main`, el CI buildea y pushea las imágenes `:prod` de backend y frontend a GHCR (ver `docs/ci-cd.md`). **No hay deploy automático**: levantar las imágenes nuevas en el server es un paso manual (ver `docs/deployment.md`). El backend corre `prisma migrate deploy` al arrancar el contenedor, así que las migraciones listadas arriba se aplican al primer arranque post-deploy, sin backup automático. Revisá las 🔴 y 🟡 y tomá backup antes del merge si corresponde.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```

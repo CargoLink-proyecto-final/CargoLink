@@ -254,6 +254,67 @@ Si cambiás la URL del backend (p. ej. mapear un dominio propio), tenés que **r
 
 ---
 
+## Entornos dev / prod + CI/CD
+
+CargoLink corre **dos entornos en el mismo proyecto** `cargo-link-2026`, separados por nombre y con DB propia:
+
+| | prod | dev |
+|---|---|---|
+| Trigger de deploy | merge/push a `main` | merge/push a `develop` |
+| Cloud Run | `cargolink-backend` / `cargolink-frontend` | `cargolink-dev-backend` / `cargolink-dev-frontend` |
+| Cloud SQL | `cargolink-db` | `cargolink-dev-db` |
+| Secrets | `cargolink-*` | `cargolink-dev-*` |
+| Artifact Registry | `cargolink` | `cargolink-dev` |
+| Cloud Run runtime SA | `cargolink-run` | `cargolink-dev-run` |
+| Backend min instances | 1 (caliente) | 0 (escala a cero) |
+
+Los entornos se manejan con **workspaces de Terraform** (`default` = prod, `dev` = dev) sobre la misma config. El entorno se elige con `var.environment` (default `prod`):
+
+```bash
+# prod (workspace default, usa terraform.tfvars):
+terraform workspace select default
+terraform apply
+
+# dev (workspace dev, usa dev.tfvars):
+terraform workspace new dev      # solo la primera vez
+terraform workspace select dev
+terraform apply -var-file=dev.tfvars
+```
+
+> `var.environment = "prod"` NO prefija (conserva los nombres existentes); cualquier otro valor prefija con `<env>-`. Así prod nunca se recrea al introducir dev.
+
+### CI/CD — `.github/workflows/deploy-gcp.yml`
+
+Deploy continuo a Cloud Run, **keyless** vía Workload Identity Federation (sin keys en GitHub):
+
+- `push` a `develop` → builda y deploya el entorno **dev**.
+- `push` a `main` → builda y deploya **prod**.
+
+El workflow buildea las imágenes (frontend con `NEXT_PUBLIC_API_URL` resuelto en vivo desde la URL del backend del entorno), las pushea al Artifact Registry del entorno, y actualiza el servicio con `gcloud run deploy --image`. Terraform tiene `ignore_changes` sobre la imagen, así que **CI es dueño de la imagen** y Terraform del resto (Cloud SQL, secrets, env vars, scaling). No hay drift.
+
+**Setup GCP del CI (una sola vez, ya hecho — documentado para reproducir):**
+
+```bash
+# Pool + provider OIDC restringido al repo
+gcloud iam workload-identity-pools create github-pool --location=global --project=cargo-link-2026
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --location=global --workload-identity-pool=github-pool \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+  --attribute-condition="assertion.repository=='CargoLink-proyecto-final/CargoLink'" --project=cargo-link-2026
+# SA deployer + roles + binding WIF
+gcloud iam service-accounts create github-deployer --project=cargo-link-2026
+for R in roles/run.admin roles/artifactregistry.writer roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding cargo-link-2026 \
+    --member="serviceAccount:github-deployer@cargo-link-2026.iam.gserviceaccount.com" --role="$R" --condition=None
+done
+gcloud iam service-accounts add-iam-policy-binding github-deployer@cargo-link-2026.iam.gserviceaccount.com \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/772498480601/locations/global/workloadIdentityPools/github-pool/attribute.repository/CargoLink-proyecto-final/CargoLink"
+```
+
+El workflow referencia el provider y la SA por env vars (no son secretos). Los servicios Cloud Run deben existir (provisionados por Terraform) antes del primer deploy de CI.
+
 ## State remoto (opcional, recomendado si trabajan varios)
 
 Por default el `terraform.tfstate` queda en tu disco. Para compartirlo y no perderlo, movelo a un bucket GCS:
