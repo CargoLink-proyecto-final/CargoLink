@@ -55,7 +55,7 @@ export default function CarrierDashboard() {
           <StatCard label="Completados" value={stats.completed} icon={CheckCircle} tone="success" />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <section className="card overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-ink-200/70">
               <div>
@@ -112,7 +112,7 @@ export default function CarrierDashboard() {
                     href={`/trips/${trip.id}`}
                     className={`flex items-center justify-between gap-3 px-5 py-4 transition hover:bg-surface-sunk/60 ${i !== 0 ? 'border-t border-ink-200/60' : ''}`}
                   >
-                    <p className="font-medium text-ink-900 truncate flex-1">{trip.load?.title}</p>
+                    <p className="font-medium text-ink-900 truncate min-w-0 flex-1">{trip.load?.title}</p>
                     <StatusBadge status={trip.status} />
                   </Link>
                 ))}

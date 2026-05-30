@@ -107,7 +107,7 @@ export default function LoadsPage() {
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
             <p className="eyebrow">{heading.eyebrow}</p>
-            <h1 className="mt-2 font-display text-[38px] leading-[1.05]">
+            <h1 className="mt-2 font-display text-3xl sm:text-[38px] leading-[1.05]">
               {heading.title}{' '}
               <span className="font-semibold text-primary-700">{heading.italic}</span>
             </h1>
@@ -136,11 +136,11 @@ export default function LoadsPage() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <Filter size={15} className="text-ink-400" />
+              <Filter size={15} className="text-ink-400 shrink-0" />
               <select
                 value={cargoType}
                 onChange={(e) => { setCargoType(e.target.value); setPage(1); }}
-                className="px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
+                className="w-full sm:w-auto px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
               >
                 <option value="">Todos los tipos</option>
                 {CARGO_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -150,7 +150,7 @@ export default function LoadsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                className="px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
+                className="w-full sm:w-auto px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
               >
                 <option value="">Todos los estados</option>
                 {statuses.map((s) => <option key={s} value={s}>{getStatusLabel(s)}</option>)}
@@ -238,8 +238,8 @@ export default function LoadsPage() {
                             <ArrowRight size={13} className="opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition" />
                           </Link>
                         </td>
-                        <td className="px-5 py-3.5 text-ink-600 max-w-[220px] truncate">{load.originAddress}</td>
-                        <td className="px-5 py-3.5 text-ink-600 max-w-[220px] truncate">{load.destAddress}</td>
+                        <td className="px-5 py-3.5 text-ink-600 max-w-[120px] sm:max-w-[220px] truncate">{load.originAddress}</td>
+                        <td className="px-5 py-3.5 text-ink-600 max-w-[120px] sm:max-w-[220px] truncate">{load.destAddress}</td>
                         <td className="px-5 py-3.5 font-mono text-[12px] text-ink-700 whitespace-nowrap">{formatDate(load.createdAt)}</td>
                         <td className="px-5 py-3.5 font-mono text-[12px] text-ink-700 whitespace-nowrap">{formatDate(load.pickupDate)}</td>
                         <td className="px-5 py-3.5 font-mono text-[12px] text-ink-700 whitespace-nowrap">
@@ -315,7 +315,7 @@ function DateRangeField({ label, range, onChange }: DateRangeFieldProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[10px] font-medium text-ink-500 uppercase tracking-[0.14em]">{label}</span>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <input
           type="date"
           value={range.from}

@@ -144,14 +144,14 @@ export default function TripDetailPage() {
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">{trip.load?.title || 'Detalles del Viaje'}</h1>
             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>
               {getStatusLabel(trip.status)}
             </span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {user?.role === 'TRANSPORTER' && trip.carrierId === user.id && trip.status === 'ACCEPTED' && (
               <button
                 onClick={() => startMutation.mutate()}
@@ -190,7 +190,7 @@ export default function TripDetailPage() {
         </div>
 
         {(markers.length > 0 || routes.length > 0) && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ height: '350px', zIndex: 1 }}>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ height: 'clamp(240px, 50vh, 350px)', zIndex: 1 }}>
             <MapView markers={markers} routes={routes} />
           </div>
         )}

@@ -127,7 +127,7 @@ export default function EditLoadPage() {
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <h1 className="text-2xl font-bold">Editar Carga</h1>
           <Link
             href={`/loads/${id}`}
@@ -158,7 +158,7 @@ export default function EditLoadPage() {
               <textarea {...register('description')} className={inputClass} rows={3} placeholder="Detalles adicionales sobre la carga" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Carga <span className="text-red-500">*</span></label>
                 <input {...register('cargoType', { required: 'Requerido' })} className={inputClass} placeholder="Ej., Electrónica" />
@@ -169,7 +169,7 @@ export default function EditLoadPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Volumen (m3, opcional)</label>
                 <input type="number" step="0.1" {...register('volume')} className={inputClass} />
@@ -187,7 +187,7 @@ export default function EditLoadPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Dirección <span className="text-red-500">*</span></label>
               <input {...register('originAddress', { required: 'Requerido' })} className={inputClass} placeholder="Dirección de origen" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Latitud <span className="text-red-500">*</span></label>
                 <input type="number" step="any" {...register('originLat', { required: 'Requerido' })} className={inputClass} placeholder="-34.6037" />
@@ -205,7 +205,7 @@ export default function EditLoadPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Dirección <span className="text-red-500">*</span></label>
               <input {...register('destAddress', { required: 'Requerido' })} className={inputClass} placeholder="Dirección de destino" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Latitud <span className="text-red-500">*</span></label>
                 <input type="number" step="any" {...register('destLat', { required: 'Requerido' })} className={inputClass} placeholder="-31.4201" />
@@ -219,7 +219,7 @@ export default function EditLoadPage() {
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
             <h2 className="font-semibold text-gray-700">Fechas</h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Recogida <span className="text-red-500">*</span></label>
                 <input type="datetime-local" {...register('pickupDate', { required: 'Requerido' })} className={inputClass} />

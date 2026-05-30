@@ -48,7 +48,7 @@ export default function RegisterFiltersBar({ filters, onChange, isAdmin, total }
 
   return (
     <div className="card p-4 space-y-4">
-      <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+      <div className="flex flex-col md:flex-row gap-2 md:gap-3 md:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" size={16} />
           <input
@@ -63,12 +63,12 @@ export default function RegisterFiltersBar({ filters, onChange, isAdmin, total }
             value={filters.participant ?? ''}
             onChange={(e) => onChange({ ...filters, participant: e.target.value || undefined })}
             placeholder="Generador o transportista…"
-            className="lg:w-72 px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
+            className="w-full md:w-72 px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
           />
         )}
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+      <div className="flex flex-col md:flex-row gap-2 md:gap-3 md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-[13px] text-ink-600">
             <span className="text-[10px] uppercase tracking-[0.14em] text-ink-500">Desde</span>

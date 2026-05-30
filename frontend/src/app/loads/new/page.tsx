@@ -379,7 +379,7 @@ export default function NewLoadPage() {
               <textarea {...register('description')} className={inputClass} rows={3} placeholder="Detalles adicionales sobre la carga" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Carga <span className="text-red-500">*</span></label>
                 <select {...register('cargoType', { required: 'Requerido' })} className={inputClass}>
@@ -395,7 +395,7 @@ export default function NewLoadPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Volumen (m³, opcional)</label>
                 <input type="number" step="0.1" {...register('volume', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
@@ -468,7 +468,7 @@ export default function NewLoadPage() {
           {/* Fechas */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
             <h2 className="font-semibold text-gray-700">Fechas</h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Recogida <span className="text-red-500">*</span></label>
                 <input
@@ -600,8 +600,8 @@ function LocationCard({
 
       {/* Address mode */}
       <div className="space-y-3" style={{ display: mode === 'address' ? 'block' : 'none' }} onInput={onFieldChange}>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Calle <span className="text-red-500">*</span></label>
             {streetInput}
             {streetError && <p className="text-red-500 text-xs mt-1">{streetError}</p>}
@@ -612,7 +612,7 @@ function LocationCard({
             {streetNumberError && <p className="text-red-500 text-xs mt-1">{streetNumberError}</p>}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad <span className="text-red-500">*</span></label>
             {cityInput}
@@ -624,7 +624,7 @@ function LocationCard({
             {stateError && <p className="text-red-500 text-xs mt-1">{stateError}</p>}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">País <span className="text-red-500">*</span></label>
             {countryInput}
@@ -694,7 +694,7 @@ function LocationCard({
 
       {/* Coords mode */}
       <div className="space-y-3" style={{ display: mode === 'coords' ? 'block' : 'none' }}>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Latitud <span className="text-red-500">*</span></label>
             {latInput}
