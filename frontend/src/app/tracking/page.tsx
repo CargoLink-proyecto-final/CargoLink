@@ -71,9 +71,9 @@ export default function TrackingPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Seguimiento en Tiempo Real</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">Seguimiento en Tiempo Real</h1>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ height: '500px', zIndex: 1 }}>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ height: 'clamp(280px, 55vh, 500px)', zIndex: 1 }}>
           <MapView markers={markers} routes={routes} />
         </div>
 
