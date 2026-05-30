@@ -6,14 +6,14 @@ CargoLink es una plataforma multi-cliente con un backend único que sirve a tres
 
 ```
                         ┌──────────────────────────────┐
-                        │      GHCR (ghcr.io)          │
+                        │      Artifact Registry       │
                         │  cargolink-backend:<tag>     │
                         │  cargolink-frontend:<tag>    │
                         └───────────┬──────────────────┘
-                                    │ docker pull (deploy)
+                                    │ gcloud run deploy
                                     ▼
    ┌────────────────────────────────────────────────────────────────┐
-   │                          Servidor                              │
+   │                     GCP Cloud Run                              │
    │                                                                │
    │   ┌─────────────────┐      ┌─────────────────┐                 │
    │   │   Next.js 14    │      │   NestJS 10     │                 │
@@ -63,9 +63,9 @@ Bottom-tabs por rol (shipper/carrier) sobre stack de auth. Usa `react-native-map
 
 6 tablas (`users`, `loads`, `postulations`, `trips`, `messages`, `ratings`) más 4 enums. Migraciones gestionadas por Prisma; la imagen del backend corre `prisma migrate deploy` al arrancar. Detalle en [`base-de-datos.md`](./base-de-datos.md).
 
-### Infraestructura — Docker Compose + GHCR
+### Infraestructura — Docker Compose (dev local) + GCP Cloud Run (prod)
 
-`docker-compose.yml` orquesta los tres servicios para dev local. Las imágenes productivas se buildean en GitHub Actions y se publican a `ghcr.io` con tags `dev` y `prod`. Detalle en [`docker.md`](./docker.md) y [`ci-cd.md`](./ci-cd.md).
+`docker-compose.yml` orquesta los tres servicios solo para dev local. Producción corre en GCP Cloud Run + Cloud SQL (proyecto `cargo-link-2026`): las imágenes se buildean en GitHub Actions y se publican a Artifact Registry, y el deploy lo hace `gcloud run deploy` por entorno (`dev`/`prod`). Infra como código en `infra/gcp/` (Terraform). Detalle en [`docker.md`](./docker.md), [`ci-cd.md`](./ci-cd.md) e [`infra/gcp/README.md`](../infra/gcp/README.md).
 
 ## Roles del sistema
 
@@ -148,7 +148,7 @@ Resumen — listado exhaustivo en [`api.md`](./api.md).
 - Backend bootstrap: [`../backend/src/main.ts`](../backend/src/main.ts).
 - Schema Prisma: [`../backend/prisma/schema.prisma`](../backend/prisma/schema.prisma).
 - Compose: [`../docker-compose.yml`](../docker-compose.yml).
-- Workflow CI/CD: [`../.github/workflows/docker-build-push.yml`](../.github/workflows/docker-build-push.yml).
+- Workflow CI/CD: [`../.github/workflows/deploy-gcp.yml`](../.github/workflows/deploy-gcp.yml).
 - WebSocket gateway: [`../backend/src/messages/messages.gateway.ts`](../backend/src/messages/messages.gateway.ts).
 - Frontend API client: [`../frontend/src/lib/api.ts`](../frontend/src/lib/api.ts).
 - Mobile API client: [`../mobile/src/services/api.ts`](../mobile/src/services/api.ts).

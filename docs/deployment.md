@@ -1,22 +1,24 @@
 # Deployment
 
-Recomendaciones y caveats para correr CargoLink en producción. El stack hoy es opinionado pero no incluye un setup productivo completo — esta página marca qué falta resolver antes de un release real.
+CargoLink se despliega en **Google Cloud Run + Cloud SQL** (dos entornos: dev y prod), con deploy continuo desde GitHub Actions.
+
+> **La fuente de verdad del deploy es [`../infra/gcp/README.md`](../infra/gcp/README.md)** (Terraform + guía paso a paso) y [`ci-cd.md`](./ci-cd.md) (el pipeline). Esta página queda como referencia conceptual (variables, migraciones, backups, rollback, alternativas de hosting).
 
 ## Estado actual
 
 | Pieza | Estado |
 |---|---|
-| Build & push de imágenes a GHCR | ✅ automatizado en GitHub Actions (ver [`ci-cd.md`](./ci-cd.md)) |
-| `docker-compose.yml` para dev | ✅ |
-| `docker-compose.prod.yml` | ❌ no existe — pendiente |
-| Healthcheck de backend | ❌ no hay (solo postgres) |
-| Backup automático de DB | ❌ no hay |
-| Migraciones en deploy | ✅ corren en el `docker-entrypoint.sh` |
-| Rollback automático | ❌ manual |
+| Infra como código (Terraform) | ✅ `infra/gcp/` — Cloud Run + Cloud SQL + Secret Manager |
+| Build & push de imágenes a Artifact Registry | ✅ automatizado en GitHub Actions (ver [`ci-cd.md`](./ci-cd.md)) |
+| Deploy continuo a Cloud Run | ✅ merge a `develop`→dev, `main`→prod (keyless vía WIF) |
+| Dos entornos (dev / prod) con DB separada | ✅ `cargolink-*` (prod) / `cargolink-dev-*` (dev) |
+| `docker-compose.yml` para dev local | ✅ |
+| Migraciones en deploy | ✅ corren en el `docker-entrypoint.sh` al startup |
+| Backup automático de DB pre-deploy | ❌ manual (Cloud SQL tiene backups diarios automáticos) |
+| Rollback | ⚠️ manual — `gcloud run services update-traffic` a revisión previa (ver [`ci-cd.md`](./ci-cd.md)) |
 | Smoke test post-deploy | ❌ manual |
-| Logs centralizados | ❌ pendiente |
-| Métricas | ❌ pendiente |
-| HTTPS / TLS | depende del orquestador (no resuelto en el repo) |
+| Logs / métricas | Cloud Logging / Cloud Monitoring (built-in de Cloud Run) |
+| HTTPS / TLS | ✅ automático en las URLs `*.run.app` de Cloud Run |
 
 ## Estrategias de hosting
 
@@ -66,73 +68,16 @@ Las mismas vars que dev (ver [`docker.md`](./docker.md)) pero con valores reales
 - Para deploy a VPS: dejar `.env` en el server (fuera del repo); editarlo a mano o vía un secret manager (Vault, Doppler, etc.).
 - Si un secret se commitea por accidente: **rotalo** (no alcanza con borrar el commit), y limpialo del historial con `git filter-repo` o `bfg-repo-cleaner`.
 
-## Levantar el stack productivo con las imágenes de GHCR
+## Cómo se despliega hoy (GCP Cloud Run)
 
-Mientras no hay un `docker-compose.prod.yml` versionado, este es un compose mínimo que sirve de referencia:
+El deploy real es **Google Cloud Run + Cloud SQL**, provisionado con Terraform y actualizado por CI. El detalle completo (Terraform, dos entornos, Workload Identity Federation, deploy en 2 fases) está en [`../infra/gcp/README.md`](../infra/gcp/README.md); el pipeline en [`ci-cd.md`](./ci-cd.md). Resumen:
 
-```yaml
-# docker-compose.prod.yml (no versionado todavía)
-services:
-  postgres:
-    image: postgres:15-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
-      retries: 5
+- **Imágenes** → Artifact Registry (`cargolink` para prod, `cargolink-dev` para dev), no GHCR.
+- **Backend** → Cloud Run, conecta a Cloud SQL por socket unix; `DATABASE_URL`, `JWT_SECRET` y `SMTP_PASSWORD` desde Secret Manager; el resto de SMTP/CORS/FRONTEND_URL como env vars que setea Terraform.
+- **Frontend** → Cloud Run; `NEXT_PUBLIC_API_URL` se hornea en el build de CI resolviendo en vivo la URL del backend del entorno (resuelve el problema del bake — ya no usa el default `localhost`).
+- **Deploy continuo**: merge a `develop` → dev, merge a `main` → prod. TLS automático en las URLs `*.run.app`.
 
-  backend:
-    image: ghcr.io/<owner>/cargolink-backend:prod
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION: ${JWT_EXPIRATION}
-      CORS_ORIGIN: ${CORS_ORIGIN}
-      FRONTEND_URL: ${FRONTEND_URL}
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_SECURE: ${SMTP_SECURE}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM}
-    ports:
-      - "8030:3001"     # ajustar según tag (prod=8030, dev=8035)
-
-  frontend:
-    image: ghcr.io/<owner>/cargolink-frontend:prod
-    restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "3030:3000"     # ajustar según tag
-
-volumes:
-  pgdata:
-```
-
-Login + pull + up:
-
-```bash
-echo $GHCR_PAT | docker login ghcr.io -u <username> --password-stdin
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-```
-
-⚠️ El `NEXT_PUBLIC_API_URL` de la imagen `cargolink-frontend:prod` está bakeado al valor que se le pasó en el build de CI. Hoy ese build no recibe el arg en el workflow → usa el default del Dockerfile (`http://localhost:3001/api`), que **no sirve en producción**. Tres opciones:
-
-1. Buildear el frontend en el server (`docker compose build frontend` con compose local + build args).
-2. Modificar el workflow para que reciba `NEXT_PUBLIC_API_URL` como build-arg desde un secret de GitHub.
-3. Servir el frontend en el mismo dominio que el backend con un reverse proxy (`/api/*` → backend, `/*` → frontend) y hardcodear `NEXT_PUBLIC_API_URL=/api` (relativo) — la opción menos invasiva.
+> El `docker-compose.yml` de la raíz es solo para **dev local** (ver [`docker.md`](./docker.md)), no para producción.
 
 ## Migraciones en el deploy
 
@@ -230,25 +175,22 @@ Automatizable con un script Bash + `curl + jq` o con [`hurl`](https://hurl.dev/)
 
 ## Rollback
 
-No automatizado. Estrategia recomendada para una falla de deploy:
+Cloud Run versiona cada deploy como una revisión. Rollback instantáneo (sin rebuild) mandando el tráfico a la revisión previa:
 
 ```bash
-# 1. Identificar el tag previo (commit anterior en la rama)
-PREV=$(git log --oneline -2 main | tail -1 | cut -d' ' -f1)
+# Listar revisiones
+gcloud run revisions list --service=cargolink-backend --region=southamerica-east1
 
-# 2. Pull de la imagen vieja
-docker pull ghcr.io/<owner>/cargolink-backend:main-${PREV:0:7}
-
-# 3. Tag como prod
-docker tag ghcr.io/<owner>/cargolink-backend:main-${PREV:0:7} ghcr.io/<owner>/cargolink-backend:prod
-
-# 4. Recreate
-docker compose -f docker-compose.prod.yml up -d --force-recreate backend
+# 100% del tráfico a una revisión anterior
+gcloud run services update-traffic cargolink-backend \
+  --region=southamerica-east1 --to-revisions=<REVISION-PREVIA>=100
 ```
 
-⚠️ El rollback de la imagen **no revierte la migración** que pudo haber aplicado el deploy nuevo. Si la migración rompió algo, hay que:
+(Para dev, usar `cargolink-dev-backend`.) Alternativa: re-deployar una imagen anterior por SHA desde Artifact Registry — ver [`ci-cd.md`](./ci-cd.md) § Rollback.
+
+⚠️ El rollback de la imagen/revisión **no revierte la migración** que pudo haber aplicado el deploy nuevo. Si la migración rompió algo, hay que:
 1. Restaurar el backup pre-deploy.
-2. **Después** rollbackear la imagen.
+2. **Después** rollbackear la imagen/revisión.
 
 Por eso el backup pre-migración es crítico.
 

@@ -1,164 +1,123 @@
 # CI/CD
 
-Single workflow en GitHub Actions que buildea las imágenes Docker de backend y frontend y las publica a GitHub Container Registry (GHCR) cada vez que se mergea a `main` o `develop`.
+Deploy continuo a **Google Cloud Run** con GitHub Actions. Cada merge a una rama de entorno builda las imágenes Docker, las publica a **Artifact Registry** y actualiza el servicio de Cloud Run del entorno correspondiente.
 
-Source: [`../.github/workflows/docker-build-push.yml`](../.github/workflows/docker-build-push.yml).
+Source: [`../.github/workflows/deploy-gcp.yml`](../.github/workflows/deploy-gcp.yml).
+
+> El detalle de la infraestructura GCP (Cloud Run, Cloud SQL, Secret Manager, los dos entornos y el setup de Workload Identity Federation) está en [`../infra/gcp/README.md`](../infra/gcp/README.md). Esta página cubre el pipeline.
+
+## Dos entornos
+
+| | dev | prod |
+|---|---|---|
+| Dispara con | merge/push a `develop` | merge/push a `main` |
+| Cloud Run | `cargolink-dev-backend` / `cargolink-dev-frontend` | `cargolink-backend` / `cargolink-frontend` |
+| Artifact Registry | `cargolink-dev` | `cargolink` |
+| Backend min instances | 0 (escala a cero) | 1 (caliente) |
+
+Ambos entornos viven en el mismo proyecto GCP `cargo-link-2026`, con DB, secrets y service account propios por entorno (ver `infra/gcp/README.md`).
 
 ## Cuándo dispara
 
 ```yaml
 on:
   push:
-    branches: [main, develop]
+    branches: [develop, main]
 ```
 
-Solo `push` directo a esas ramas (incluye merges de PR, porque GitHub registra el merge como push a la rama base). **Los PRs no disparan el workflow** — no hace test ni lint, solo build & push de imágenes ya aprobadas.
+Solo `push` directo a esas ramas (incluye merges de PR, porque GitHub registra el merge como push a la rama base). **Los PRs no disparan el deploy** — la validación pasa por el flujo de `/pr` + el subagente `qa-engineer` antes del merge (ver [`workflow-claude-code.md`](./workflow-claude-code.md)).
 
 ## Qué hace
 
 ```
-push a main o develop
+push a develop o main
        │
        ▼
-  job: build-and-push (ubuntu-latest)
+  job: deploy (ubuntu-latest)
        │
        ├── checkout
-       ├── set env tag
-       │     main    → tag=prod, backend_port=8030, frontend_port=3030
-       │     develop → tag=dev,  backend_port=8035, frontend_port=3035
-       │     sha (7 chars)
-       ├── lowercase image owner (gh org puede tener uppercase, ghcr no acepta)
-       ├── login a ghcr.io con GITHUB_TOKEN
-       ├── set up Docker Buildx
-       ├── build & push backend
-       │     context: ./backend
-       │     tags: cargolink-backend:<tag> + cargolink-backend:<branch>-<sha>
-       │     cache: gha scope=backend-<branch>
-       │     build-arg: PORT=<backend_port>
-       └── build & push frontend
-             context: ./frontend
-             tags: cargolink-frontend:<tag> + cargolink-frontend:<branch>-<sha>
-             cache: gha scope=frontend-<branch>
-             build-args: PORT=<frontend_port>, BACKEND_PORT=<backend_port>
+       ├── resolve environment (main→prod / develop→dev): infix + repo de Artifact Registry
+       ├── auth a GCP vía Workload Identity Federation (OIDC, keyless)
+       ├── setup gcloud + docker auth a Artifact Registry
+       ├── resolver URL del backend del entorno (gcloud run services describe)
+       ├── build & push backend  → .../cargolink[-dev]/cargolink-backend:<env>-<sha>
+       ├── build & push frontend → .../cargolink[-dev]/cargolink-frontend:<env>-<sha>
+       │     build-arg NEXT_PUBLIC_API_URL=<backend-url>/api  (resuelto en vivo)
+       ├── gcloud run deploy backend  --image <nueva imagen>
+       └── gcloud run deploy frontend --image <nueva imagen>
 ```
 
-## Imágenes publicadas
+Las imágenes se taggean `<env>-<sha-7>` (`dev-abc1234`, `prod-abc1234`).
 
-Las imágenes terminan en `ghcr.io/<owner-lowercase>/cargolink-{backend,frontend}` con dos tags:
+## Autenticación: Workload Identity Federation (keyless)
 
-| Tag | Cuándo se publica |
-|---|---|
-| `prod` | push a `main` |
-| `dev` | push a `develop` |
-| `<branch>-<sha-7>` | siempre (`main-abc1234`, `develop-abc1234`) — útil para rollback puntual o pinear una versión |
-
-### Asignación de puertos por rama
-
-| Rama | Backend port | Frontend port |
-|---|---|---|
-| `main` (prod) | 8030 | 3030 |
-| `develop` (dev) | 8035 | 3035 |
-
-Estos puertos se pasan como build args (`PORT`, `BACKEND_PORT`). Hoy los Dockerfiles del repo **no usan estos args** — el backend está hardcoded a `EXPOSE 3001` y el frontend a `EXPOSE 3000`. Los args están preparados para cuando se quiera servir cada entorno en su puerto propio sin tener que reconstruir manualmente; mientras tanto, el orquestador en el server tiene que mapear `<host-port>:3001` y `<host-port>:3000` con esos puertos del host (8030/8035 backend, 3030/3035 frontend).
-
-## Permisos del workflow
+No hay keys de service account guardadas en GitHub. El workflow se autentica por OIDC:
 
 ```yaml
 permissions:
   contents: read
-  packages: write
-```
+  id-token: write   # requerido para el token OIDC de WIF
 
-`packages: write` es lo que le permite hacer push a GHCR usando el `GITHUB_TOKEN` automático — no hace falta crear un PAT manual mientras el repo es del mismo owner que el package.
-
-## Login a GHCR
-
-```yaml
-- uses: docker/login-action@v3
+- uses: google-github-actions/auth@v2
   with:
-    registry: ghcr.io
-    username: ${{ github.actor }}
-    password: ${{ secrets.GITHUB_TOKEN }}
+    workload_identity_provider: projects/.../workloadIdentityPools/github-pool/providers/github-provider
+    service_account: github-deployer@cargo-link-2026.iam.gserviceaccount.com
 ```
 
-`github.actor` es quien disparó el push (o el bot que mergeó). El `GITHUB_TOKEN` se inyecta automáticamente.
+GitHub emite un token OIDC; GCP lo valida contra el provider (restringido al repo `CargoLink-proyecto-final/CargoLink`) y deja al workflow impersonar la SA `github-deployer`. Esa SA tiene los roles mínimos: `run.admin` (deploy), `artifactregistry.writer` (push), `iam.serviceAccountUser` (correr Cloud Run como la SA de runtime). El provider y la SA email **no son secretos** → van como `env:` en el workflow. El setup (pool, provider, SA, roles) está documentado en `infra/gcp/README.md`.
 
-## Cache
+## El frontend y `NEXT_PUBLIC_API_URL`
 
-```yaml
-cache-from: type=gha,scope=backend-${{ github.ref_name }}
-cache-to: type=gha,mode=max,scope=backend-${{ github.ref_name }}
-```
+`NEXT_PUBLIC_API_URL` se hornea en build-time del frontend (Next la baja al bundle al compilar). El workflow resuelve la URL del backend del entorno en vivo con `gcloud run services describe` y la pasa como `--build-arg`, así cada entorno apunta a su propio backend sin config manual.
 
-Caché de capas Docker en el storage de GitHub Actions, segmentado por servicio (backend/frontend) y rama. `mode=max` cachea también las capas intermedias, no sólo el resultado final — mejora cold starts a costa de usar más storage.
+## División de responsabilidad: Terraform vs CI
 
-Es un caché grato pero no agresivo: builds incrementales después de pequeños cambios en `src/` son rápidos; cambios a `package.json` invalidan la capa de deps y obligan a rebuildear desde ahí.
+- **Terraform** (`infra/gcp/`) es dueño de la infra: Cloud SQL, secrets, env vars, scaling, IAM, y la creación inicial de los servicios Cloud Run.
+- **CI** es dueño de la **imagen**: cada deploy actualiza solo la imagen del servicio con `gcloud run deploy --image`.
+
+Para que no se pisen, los recursos `google_cloud_run_v2_service` tienen `lifecycle { ignore_changes = [template[0].containers[0].image] }`. Resultado: CI cambia la imagen sin generar drift en el state de Terraform.
+
+> Los servicios Cloud Run deben existir (provisionados por Terraform) **antes** del primer deploy de CI. El step "Resolve backend URL" falla con mensaje claro si el backend del entorno no existe.
 
 ## Por qué no hay CI de tests / lint
 
-El repo tiene infraestructura de tests (Jest configurado en backend) pero **no tiene tests escritos todavía**. Tampoco hay step de lint. Esto es deliberado por etapa del proyecto — la calidad pasa por el flujo de PR + el subagente `qa-engineer` (ver [`workflow-claude-code.md`](./workflow-claude-code.md)).
+El repo tiene infraestructura de tests (Jest en backend) pero **no tiene tests escritos todavía**, y no hay step de lint. Es deliberado por etapa del proyecto — la calidad pasa por el flujo de PR + el subagente `qa-engineer`.
 
-Cuando se sumen tests, lo natural sería:
-- Sumar un workflow `pr-checks.yml` que dispare en `pull_request` y corra `npm test` + `npm run lint` + `npx prisma format --check` (backend) y `npm run lint` + `npm run build` (frontend).
-- Hacerlo gating del merge.
-- Mantener `docker-build-push.yml` separado, solo en post-merge.
+Cuando se sumen tests, lo natural sería un workflow `pr-checks.yml` que dispare en `pull_request` y corra `npm test` + lint (backend y frontend), gating del merge, manteniendo `deploy-gcp.yml` separado (solo post-merge).
 
 ## PR template
 
 Source: [`../.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUEST_TEMPLATE.md).
 
-Estructura mínima — Summary, Commits, Test plan, Checklist. La completa el comando `/pr` (ver [`workflow-claude-code.md`](./workflow-claude-code.md)) con el output del subagente `qa-engineer`.
-
-## Cómo ver imágenes publicadas
-
-En GitHub:
-1. Ir a la org/owner del repo → "Packages".
-2. Ver `cargolink-backend` y `cargolink-frontend`.
-3. Cada uno lista los tags disponibles.
-
-Por CLI:
-
-```bash
-# Login con un PAT que tenga read:packages
-echo $GHCR_PAT | docker login ghcr.io -u <username> --password-stdin
-
-# Pull
-docker pull ghcr.io/<owner>/cargolink-backend:dev
-docker pull ghcr.io/<owner>/cargolink-frontend:dev
-
-# Run específico
-docker run --rm -p 3001:3001 \
-  -e DATABASE_URL=... -e JWT_SECRET=... \
-  ghcr.io/<owner>/cargolink-backend:dev
-```
-
-## Visibilidad de los packages
-
-Por default GHCR hereda la visibilidad del repo. Si el repo es privado, los packages también. Para deploy desde un server externo se necesita o bien un PAT con `read:packages` o configurar el package como público desde la UI de GitHub.
+Estructura mínima — Summary, Commits, Test plan, Checklist. La completa el comando `/pr` con el output del subagente `qa-engineer`.
 
 ## Rollback
 
-Para volver a una versión anterior:
+`gcloud run deploy` crea una revisión nueva por cada deploy. Para volver atrás:
 
 ```bash
-# Listar tags por SHA
-gh api /users/<owner>/packages/container/cargolink-backend/versions
+# Listar revisiones del servicio
+gcloud run revisions list --service=cargolink-backend --region=southamerica-east1
 
-# Pull del tag específico
-docker pull ghcr.io/<owner>/cargolink-backend:main-abc1234
-
-# Tag como "prod" actual en el server
-docker tag ghcr.io/<owner>/cargolink-backend:main-abc1234 ghcr.io/<owner>/cargolink-backend:prod
-docker push ghcr.io/<owner>/cargolink-backend:prod
+# Mandar el 100% del tráfico a una revisión previa (rollback instantáneo, sin rebuild)
+gcloud run services update-traffic cargolink-backend \
+  --region=southamerica-east1 --to-revisions=<REVISION-PREVIA>=100
 ```
 
-O simplemente cambiar el `image` en el `docker-compose.prod.yml` (cuando exista) al tag `main-abc1234` y `docker compose up -d`.
+O re-deployar una imagen anterior por SHA (siguen en Artifact Registry):
+
+```bash
+gcloud run deploy cargolink-backend \
+  --image=southamerica-east1-docker.pkg.dev/cargo-link-2026/cargolink/cargolink-backend:prod-abc1234 \
+  --region=southamerica-east1
+```
+
+⚠️ El rollback de imagen **no revierte una migración Prisma** que ya haya corrido al startup. Si la migración rompió datos, primero restaurá el backup de la DB (ver [`deployment.md`](./deployment.md)).
 
 ## Caveats
 
-- **Workflow no falla nunca por calidad de código** — solo falla si el build de Docker falla. Mergear código roto es posible en teoría. Mitigado por el flujo de `/pr` + `qa-engineer`.
-- **No corre migraciones de DB en CI**. Las migraciones se aplican al startup del contenedor en el server (`docker-entrypoint.sh`). Si una migración tiene un error, lo descubrís al deploy, no antes.
-- **No detecta secretos commiteados**. Vale la pena sumar un step con `trufflehog` o similar.
-- **El job es serial** (backend después de frontend), aunque podrían paralelizarse. Para builds rápidos, considerar dividir en dos jobs.
-- **`PORT` build-arg no está implementado en los Dockerfiles actuales** — está preparado para futuro multi-instancia en el mismo host.
-- **Sin trigger manual** (`workflow_dispatch`). Si necesitás rebuildear sin push, hay que pushear un commit vacío o disparar desde la UI agregándolo al `on:` block.
+- **El deploy no corre tests** — solo falla si el build de Docker o el `gcloud run deploy` fallan. Mergear código roto es posible; mitigado por `/pr` + `qa-engineer`.
+- **Migraciones en CI**: no se corren en el pipeline. Se aplican al startup del contenedor (`docker-entrypoint.sh` → `prisma migrate deploy` + seed). Un error de migración se descubre en el deploy, no antes.
+- **No detecta secretos commiteados** — vale sumar un step con `trufflehog` o similar.
+- **dev escala a cero** (`min-instances=0`): el primer request tras un período idle tiene cold start, y el seed se re-ejecuta (idempotente). prod queda caliente (`min=1`).
+- **Sin trigger manual** (`workflow_dispatch`). Para re-deployar sin push, agregarlo al `on:` block o pushear un commit.

@@ -16,7 +16,7 @@ Este mínimo de contexto alcanza para la mayoría de las tareas. Para detalle de
 | **Web** (`frontend/`) | Next.js 14 (App Router) · React 18 · TypeScript `strict: true` · Tailwind · zustand · @tanstack/react-query · axios · react-hook-form · zod · leaflet/react-leaflet · socket.io-client · lucide-react |
 | **Backend** (`backend/`) | NestJS 10 · Prisma 5 · JWT (@nestjs/jwt + passport-jwt) · Socket.IO (@nestjs/websockets) · Swagger · class-validator/class-transformer · bcrypt · nodemailer |
 | **Base de datos** | PostgreSQL 15 (vía Prisma — schema en `backend/prisma/schema.prisma`, migraciones en `backend/prisma/migrations/`, seed en `backend/prisma/seed.ts`) |
-| **Infra / dev** | Único `docker-compose.yml` en la raíz (`postgres` :5432, `backend` :3001, `frontend` :3000) · imágenes multi-stage en GHCR |
+| **Infra / dev** | Único `docker-compose.yml` en la raíz (`postgres` :5432, `backend` :3001, `frontend` :3000) para dev local · prod en GCP Cloud Run + Cloud SQL, imágenes multi-stage en Artifact Registry |
 | **Tests** | jest (backend) |
 
 Comandos útiles de referencia:
@@ -341,11 +341,11 @@ Cuando `develop` tiene cambios listos para producción:
 3. `/release` abre el PR `develop → main` con ese informe como body.
 4. **Claude no mergea ni aprueba ese PR.** Regla dura — está en el hook, en este documento y en el slash-command. El merge a `main` lo hace el mantenedor humano desde GitHub con su propia cuenta.
 5. El user revisa el PR (con visibilidad concreta de lo que va a pasar gracias al informe), lo aprueba con su cuenta (o con la de otro reviewer), y lo mergea manualmente.
-6. **Al mergear a `main`, el único proceso automático es el CI.** El workflow [`.github/workflows/docker-build-push.yml`](./.github/workflows/docker-build-push.yml) buildea las imágenes Docker de backend y frontend y las publica a GHCR con el tag `:prod` (`ghcr.io/<owner>/cargolink-backend:prod` y `cargolink-frontend:prod`), más un tag `<branch>-<sha>`. **No hay deploy automático por SSH, ni backup automático, ni smoke tests ni rollback en CI.** El pull de la imagen y el `up -d` en el server los hace el mantenedor por fuera del repo. Detalle en [`docs/ci-cd.md`](./docs/ci-cd.md).
+6. **Al mergear a `main`, el deploy a prod es automático.** El workflow [`.github/workflows/deploy-gcp.yml`](./.github/workflows/deploy-gcp.yml) buildea las imágenes Docker de backend y frontend, las pushea a Artifact Registry y corre `gcloud run deploy` contra el entorno **prod** de Cloud Run (servicios `cargolink-backend`/`cargolink-frontend`, DB `cargolink-db`) en el proyecto GCP `cargo-link-2026`. Auth keyless vía Workload Identity Federation (sin keys en GitHub), TLS automático en las URLs `*.run.app`. Detalle en [`docs/ci-cd.md`](./docs/ci-cd.md).
 
-**Imágenes `:dev`**: el merge a `develop` dispara el mismo workflow y publica las imágenes con tag `:dev` (build args de puertos 8035/3035). El merge a `main` publica `:prod` (build args 8030/3030). El workflow solo buildea y pushea — no despliega.
+**Entorno `dev`**: el merge a `develop` dispara el mismo workflow contra el entorno **dev** (servicios `cargolink-dev-*`, imágenes en el repo `cargolink-dev` de Artifact Registry), cada uno con su propia DB y secrets.
 
-**Por qué el merge a main es manual**: es la decisión humana ("quiero que esto entre a prod"). El CI solo deja las imágenes listas en GHCR; el deploy efectivo lo controla el mantenedor.
+**Por qué el merge a main es manual**: es la decisión humana ("quiero que esto entre a prod"). El merge dispara el deploy automático a Cloud Run prod, pero la decisión de mergear sigue en manos del mantenedor.
 
 ## Slash-commands disponibles
 

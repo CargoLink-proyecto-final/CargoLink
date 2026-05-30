@@ -277,4 +277,4 @@ docker compose up -d
 
 ## CI/CD relacionado
 
-Las imágenes para deploy se buildean en GitHub Actions (no en Compose local) y se publican a GHCR con tags `dev` (push a `develop`) y `prod` (push a `main`). Detalle en [`ci-cd.md`](./ci-cd.md).
+Las imágenes para deploy se buildean en GitHub Actions (no en Compose local), se publican a Artifact Registry y se deployan a Cloud Run: entorno `dev` (push a `develop`) y `prod` (push a `main`). Detalle en [`ci-cd.md`](./ci-cd.md).
