@@ -263,7 +263,7 @@ Seteá los dominios en el tfvars del entorno (vacío = no se crea nada):
 
 ```hcl
 # terraform.tfvars (prod)
-frontend_domain = "app.cargolink.com.ar"
+frontend_domain = "plataforma.cargolink.com.ar"
 backend_domain  = "api.cargolink.com.ar"
 
 # dev.tfvars (dev) — OJO: terraform.tfvars (prod) se auto-carga; seteá los de dev

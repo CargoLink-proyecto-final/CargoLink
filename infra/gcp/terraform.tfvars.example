@@ -22,7 +22,7 @@ frontend_image = ""
 # Cloud Run domain mappings NO funcionan en southamerica-east1: se usa un LB.
 # Tras `terraform apply`, mirá `terraform output lb_ip` y creá un registro A por
 # subdominio en tu DNS (donweb) apuntando a esa IP. Ver README §"Dominios custom".
-# frontend_domain = "app.cargolink.com.ar"
+# frontend_domain = "plataforma.cargolink.com.ar"
 # backend_domain  = "api.cargolink.com.ar"
 
 # ─── SMTP (opcional — vacío = fallback Ethereal, no envía mails reales) ───
