@@ -249,8 +249,49 @@ El chat usa Socket.IO con el adapter **en memoria**. Con más de una instancia d
 ### `NEXT_PUBLIC_API_URL` es build-time
 Si cambiás la URL del backend (p. ej. mapear un dominio propio), tenés que **re-buildear** el frontend con el nuevo valor. No se puede cambiar por env var en runtime.
 
-### CORS soporta un solo origen
-`main.ts` lee un único `CORS_ORIGIN`. Si necesitás varios orígenes (ej. web + un dominio extra), hay que parsear coma-separados en el backend (hoy no lo hace).
+### CORS soporta múltiples orígenes (coma-separados)
+`main.ts` parsea `CORS_ORIGIN` como lista separada por coma. Terraform arma el valor con la URL `.run.app` del frontend **y** el dominio custom (si está seteado), así el backend admite ambos durante la transición. Para agregar más orígenes a mano, separalos por coma.
+
+---
+
+## Dominios custom
+
+> ⚠️ **Cloud Run domain mappings NO están soportados en `southamerica-east1`.** Por eso los dominios custom se exponen vía un **Application Load Balancer global externo + Serverless NEGs** (región-independiente, una IP anycast única). Definido en `main.tf` (bloque "Dominios custom"), opt-in por entorno.
+
+### Cómo se activa
+Seteá los dominios en el tfvars del entorno (vacío = no se crea nada):
+
+```hcl
+# terraform.tfvars (prod)
+frontend_domain = "plataforma.cargolink.com.ar"
+backend_domain  = "api.cargolink.com.ar"
+
+# dev.tfvars (dev) — OJO: terraform.tfvars (prod) se auto-carga; seteá los de dev
+# explícitamente o dev hereda los de prod (mismo gotcha que SMTP).
+frontend_domain = "dev.cargolink.com.ar"
+backend_domain  = "api.dev.cargolink.com.ar"
+```
+
+Si ambos quedan vacíos, **no se crea el LB** (ni la API `compute`, ni IP, ni cert) → cero costo extra. Cada entorno tiene su **propio LB y su propia IP anycast**.
+
+### Qué crea
+Por entorno: una IP global estática, Serverless NEG por servicio (front/back), backend services, un certificado SSL managed (cubre ambos dominios), URL map que rutea por host, target HTTPS proxy + forwarding rule en :443, y un redirect :80 → :443.
+
+### Pasos de DNS (donweb)
+1. `terraform apply` (en el workspace del entorno).
+2. `terraform output lb_ip` → IP anycast del LB.
+3. En el panel **Zona DNS de donweb**, creá un registro **`A`** por subdominio apuntando a esa IP (ej. `app` y `api` → `<lb_ip>`).
+4. Esperá la propagación DNS. **Recién ahí** Google provisiona el cert managed (hasta ~60 min). Chequeá el estado con:
+   `gcloud compute ssl-certificates describe $(terraform output -raw lb_cert_name) --global --format='value(managed.status)'` (pasa de `PROVISIONING` a `ACTIVE`).
+   - Apex desnudo (`@`): donweb debe permitir un `A` en la raíz. Los subdominios (`app.`/`api.`) siempre funcionan.
+
+### Cambios de app (ya cableados)
+- **`NEXT_PUBLIC_API_URL` (build-time del frontend):** lo hornea el workflow `deploy-gcp.yml`. Por default usa la URL `.run.app` del backend. Cuando el dominio custom del backend esté **vivo** (LB + DNS + cert ACTIVE), seteá la repo variable de GitHub Actions para que el frontend se buildee contra él:
+  - prod → `PROD_API_BASE_URL=https://api.cargolink.com.ar`
+  - dev → `DEV_API_BASE_URL=https://api.dev.cargolink.com.ar`
+
+  (`Settings → Secrets and variables → Actions → Variables`.) El próximo deploy hornea `NEXT_PUBLIC_API_URL=<base>/api`. **No la seteés antes de que el dominio resuelva**, o el frontend quedaría apuntando a una API que todavía no sirve.
+- **`CORS_ORIGIN` (runtime del backend):** Terraform ya lo arma con la URL `.run.app` + el dominio custom del frontend (coma-separados), así que al `apply` con `frontend_domain` seteado el backend admite ambos orígenes. Nada manual.
 
 ---
 

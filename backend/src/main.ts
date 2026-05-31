@@ -7,8 +7,18 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // CORS_ORIGIN admite uno o varios orígenes separados por coma (ej. el dominio
+  // custom + la URL .run.app durante la transición). Ver infra/gcp/README.md.
+  const DEFAULT_CORS_ORIGIN = 'http://localhost:3000';
+  const corsOrigins = (process.env.CORS_ORIGIN || DEFAULT_CORS_ORIGIN)
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    // Si CORS_ORIGIN quedara vacío (ej. "," o " "), caer al default en vez de
+    // pasar un array vacío, que bloquearía todo origen cruzado.
+    origin: corsOrigins.length > 0 ? corsOrigins : [DEFAULT_CORS_ORIGIN],
     credentials: true,
   });
 

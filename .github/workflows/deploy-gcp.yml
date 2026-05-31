@@ -72,6 +72,23 @@ jobs:
           if [[ -z "$URL" ]]; then echo "::error::No se encontró el backend de ${{ steps.env.outputs.name }}. ¿Está provisionado por Terraform?"; exit 1; fi
           echo "url=$URL" >>"$GITHUB_OUTPUT"
 
+      - name: Resolve public API base URL (dominio custom o fallback .run.app)
+        id: api
+        run: |
+          # Si el dominio custom del backend ya está vivo (LB + DNS + cert), seteá
+          # la repo variable correspondiente para que el frontend se buildee con él:
+          #   prod → PROD_API_BASE_URL=https://api.cargolink.com.ar
+          #   dev  → DEV_API_BASE_URL=https://api.dev.cargolink.com.ar
+          # Si está vacía, cae a la URL .run.app del backend (comportamiento actual).
+          if [[ "${{ steps.env.outputs.name }}" == "prod" ]]; then
+            OVERRIDE="${{ vars.PROD_API_BASE_URL }}"
+          else
+            OVERRIDE="${{ vars.DEV_API_BASE_URL }}"
+          fi
+          BASE="${OVERRIDE:-${{ steps.backend.outputs.url }}}"
+          echo "Frontend se buildea con NEXT_PUBLIC_API_URL=${BASE}/api"
+          echo "base=$BASE" >>"$GITHUB_OUTPUT"
+
       - name: Build & push backend image
         id: be
         run: |
@@ -85,7 +102,7 @@ jobs:
         run: |
           IMG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ steps.env.outputs.ar_repo }}/cargolink-frontend:${{ steps.env.outputs.name }}-${{ steps.env.outputs.sha }}"
           docker build \
-            --build-arg NEXT_PUBLIC_API_URL="${{ steps.backend.outputs.url }}/api" \
+            --build-arg NEXT_PUBLIC_API_URL="${{ steps.api.outputs.base }}/api" \
             -t "$IMG" ./frontend
           docker push "$IMG"
           echo "image=$IMG" >>"$GITHUB_OUTPUT"
