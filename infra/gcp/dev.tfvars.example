@@ -22,3 +22,10 @@ smtp_password = ""
 smtp_user     = ""
 # smtp_host     = "smtp.gmail.com"
 # smtp_from     = "CargoLink Dev <tu-cuenta@gmail.com>"
+
+# ─── Dominios custom de dev (opcional) ───
+# MISMO ojo que con SMTP: si prod define frontend_domain/backend_domain en
+# terraform.tfvars, dev los heredaría. Seteá los de dev (o "" para no crear LB)
+# acá explícitamente. Cada entorno tiene su propio LB → su propia IP anycast.
+# frontend_domain = "dev.cargolink.com.ar"
+# backend_domain  = "api.dev.cargolink.com.ar"

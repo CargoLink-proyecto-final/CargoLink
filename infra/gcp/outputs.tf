@@ -27,3 +27,14 @@ output "db_instance_name" {
   description = "Nombre de la instancia Cloud SQL (para gcloud sql / backups)."
   value       = google_sql_database_instance.main.name
 }
+
+# ──────────────────────────── Dominios custom (Load Balancer) ────────────────────────────
+output "lb_ip" {
+  description = "IP anycast del Load Balancer. Creá un registro A en el DNS (donweb) apuntando a esta IP. Vacío si no hay dominios configurados."
+  value       = try(google_compute_global_address.lb[0].address, "(LB no creado — sin dominios)")
+}
+
+output "lb_cert_name" {
+  description = "Nombre del certificado SSL managed. El estado (PROVISIONING/ACTIVE) no lo exporta Terraform; chequealo con: gcloud compute ssl-certificates describe <name> --global --format='value(managed.status)'"
+  value       = try(google_compute_managed_ssl_certificate.lb[0].name, "(sin cert)")
+}
