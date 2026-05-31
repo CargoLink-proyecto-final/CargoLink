@@ -500,12 +500,22 @@ resource "google_compute_backend_service" "backend" {
 # Certificado SSL managed (Google emite y renueva automáticamente). REQUIERE que
 # el DNS ya apunte a la IP del LB para provisionar — puede tardar hasta ~60 min
 # en pasar a ACTIVE. Ver output lb_cert_status.
+#
+# create_before_destroy + nombre versionado: si un dominio queda trabado en
+# FAILED_NOT_VISIBLE (negative-cache de DNS en el validador de Google), basta
+# con bumpear el sufijo del nombre y `terraform apply` → crea un cert nuevo,
+# lo ata al proxy y borra el viejo sin downtime (un cert managed no se puede
+# borrar mientras está en uso, por eso el create_before_destroy).
 resource "google_compute_managed_ssl_certificate" "lb" {
   count = local.lb_enabled ? 1 : 0
-  name  = "cargolink-${local.infix}cert"
+  name  = "cargolink-${local.infix}cert-v2"
 
   managed {
     domains = local.lb_domains
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 

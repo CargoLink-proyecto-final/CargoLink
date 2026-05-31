@@ -136,9 +136,12 @@ jobs:
 
       - name: Summary
         run: |
+          # URLs públicas: dominio custom si está seteado en repo variables, si no la .run.app.
+          FE="${{ vars.DEV_FRONTEND_URL }}"; FE="${FE:-$(gcloud run services describe cargolink-dev-frontend --region=${{ env.REGION }} --format='value(status.url)')}"
+          API="${{ vars.DEV_API_BASE_URL }}"; API="${API:-$(gcloud run services describe cargolink-dev-backend --region=${{ env.REGION }} --format='value(status.url)')}"
           echo "### Deploy a dev ✅" >>"$GITHUB_STEP_SUMMARY"
-          echo "- Backend: $(gcloud run services describe cargolink-dev-backend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
-          echo "- Frontend: $(gcloud run services describe cargolink-dev-frontend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
+          echo "- Frontend: $FE" >>"$GITHUB_STEP_SUMMARY"
+          echo "- API: $API" >>"$GITHUB_STEP_SUMMARY"
 
   # ── Deploy a PROD (solo push a main; en develop queda skipped) ──
   deploy-prod:
@@ -169,6 +172,9 @@ jobs:
 
       - name: Summary
         run: |
+          # URLs públicas: dominio custom si está seteado en repo variables, si no la .run.app.
+          FE="${{ vars.PROD_FRONTEND_URL }}"; FE="${FE:-$(gcloud run services describe cargolink-frontend --region=${{ env.REGION }} --format='value(status.url)')}"
+          API="${{ vars.PROD_API_BASE_URL }}"; API="${API:-$(gcloud run services describe cargolink-backend --region=${{ env.REGION }} --format='value(status.url)')}"
           echo "### Deploy a prod ✅" >>"$GITHUB_STEP_SUMMARY"
-          echo "- Backend: $(gcloud run services describe cargolink-backend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
-          echo "- Frontend: $(gcloud run services describe cargolink-frontend --region=${{ env.REGION }} --format='value(status.url)')" >>"$GITHUB_STEP_SUMMARY"
+          echo "- Frontend: $FE" >>"$GITHUB_STEP_SUMMARY"
+          echo "- API: $API" >>"$GITHUB_STEP_SUMMARY"
