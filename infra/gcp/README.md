@@ -254,6 +254,43 @@ Si cambiás la URL del backend (p. ej. mapear un dominio propio), tenés que **r
 
 ---
 
+## Dominios custom
+
+> ⚠️ **Cloud Run domain mappings NO están soportados en `southamerica-east1`.** Por eso los dominios custom se exponen vía un **Application Load Balancer global externo + Serverless NEGs** (región-independiente, una IP anycast única). Definido en `main.tf` (bloque "Dominios custom"), opt-in por entorno.
+
+### Cómo se activa
+Seteá los dominios en el tfvars del entorno (vacío = no se crea nada):
+
+```hcl
+# terraform.tfvars (prod)
+frontend_domain = "app.cargolink.com"
+backend_domain  = "api.cargolink.com"
+
+# dev.tfvars (dev) — OJO: terraform.tfvars (prod) se auto-carga; seteá los de dev
+# explícitamente o dev hereda los de prod (mismo gotcha que SMTP).
+frontend_domain = "dev.cargolink.com"
+backend_domain  = "api.dev.cargolink.com"
+```
+
+Si ambos quedan vacíos, **no se crea el LB** (ni la API `compute`, ni IP, ni cert) → cero costo extra. Cada entorno tiene su **propio LB y su propia IP anycast**.
+
+### Qué crea
+Por entorno: una IP global estática, Serverless NEG por servicio (front/back), backend services, un certificado SSL managed (cubre ambos dominios), URL map que rutea por host, target HTTPS proxy + forwarding rule en :443, y un redirect :80 → :443.
+
+### Pasos de DNS (donweb)
+1. `terraform apply` (en el workspace del entorno).
+2. `terraform output lb_ip` → IP anycast del LB.
+3. En el panel **Zona DNS de donweb**, creá un registro **`A`** por subdominio apuntando a esa IP (ej. `app` y `api` → `<lb_ip>`).
+4. Esperá la propagación DNS. **Recién ahí** Google provisiona el cert managed (hasta ~60 min). Chequeá el estado con:
+   `gcloud compute ssl-certificates describe $(terraform output -raw lb_cert_name) --global --format='value(managed.status)'` (pasa de `PROVISIONING` a `ACTIVE`).
+   - Apex desnudo (`@`): donweb debe permitir un `A` en la raíz. Los subdominios (`app.`/`api.`) siempre funcionan.
+
+### Cambios de app que siguen siendo necesarios
+- **Re-buildear el frontend** con `NEXT_PUBLIC_API_URL=https://<backend_domain>/api` (es build-time, ver gotcha arriba).
+- **Ampliar `CORS_ORIGIN`** al nuevo dominio del frontend (y sumar parseo coma-separado si querés mantener también el origen `.run.app`).
+
+---
+
 ## Entornos dev / prod + CI/CD
 
 CargoLink corre **dos entornos en el mismo proyecto** `cargo-link-2026`, separados por nombre y con DB propia:

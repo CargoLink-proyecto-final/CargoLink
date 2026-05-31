@@ -99,6 +99,23 @@ variable "cors_origin_fallback" {
   default     = "http://localhost:3000"
 }
 
+# ──────────────────────────── Dominios custom (opcional) ────────────────────────────
+# Cloud Run domain mappings NO están soportados en southamerica-east1, así que
+# los dominios se exponen vía un Application Load Balancer global (ver main.tf y
+# la sección "Dominios custom" del README). Dejá vacío para no crear el LB.
+# Cada entorno setea los suyos en su tfvars (prod → terraform.tfvars, dev → dev.tfvars).
+variable "frontend_domain" {
+  description = "Dominio custom del frontend (ej. app.cargolink.com). Vacío = sin LB para el front."
+  type        = string
+  default     = ""
+}
+
+variable "backend_domain" {
+  description = "Dominio custom del backend/API (ej. api.cargolink.com). Vacío = no se rutea por dominio."
+  type        = string
+  default     = ""
+}
+
 # ──────────────────────────── SMTP (opcional) ────────────────────────────
 # Dejá SMTP_USER/PASSWORD vacíos para que el backend caiga al fallback Ethereal
 # (preview de dev, no envía mails reales). Para envío real, completá todo.
