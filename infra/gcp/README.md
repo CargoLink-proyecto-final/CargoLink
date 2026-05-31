@@ -249,8 +249,8 @@ El chat usa Socket.IO con el adapter **en memoria**. Con más de una instancia d
 ### `NEXT_PUBLIC_API_URL` es build-time
 Si cambiás la URL del backend (p. ej. mapear un dominio propio), tenés que **re-buildear** el frontend con el nuevo valor. No se puede cambiar por env var en runtime.
 
-### CORS soporta un solo origen
-`main.ts` lee un único `CORS_ORIGIN`. Si necesitás varios orígenes (ej. web + un dominio extra), hay que parsear coma-separados en el backend (hoy no lo hace).
+### CORS soporta múltiples orígenes (coma-separados)
+`main.ts` parsea `CORS_ORIGIN` como lista separada por coma. Terraform arma el valor con la URL `.run.app` del frontend **y** el dominio custom (si está seteado), así el backend admite ambos durante la transición. Para agregar más orígenes a mano, separalos por coma.
 
 ---
 
@@ -285,9 +285,13 @@ Por entorno: una IP global estática, Serverless NEG por servicio (front/back), 
    `gcloud compute ssl-certificates describe $(terraform output -raw lb_cert_name) --global --format='value(managed.status)'` (pasa de `PROVISIONING` a `ACTIVE`).
    - Apex desnudo (`@`): donweb debe permitir un `A` en la raíz. Los subdominios (`app.`/`api.`) siempre funcionan.
 
-### Cambios de app que siguen siendo necesarios
-- **Re-buildear el frontend** con `NEXT_PUBLIC_API_URL=https://<backend_domain>/api` (es build-time, ver gotcha arriba).
-- **Ampliar `CORS_ORIGIN`** al nuevo dominio del frontend (y sumar parseo coma-separado si querés mantener también el origen `.run.app`).
+### Cambios de app (ya cableados)
+- **`NEXT_PUBLIC_API_URL` (build-time del frontend):** lo hornea el workflow `deploy-gcp.yml`. Por default usa la URL `.run.app` del backend. Cuando el dominio custom del backend esté **vivo** (LB + DNS + cert ACTIVE), seteá la repo variable de GitHub Actions para que el frontend se buildee contra él:
+  - prod → `PROD_API_BASE_URL=https://api.cargolink.com.ar`
+  - dev → `DEV_API_BASE_URL=https://api.dev.cargolink.com.ar`
+
+  (`Settings → Secrets and variables → Actions → Variables`.) El próximo deploy hornea `NEXT_PUBLIC_API_URL=<base>/api`. **No la seteés antes de que el dominio resuelva**, o el frontend quedaría apuntando a una API que todavía no sirve.
+- **`CORS_ORIGIN` (runtime del backend):** Terraform ya lo arma con la URL `.run.app` + el dominio custom del frontend (coma-separados), así que al `apply` con `frontend_domain` seteado el backend admite ambos orígenes. Nada manual.
 
 ---
 

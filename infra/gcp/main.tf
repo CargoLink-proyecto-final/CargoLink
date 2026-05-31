@@ -52,6 +52,20 @@ locals {
   # try() evita el error de índice cuando frontend tiene count = 0.
   frontend_url = try(google_cloud_run_v2_service.frontend[0].uri, var.cors_origin_fallback)
 
+  # URL pública canónica del frontend: el dominio custom si está seteado, si no
+  # la URL .run.app. Se usa para FRONTEND_URL (links en mails, etc.).
+  frontend_public_url = var.frontend_domain != "" ? "https://${var.frontend_domain}" : local.frontend_url
+
+  # Orígenes permitidos por CORS. Incluye la URL .run.app del frontend Y el
+  # dominio custom (si está seteado), separados por coma → el backend admite
+  # ambos durante la transición (main.ts parsea coma-separados). Si no hay
+  # ninguno (fase 1 sin frontend) cae al fallback.
+  cors_origins = compact([
+    try(google_cloud_run_v2_service.frontend[0].uri, ""),
+    var.frontend_domain != "" ? "https://${var.frontend_domain}" : "",
+  ])
+  cors_origin_value = length(local.cors_origins) > 0 ? join(",", local.cors_origins) : var.cors_origin_fallback
+
   # Connection string de Prisma vía el socket unix de Cloud SQL.
   # Cloud Run monta el proxy en /cloudsql/<connection_name>.
   database_url = "postgresql://${var.db_user}:${random_password.db.result}@localhost/${var.db_name}?host=/cloudsql/${google_sql_database_instance.main.connection_name}&schema=public"
@@ -278,14 +292,15 @@ resource "google_cloud_run_v2_service" "backend" {
         value = var.jwt_expiration
       }
 
-      # CORS_ORIGIN y FRONTEND_URL apuntan al frontend una vez desplegado (fase 2).
+      # CORS_ORIGIN admite la URL .run.app y el dominio custom (coma-separados).
+      # FRONTEND_URL es la URL canónica (dominio custom si está seteado).
       env {
         name  = "CORS_ORIGIN"
-        value = local.frontend_url
+        value = local.cors_origin_value
       }
       env {
         name  = "FRONTEND_URL"
-        value = local.frontend_url
+        value = local.frontend_public_url
       }
 
       env {
