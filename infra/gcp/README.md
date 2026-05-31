@@ -263,13 +263,13 @@ Seteá los dominios en el tfvars del entorno (vacío = no se crea nada):
 
 ```hcl
 # terraform.tfvars (prod)
-frontend_domain = "app.cargolink.com"
-backend_domain  = "api.cargolink.com"
+frontend_domain = "app.cargolink.com.ar"
+backend_domain  = "api.cargolink.com.ar"
 
 # dev.tfvars (dev) — OJO: terraform.tfvars (prod) se auto-carga; seteá los de dev
 # explícitamente o dev hereda los de prod (mismo gotcha que SMTP).
-frontend_domain = "dev.cargolink.com"
-backend_domain  = "api.dev.cargolink.com"
+frontend_domain = "dev.cargolink.com.ar"
+backend_domain  = "api.dev.cargolink.com.ar"
 ```
 
 Si ambos quedan vacíos, **no se crea el LB** (ni la API `compute`, ni IP, ni cert) → cero costo extra. Cada entorno tiene su **propio LB y su propia IP anycast**.
