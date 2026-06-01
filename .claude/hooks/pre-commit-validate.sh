@@ -104,11 +104,39 @@ fi
 # Bloque B: validación de git commit.
 # ────────────────────────────────────────────────────────────────────────
 
-# Si no es git commit, dejar pasar.
-case "$CMD" in
-  *"git commit"*|*"git"*"commit"*) ;;
-  *) exit 0 ;;
-esac
+# Si no es `git commit`, dejar pasar. Detección por TOKENS (no substring): busca
+# un token `git` y, salteando sus opciones globales (-C <path>, -c <k=v>,
+# --git-dir, etc.), verifica que el subcomando sea exactamente `commit`. Así un
+# comando read-only como `git log ... | echo "...commits..."` NO se confunde con
+# un commit real — el glob viejo `*"git"*"commit"*` matcheaba ambos y bloqueaba
+# comandos inocentes en ramas protegidas.
+IS_GIT_COMMIT="$(printf '%s' "$CMD" | /usr/bin/python3 -c '
+import sys, shlex
+try:
+  tokens = shlex.split(sys.stdin.read())
+except Exception:
+  print("0"); sys.exit(0)
+GLOBAL_WITH_ARG = ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path")
+i, n, found = 0, len(tokens), False
+while i < n:
+  if tokens[i] == "git":
+    j = i + 1
+    while j < n:
+      t = tokens[j]
+      if t in GLOBAL_WITH_ARG:
+        j += 2; continue
+      if t.startswith("-"):
+        j += 1; continue
+      break
+    if j < n and tokens[j] == "commit":
+      found = True
+      break
+  i += 1
+print("1" if found else "0")
+' 2>/dev/null)"
+
+# Si no es un git commit real, dejar pasar.
+[ "$IS_GIT_COMMIT" != "1" ] && exit 0
 
 # Rama actual.
 BRANCH="$(cd "$REPO" 2>/dev/null && git rev-parse --abbrev-ref HEAD 2>/dev/null)"
