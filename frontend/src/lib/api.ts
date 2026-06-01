@@ -9,7 +9,9 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('token');
+    // Token por pestaña (sessionStorage). Ver store/auth.ts: cada pestaña tiene
+    // su propia sesión, así dos cuentas en el mismo navegador no se pisan.
+    const token = sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -23,8 +25,8 @@ api.interceptors.response.use(
     const requestUrl: string = error.config?.url || '';
     const isAuthEndpoint = requestUrl.includes('/auth/');
     if (error.response?.status === 401 && typeof window !== 'undefined' && !isAuthEndpoint) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
       window.location.href = '/auth/login';
     }
     return Promise.reject(error);
