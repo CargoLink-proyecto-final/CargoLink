@@ -100,6 +100,37 @@ export const ratingsApi = {
   getUserRatings: (userId: string) => api.get(`/ratings/user/${userId}`),
 };
 
+// Companies (fleet / company admin)
+export const companiesApi = {
+  // Directory + driver side
+  list: () => api.get('/companies'),
+  getMyMembership: () => api.get('/companies/my-membership'),
+  requestToJoin: (companyId: string) =>
+    api.post('/companies/join-requests', { companyId }),
+  cancelJoinRequest: (requestId: string) =>
+    api.delete(`/companies/join-requests/${requestId}`),
+  leave: () => api.post('/companies/leave'),
+  // Company admin side (scoped to the owned company)
+  getMyCompany: () => api.get('/companies/me'),
+  getDrivers: () => api.get('/companies/me/drivers'),
+  removeDriver: (driverId: string) =>
+    api.delete(`/companies/me/drivers/${driverId}`),
+  getDriverStats: (driverId: string) =>
+    api.get(`/companies/me/drivers/${driverId}/stats`),
+  getRequests: (params?: { status?: string }) =>
+    api.get('/companies/me/requests', { params }),
+  decideRequest: (requestId: string, decision: 'APPROVE' | 'REJECT') =>
+    api.patch(`/companies/me/requests/${requestId}`, { decision }),
+  getTrips: (params?: {
+    status?: string;
+    driverId?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/companies/me/trips', { params }),
+};
+
 // Postulations
 export const postulationsApi = {
   create: (loadId: string, data: { message?: string; proposedPrice?: number }) =>

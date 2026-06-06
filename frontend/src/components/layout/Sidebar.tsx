@@ -17,6 +17,8 @@ import {
   Menu,
   X,
   ClipboardList,
+  Building2,
+  UserCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -33,8 +35,15 @@ const navItems = {
     { href: '/dashboard/carrier', label: 'Panel', icon: LayoutDashboard },
     { href: '/loads', label: 'Cargas Disponibles', icon: Package },
     { href: '/tracking', label: 'Mis Viajes', icon: Truck },
+    { href: '/company', label: 'Mi Empresa', icon: Building2 },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
     { href: '/register', label: 'Registro', icon: ClipboardList },
+  ],
+  COMPANY_ADMIN: [
+    { href: '/dashboard/company-admin', label: 'Panel', icon: LayoutDashboard },
+    { href: '/dashboard/company-admin/drivers', label: 'Conductores', icon: Users },
+    { href: '/dashboard/company-admin/trips', label: 'Viajes', icon: Truck },
+    { href: '/dashboard/company-admin/requests', label: 'Solicitudes', icon: UserCheck },
   ],
   ADMIN: [
     { href: '/dashboard/admin', label: 'Panel', icon: LayoutDashboard },
@@ -50,6 +59,7 @@ const ROLE_LABEL: Record<string, string> = {
   CARGO_GENERATOR: 'Generador de carga',
   TRANSPORTER: 'Transportista',
   ADMIN: 'Administrador',
+  COMPANY_ADMIN: 'Administrador de empresa',
 };
 
 export default function Sidebar() {

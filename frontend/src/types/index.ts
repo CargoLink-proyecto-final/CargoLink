@@ -1,4 +1,6 @@
-export type Role = 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN';
+export type Role = 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN' | 'COMPANY_ADMIN';
+
+export type JoinRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export type LoadStatus = 'PUBLISHED' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type TripStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
@@ -116,4 +118,62 @@ export interface PaginatedResponse<T> {
 export interface AuthResponse {
   user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role'>;
   accessToken: string;
+}
+
+// ---- Company admin (fleet) ----
+
+export type CompanyDriver = Pick<
+  User,
+  'id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'avatarUrl'
+>;
+
+export interface CompanyOverview {
+  id: string;
+  name: string;
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+  memberCount: number;
+  pendingRequests: number;
+}
+
+export interface CompanyJoinRequest {
+  id: string;
+  status: JoinRequestStatus;
+  createdAt: string;
+  decidedAt?: string | null;
+  transporter?: CompanyDriver;
+  company?: { id: string; name: string };
+}
+
+export interface DriverStats {
+  driver: CompanyDriver;
+  totalTrips: number;
+  completedTrips: number;
+  activeTrips: number;
+  onTimeDeliveries: number;
+  onTimeRate: number | null;
+  totalRevenue: number;
+  avgRating: number | null;
+  ratingsCount: number;
+}
+
+export interface CompanyDirectoryItem {
+  id: string;
+  name: string;
+  _count: { members: number };
+}
+
+export interface MyMembership {
+  company: { id: string; name: string } | null;
+  requests: CompanyJoinRequest[];
+}
+
+export interface CompanyTrip {
+  id: string;
+  status: TripStatus;
+  createdAt: string;
+  completedAt?: string | null;
+  load: Pick<Load, 'id' | 'title' | 'originAddress' | 'destAddress' | 'price' | 'deliveryDate'>;
+  carrier: CompanyDriver;
 }
