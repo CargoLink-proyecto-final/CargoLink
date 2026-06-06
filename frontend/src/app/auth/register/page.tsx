@@ -27,6 +27,9 @@ export default function RegisterPage() {
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterForm>({
     defaultValues: { role: 'CARGO_GENERATOR' },
+    // Los campos ocultos (nombre/apellido cuando el rol es Empresa) se
+    // desregistran al desmontarse, así no se validan ni se envían.
+    shouldUnregister: true,
   });
 
   const selectedRole = watch('role');
@@ -75,30 +78,32 @@ export default function RegisterPage() {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <span className="text-red-500">*</span></label>
-              <input
-                {...register('firstName', {
-                required: 'Obligatorio',
-                pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
-              })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-              />
-              {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
+          {selectedRole !== 'COMPANY_ADMIN' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <span className="text-red-500">*</span></label>
+                <input
+                  {...register('firstName', {
+                  required: 'Obligatorio',
+                  pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
+                })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                />
+                {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Apellido <span className="text-red-500">*</span></label>
+                <input
+                  {...register('lastName', {
+                  required: 'Obligatorio',
+                  pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
+                })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                />
+                {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Apellido <span className="text-red-500">*</span></label>
-              <input
-                {...register('lastName', {
-                required: 'Obligatorio',
-                pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
-              })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-              />
-              {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
-            </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico <span className="text-red-500">*</span></label>

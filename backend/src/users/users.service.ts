@@ -7,7 +7,11 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async create(data: RegisterDto & { password: string }) {
-    return this.prisma.user.create({ data });
+    // firstName/lastName son opcionales en el DTO (las cuentas de empresa no los
+    // mandan); Prisma los exige como string, así que garantizamos un valor.
+    return this.prisma.user.create({
+      data: { ...data, firstName: data.firstName ?? '', lastName: data.lastName ?? '' },
+    });
   }
 
   async findByEmail(email: string) {

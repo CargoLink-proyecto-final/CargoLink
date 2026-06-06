@@ -44,12 +44,19 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
+    // Una empresa no tiene nombre/apellido personales: el nombre visible (y las
+    // iniciales del avatar) salen del nombre de la empresa.
+    const isCompany = dto.role === Role.COMPANY_ADMIN;
+    const firstName = isCompany ? dto.companyName!.trim() : (dto.firstName ?? '');
+    const lastName = isCompany ? '' : (dto.lastName ?? '');
     const user = await this.usersService.create({
       ...dto,
+      firstName,
+      lastName,
       password: hashedPassword,
     });
 
-    if (dto.role === Role.COMPANY_ADMIN) {
+    if (isCompany) {
       await this.prisma.company.create({
         data: { name: dto.companyName!.trim(), ownerId: user.id },
       });
