@@ -9,6 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { Role } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
@@ -34,11 +35,25 @@ export class AuthService {
       throw new ConflictException('El correo ya está registrado');
     }
 
+    // Registrarse como empresa exige un nombre: se usa para crear la Company
+    // que este usuario administrará (request + approval de conductores).
+    if (dto.role === Role.COMPANY_ADMIN && !dto.companyName?.trim()) {
+      throw new BadRequestException(
+        'El nombre de la empresa es obligatorio para registrar una empresa',
+      );
+    }
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     const user = await this.usersService.create({
       ...dto,
       password: hashedPassword,
     });
+
+    if (dto.role === Role.COMPANY_ADMIN) {
+      await this.prisma.company.create({
+        data: { name: dto.companyName!.trim(), ownerId: user.id },
+      });
+    }
 
     const verificationToken = randomBytes(32).toString('hex');
     const verificationExp = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
