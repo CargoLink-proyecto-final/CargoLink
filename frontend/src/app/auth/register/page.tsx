@@ -184,32 +184,36 @@ export default function RegisterPage() {
             {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {selectedRole === 'COMPANY_ADMIN' ? (
-                <>Nombre de la empresa <span className="text-red-500">*</span></>
-              ) : (
-                'Empresa (opcional)'
+          {/* El transportista no elige empresa al registrarse: lo hace después
+              desde "Mi Empresa" (solicitud + aprobación del admin de la flota). */}
+          {selectedRole !== 'TRANSPORTER' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {selectedRole === 'COMPANY_ADMIN' ? (
+                  <>Nombre de la empresa <span className="text-red-500">*</span></>
+                ) : (
+                  'Empresa (opcional)'
+                )}
+              </label>
+              <input
+                {...register('companyName', {
+                  validate: (value) =>
+                    selectedRole !== 'COMPANY_ADMIN' ||
+                    (!!value && value.trim().length > 0) ||
+                    'El nombre de la empresa es obligatorio',
+                })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              />
+              {selectedRole === 'COMPANY_ADMIN' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Vas a administrar esta empresa: los transportistas podrán pedir unirse a tu flota.
+                </p>
               )}
-            </label>
-            <input
-              {...register('companyName', {
-                validate: (value) =>
-                  selectedRole !== 'COMPANY_ADMIN' ||
-                  (!!value && value.trim().length > 0) ||
-                  'El nombre de la empresa es obligatorio',
-              })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-            />
-            {selectedRole === 'COMPANY_ADMIN' && (
-              <p className="text-xs text-gray-500 mt-1">
-                Vas a administrar esta empresa: los transportistas podrán pedir unirse a tu flota.
-              </p>
-            )}
-            {errors.companyName && (
-              <p className="text-red-500 text-xs mt-1">{errors.companyName.message}</p>
-            )}
-          </div>
+              {errors.companyName && (
+                <p className="text-red-500 text-xs mt-1">{errors.companyName.message}</p>
+              )}
+            </div>
+          )}
 
           <button
             type="submit"
