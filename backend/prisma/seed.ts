@@ -1,4 +1,4 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient, Role, JoinRequestStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -49,6 +49,85 @@ async function main() {
     },
   });
 
+  // ---- Empresa demo (rol COMPANY_ADMIN) ----
+  const companyAdmin = await prisma.user.upsert({
+    where: { email: 'empresa@example.com' },
+    update: { emailVerified: true },
+    create: {
+      email: 'empresa@example.com',
+      password,
+      firstName: 'Laura',
+      lastName: 'Fernández',
+      phone: '+5491155550000',
+      role: Role.COMPANY_ADMIN,
+      companyName: 'Flota Andina',
+      emailVerified: true,
+    },
+  });
+
+  const company = await prisma.company.upsert({
+    where: { ownerId: companyAdmin.id },
+    update: {},
+    create: { name: 'Flota Andina', ownerId: companyAdmin.id },
+  });
+
+  // Dos conductores miembros de la empresa.
+  const driverOne = await prisma.user.upsert({
+    where: { email: 'driver1@example.com' },
+    update: { emailVerified: true, companyId: company.id },
+    create: {
+      email: 'driver1@example.com',
+      password,
+      firstName: 'Pedro',
+      lastName: 'Gómez',
+      phone: '+5491155551111',
+      role: Role.TRANSPORTER,
+      emailVerified: true,
+      companyId: company.id,
+    },
+  });
+
+  const driverTwo = await prisma.user.upsert({
+    where: { email: 'driver2@example.com' },
+    update: { emailVerified: true, companyId: company.id },
+    create: {
+      email: 'driver2@example.com',
+      password,
+      firstName: 'Sofía',
+      lastName: 'Ramírez',
+      phone: '+5491155552222',
+      role: Role.TRANSPORTER,
+      emailVerified: true,
+      companyId: company.id,
+    },
+  });
+
+  // Un conductor con solicitud PENDING (para probar el inbox de aprobación).
+  const driverPending = await prisma.user.upsert({
+    where: { email: 'driver3@example.com' },
+    update: { emailVerified: true },
+    create: {
+      email: 'driver3@example.com',
+      password,
+      firstName: 'Diego',
+      lastName: 'López',
+      phone: '+5491155553333',
+      role: Role.TRANSPORTER,
+      emailVerified: true,
+    },
+  });
+
+  const joinRequest = await prisma.companyJoinRequest.upsert({
+    where: {
+      companyId_transporterId: {
+        companyId: company.id,
+        transporterId: driverPending.id,
+      },
+    },
+    update: { status: JoinRequestStatus.PENDING, decidedAt: null },
+    create: { companyId: company.id, transporterId: driverPending.id },
+  });
+
   const SEED_LOAD_TITLE = 'Electrónica a Córdoba';
   const existing = await prisma.load.findFirst({
     where: { shipperId: shipper.id, title: SEED_LOAD_TITLE },
@@ -84,6 +163,10 @@ async function main() {
     admin: admin.email,
     shipper: shipper.email,
     carrier: carrier.email,
+    companyAdmin: companyAdmin.email,
+    company: company.name,
+    members: [driverOne.email, driverTwo.email],
+    pendingRequest: `${driverPending.email} -> ${joinRequest.status}`,
     load: load.id,
     reused: !!existing,
   });

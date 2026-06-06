@@ -14,7 +14,7 @@ interface RegisterForm {
   firstName: string;
   lastName: string;
   phone: string;
-  role: 'CARGO_GENERATOR' | 'TRANSPORTER';
+  role: 'CARGO_GENERATOR' | 'TRANSPORTER' | 'COMPANY_ADMIN';
   companyName?: string;
 }
 
@@ -27,6 +27,9 @@ export default function RegisterPage() {
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterForm>({
     defaultValues: { role: 'CARGO_GENERATOR' },
+    // Los campos ocultos (nombre/apellido cuando el rol es Empresa) se
+    // desregistran al desmontarse, así no se validan ni se envían.
+    shouldUnregister: true,
   });
 
   const selectedRole = watch('role');
@@ -60,41 +63,47 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="flex gap-2">
-            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'CARGO_GENERATOR' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
+          <div className="grid grid-cols-3 gap-2">
+            <label className={`text-center py-2 px-1 rounded-lg border-2 cursor-pointer transition text-xs font-medium ${selectedRole === 'CARGO_GENERATOR' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600'}`}>
               <input type="radio" value="CARGO_GENERATOR" {...register('role')} className="sr-only" />
               Generador de carga
             </label>
-            <label className={`flex-1 text-center py-2 rounded-lg border-2 cursor-pointer transition ${selectedRole === 'TRANSPORTER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
+            <label className={`text-center py-2 px-1 rounded-lg border-2 cursor-pointer transition text-xs font-medium ${selectedRole === 'TRANSPORTER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600'}`}>
               <input type="radio" value="TRANSPORTER" {...register('role')} className="sr-only" />
               Transportista
             </label>
+            <label className={`text-center py-2 px-1 rounded-lg border-2 cursor-pointer transition text-xs font-medium ${selectedRole === 'COMPANY_ADMIN' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600'}`}>
+              <input type="radio" value="COMPANY_ADMIN" {...register('role')} className="sr-only" />
+              Empresa
+            </label>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <span className="text-red-500">*</span></label>
-              <input
-                {...register('firstName', {
-                required: 'Obligatorio',
-                pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
-              })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-              />
-              {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
+          {selectedRole !== 'COMPANY_ADMIN' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <span className="text-red-500">*</span></label>
+                <input
+                  {...register('firstName', {
+                  required: 'Obligatorio',
+                  pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
+                })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                />
+                {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Apellido <span className="text-red-500">*</span></label>
+                <input
+                  {...register('lastName', {
+                  required: 'Obligatorio',
+                  pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
+                })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                />
+                {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Apellido <span className="text-red-500">*</span></label>
-              <input
-                {...register('lastName', {
-                required: 'Obligatorio',
-                pattern: { value: /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, message: 'Solo letras' },
-              })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-              />
-              {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
-            </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico <span className="text-red-500">*</span></label>
@@ -175,13 +184,36 @@ export default function RegisterPage() {
             {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Empresa (opcional)</label>
-            <input
-              {...register('companyName')}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-            />
-          </div>
+          {/* El transportista no elige empresa al registrarse: lo hace después
+              desde "Mi Empresa" (solicitud + aprobación del admin de la flota). */}
+          {selectedRole !== 'TRANSPORTER' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {selectedRole === 'COMPANY_ADMIN' ? (
+                  <>Nombre de la empresa <span className="text-red-500">*</span></>
+                ) : (
+                  'Empresa (opcional)'
+                )}
+              </label>
+              <input
+                {...register('companyName', {
+                  validate: (value) =>
+                    selectedRole !== 'COMPANY_ADMIN' ||
+                    (!!value && value.trim().length > 0) ||
+                    'El nombre de la empresa es obligatorio',
+                })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              />
+              {selectedRole === 'COMPANY_ADMIN' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Vas a administrar esta empresa: los transportistas podrán pedir unirse a tu flota.
+                </p>
+              )}
+              {errors.companyName && (
+                <p className="text-red-500 text-xs mt-1">{errors.companyName.message}</p>
+              )}
+            </div>
+          )}
 
           <button
             type="submit"
