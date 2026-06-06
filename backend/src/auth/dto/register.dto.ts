@@ -1,4 +1,12 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
@@ -12,15 +20,19 @@ export class RegisterDto {
   @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres' })
   password: string;
 
-  @ApiProperty({ example: 'John' })
+  // Una cuenta de empresa (COMPANY_ADMIN) no lleva nombre/apellido personales:
+  // el nombre visible se deriva del nombre de la empresa en el service.
+  @ApiProperty({ example: 'John', required: false })
+  @ValidateIf((o) => o.role !== Role.COMPANY_ADMIN)
   @IsString({ message: 'El nombre debe ser texto' })
   @IsNotEmpty({ message: 'El nombre es obligatorio' })
-  firstName: string;
+  firstName?: string;
 
-  @ApiProperty({ example: 'Doe' })
+  @ApiProperty({ example: 'Doe', required: false })
+  @ValidateIf((o) => o.role !== Role.COMPANY_ADMIN)
   @IsString({ message: 'El apellido debe ser texto' })
   @IsNotEmpty({ message: 'El apellido es obligatorio' })
-  lastName: string;
+  lastName?: string;
 
   @ApiProperty({ example: '+1234567890' })
   @IsString({ message: 'El teléfono debe ser texto' })

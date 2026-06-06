@@ -11,6 +11,13 @@ enum Role {
   CARGO_GENERATOR
   TRANSPORTER
   ADMIN
+  COMPANY_ADMIN
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum LoadStatus {
@@ -56,6 +63,16 @@ model User {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  // Company membership (TRANSPORTER) — null = independent / not in a company
+  companyId     String?  @map("company_id")
+  company       Company? @relation("CompanyMembers", fields: [companyId], references: [id])
+
+  // Company ownership (COMPANY_ADMIN) — the company this user owns, if any
+  ownedCompany  Company? @relation("CompanyOwner")
+
+  // Join requests submitted as a transporter
+  companyJoinRequests CompanyJoinRequest[] @relation("DriverRequests")
+
   // Shipper relations
   loads         Load[]   @relation("ShipperLoads")
 
@@ -73,7 +90,40 @@ model User {
   givenRatings    Rating[] @relation("RatingFrom")
   receivedRatings Rating[] @relation("RatingTo")
 
+  @@index([companyId])
   @@map("users")
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  ownerId   String   @unique @map("owner_id")
+  owner     User     @relation("CompanyOwner", fields: [ownerId], references: [id])
+
+  members   User[]   @relation("CompanyMembers")
+  requests  CompanyJoinRequest[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("companies")
+}
+
+model CompanyJoinRequest {
+  id            String            @id @default(uuid())
+  companyId     String            @map("company_id")
+  company       Company           @relation(fields: [companyId], references: [id])
+  transporterId String            @map("transporter_id")
+  transporter   User              @relation("DriverRequests", fields: [transporterId], references: [id])
+
+  status        JoinRequestStatus @default(PENDING)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  decidedAt     DateTime?         @map("decided_at")
+
+  @@unique([companyId, transporterId])
+  @@index([companyId, status])
+  @@index([transporterId])
+  @@map("company_join_requests")
 }
 
 model Load {

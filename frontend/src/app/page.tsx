@@ -24,6 +24,9 @@ export default function Home() {
       case 'TRANSPORTER':
         router.replace('/dashboard/carrier');
         break;
+      case 'COMPANY_ADMIN':
+        router.replace('/dashboard/company-admin');
+        break;
       default:
         router.replace('/auth/login');
     }

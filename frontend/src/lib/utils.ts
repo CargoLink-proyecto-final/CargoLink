@@ -50,6 +50,7 @@ export function getStatusLabel(status: string): string {
     IN_PROGRESS: 'En Progreso',
     REJECTED: 'Rechazada',
     WITHDRAWN: 'Retirada',
+    APPROVED: 'Aprobada',
   };
   return labels[status] || status;
 }
