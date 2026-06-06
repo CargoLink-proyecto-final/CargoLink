@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { CompleteTripDto } from './dto/complete-trip.dto';
 import { TripStatus } from '@prisma/client';
 
 @ApiTags('Trips')
@@ -62,6 +63,16 @@ export class TripsController {
     return this.tripsService.findAll({ carrierId: userId, status, page, limit });
   }
 
+  @Get('metrics')
+  @UseGuards(RolesGuard)
+  @Roles('TRANSPORTER')
+  @ApiOperation({
+    summary: 'Fuel + on-time delivery metrics for the current carrier',
+  })
+  getMyMetrics(@CurrentUser('id') userId: string) {
+    return this.tripsService.getCarrierMetrics(userId);
+  }
+
   @Get('my-loads')
   @UseGuards(RolesGuard)
   @Roles('CARGO_GENERATOR')
@@ -93,8 +104,12 @@ export class TripsController {
   @UseGuards(RolesGuard)
   @Roles('TRANSPORTER')
   @ApiOperation({ summary: 'Complete a trip (Carrier only)' })
-  completeTrip(@Param('id') id: string, @CurrentUser('id') userId: string) {
-    return this.tripsService.completeTrip(id, userId);
+  completeTrip(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: CompleteTripDto,
+  ) {
+    return this.tripsService.completeTrip(id, userId, body.fuelLiters);
   }
 
   @Patch(':id/location')

@@ -10,7 +10,7 @@ import { tripsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import { useRoute } from '@/lib/useRoute';
-import { MapPin, Truck, Calendar, Star, MessageSquare } from 'lucide-react';
+import { MapPin, Truck, Calendar, Star, MessageSquare, Fuel, Route, Gauge } from 'lucide-react';
 import Link from 'next/link';
 
 const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
@@ -73,6 +73,75 @@ function RatingModal({
   );
 }
 
+function CompleteTripModal({
+  onClose,
+  onSubmit,
+  isPending,
+}: {
+  onClose: () => void;
+  onSubmit: (fuelLiters?: number) => void;
+  isPending: boolean;
+}) {
+  const [liters, setLiters] = useState('');
+
+  const parsed = liters.trim() === '' ? undefined : Number(liters);
+  const invalid = parsed !== undefined && (Number.isNaN(parsed) || parsed <= 0);
+
+  return createPortal(
+    <div
+      style={{ zIndex: 10000 }}
+      className="fixed inset-0 bg-black/40 flex items-center justify-center p-4"
+    >
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+        <h3 className="text-lg font-bold flex items-center gap-2">
+          <Fuel size={20} className="text-green-600" /> Completar viaje
+        </h3>
+        <p className="text-sm text-gray-500">
+          Ingresá los litros de combustible que usaste en este viaje. La
+          distancia recorrida se calcula automáticamente desde la ruta.
+        </p>
+        <div>
+          <label className="text-sm font-medium text-gray-700">
+            Litros usados <span className="text-gray-400">(opcional)</span>
+          </label>
+          <div className="relative mt-1">
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              inputMode="decimal"
+              value={liters}
+              onChange={(e) => setLiters(e.target.value)}
+              className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+              placeholder="Ej. 85.5"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">L</span>
+          </div>
+          {invalid && (
+            <p className="text-xs text-red-600 mt-1">Ingresá un número de litros mayor a 0.</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => onSubmit(parsed)}
+            disabled={isPending || invalid}
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+          >
+            {isPending ? 'Completando...' : 'Completar Viaje'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export default function TripDetailPage() {
   const params = useParams();
   const queryClient = useQueryClient();
@@ -80,6 +149,7 @@ export default function TripDetailPage() {
   const id = params.id as string;
 
   const [showRating, setShowRating] = useState(false);
+  const [showComplete, setShowComplete] = useState(false);
 
   const { data: trip, isLoading } = useQuery({
     queryKey: ['trip', id],
@@ -103,8 +173,12 @@ export default function TripDetailPage() {
   });
 
   const completeMutation = useMutation({
-    mutationFn: () => tripsApi.complete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trip', id] }),
+    mutationFn: (fuelLiters?: number) =>
+      tripsApi.complete(id, fuelLiters != null ? { fuelLiters } : undefined),
+    onSuccess: () => {
+      setShowComplete(false);
+      queryClient.invalidateQueries({ queryKey: ['trip', id] });
+    },
   });
 
   const rateMutation = useMutation({
@@ -163,7 +237,7 @@ export default function TripDetailPage() {
             )}
             {user?.role === 'TRANSPORTER' && trip.carrierId === user.id && trip.status === 'IN_PROGRESS' && (
               <button
-                onClick={() => completeMutation.mutate()}
+                onClick={() => setShowComplete(true)}
                 disabled={completeMutation.isPending}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
               >
@@ -213,6 +287,30 @@ export default function TripDetailPage() {
             </div>
           </div>
 
+          {trip.status === 'COMPLETED' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
+              <h2 className="font-semibold flex items-center gap-2"><Fuel size={18} /> Combustible y recorrido</h2>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-gray-500 flex items-center gap-1"><Route size={14} /> Distancia</span>
+                  <span className="font-medium">{trip.distanceKm != null ? `${trip.distanceKm} km` : '—'}</span>
+                </div>
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-gray-500 flex items-center gap-1"><Fuel size={14} /> Combustible</span>
+                  <span className="font-medium">{trip.fuelLiters != null ? `${trip.fuelLiters} L` : '—'}</span>
+                </div>
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-gray-500 flex items-center gap-1"><Gauge size={14} /> Rendimiento</span>
+                  <span className="font-medium">
+                    {trip.distanceKm != null && trip.fuelLiters
+                      ? `${(trip.distanceKm / trip.fuelLiters).toFixed(1)} km/L`
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
             <h2 className="font-semibold flex items-center gap-2"><Truck size={18} /> Transportista</h2>
             <p className="font-medium text-sm">{trip.carrier?.firstName} {trip.carrier?.lastName}</p>
@@ -248,6 +346,14 @@ export default function TripDetailPage() {
               ))}
             </div>
           </div>
+        )}
+
+        {showComplete && (
+          <CompleteTripModal
+            onClose={() => setShowComplete(false)}
+            onSubmit={(fuelLiters) => completeMutation.mutate(fuelLiters)}
+            isPending={completeMutation.isPending}
+          />
         )}
 
         {showRating && (

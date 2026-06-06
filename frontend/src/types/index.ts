@@ -54,8 +54,28 @@ export interface Trip {
   currentLng?: number;
   startedAt?: string;
   completedAt?: string;
+  fuelLiters?: number | null;
+  distanceKm?: number | null;
   notes?: string;
   createdAt: string;
+}
+
+// Métricas de combustible y puntualidad de una flota (un transportista o un
+// conductor de empresa). El backend las calcula con el mismo helper en ambos casos.
+export interface FleetMetrics {
+  onTimeDeliveries: number;
+  lateDeliveries: number;
+  onTimeRate: number | null;
+  totalDistanceKm: number;
+  totalFuelLiters: number;
+  avgKmPerLiter: number | null;
+  litersThisMonth: number;
+  kmThisMonth: number;
+  monthLabel: string;
+}
+
+export interface CarrierMetrics extends FleetMetrics {
+  completedTrips: number;
 }
 
 export interface Message {
@@ -146,13 +166,11 @@ export interface CompanyJoinRequest {
   company?: { id: string; name: string };
 }
 
-export interface DriverStats {
+export interface DriverStats extends FleetMetrics {
   driver: CompanyDriver;
   totalTrips: number;
   completedTrips: number;
   activeTrips: number;
-  onTimeDeliveries: number;
-  onTimeRate: number | null;
   totalRevenue: number;
   avgRating: number | null;
   ratingsCount: number;

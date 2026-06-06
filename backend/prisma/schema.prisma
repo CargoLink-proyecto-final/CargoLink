@@ -192,6 +192,10 @@ model Trip {
   currentLng    Float?     @map("current_lng")
   startedAt     DateTime?  @map("started_at")
   completedAt   DateTime?  @map("completed_at")
+  // Litros de combustible que el transportista carga al completar el viaje.
+  fuelLiters    Float?     @map("fuel_liters")
+  // Distancia de la ruta (km) calculada en el backend vía OSRM al completar.
+  distanceKm    Float?     @map("distance_km")
   notes         String?
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @updatedAt @map("updated_at")

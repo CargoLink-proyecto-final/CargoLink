@@ -76,8 +76,10 @@ export const tripsApi = {
   getMy: (params?: any) => api.get('/trips/my', { params }),
   getMyLoads: (params?: any) => api.get('/trips/my-loads', { params }),
   getById: (id: string) => api.get(`/trips/${id}`),
+  getMetrics: () => api.get('/trips/metrics'),
   start: (id: string) => api.patch(`/trips/${id}/start`),
-  complete: (id: string) => api.patch(`/trips/${id}/complete`),
+  complete: (id: string, data?: { fuelLiters?: number }) =>
+    api.patch(`/trips/${id}/complete`, data ?? {}),
   updateLocation: (id: string, data: { lat: number; lng: number }) =>
     api.patch(`/trips/${id}/location`, data),
 };
