@@ -72,5 +72,4 @@ Reglas operativas en [`CLAUDE.md`](./CLAUDE.md). Resumen: gitflow con `main`/`de
 
 ## Otros recursos
 
-- [`PLAN_GANTT.md`](./PLAN_GANTT.md) — timeline del proyecto.
 - [`CLAUDE.md`](./CLAUDE.md) — guía de trabajo para Claude Code (también útil para humanos colaboradores).
