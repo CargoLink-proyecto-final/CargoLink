@@ -44,4 +44,3 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 
 - [`../README.md`](../README.md) — landing page del repo, quick start mínimo, link a estas docs.
 - [`../CLAUDE.md`](../CLAUDE.md) — reglas operativas para Claude Code en este repo (branching, commits, workflow de PR).
-- [`../PLAN_GANTT.md`](../PLAN_GANTT.md) — timeline del proyecto.
