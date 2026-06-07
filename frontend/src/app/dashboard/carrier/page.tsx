@@ -6,9 +6,9 @@ import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { tripsApi, loadsApi, postulationsApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { Truck, Package, Clock, CheckCircle, ArrowRight, Inbox, Hand } from 'lucide-react';
+import { Truck, Package, Clock, CheckCircle, ArrowRight, Inbox, Hand, Gauge, Fuel, Timer, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
-import type { PostulationWithLoad } from '@/types';
+import type { PostulationWithLoad, CarrierMetrics } from '@/types';
 
 export default function CarrierDashboard() {
   const { data: tripsData, isLoading: tripsLoading } = useQuery({
@@ -25,6 +25,11 @@ export default function CarrierDashboard() {
     queryKey: ['my-postulations'],
     queryFn: () =>
       postulationsApi.getMy().then((r) => r.data as PostulationWithLoad[]),
+  });
+
+  const { data: metrics } = useQuery({
+    queryKey: ['my-trip-metrics'],
+    queryFn: () => tripsApi.getMetrics().then((r) => r.data as CarrierMetrics),
   });
 
   const trips = tripsData?.trips || [];
@@ -53,6 +58,44 @@ export default function CarrierDashboard() {
           <StatCard label="En camino" value={stats.active} icon={Clock} tone="primary" />
           <StatCard label="Aceptados" value={stats.accepted} icon={Package} tone="warning" />
           <StatCard label="Completados" value={stats.completed} icon={CheckCircle} tone="success" />
+        </div>
+
+        <div>
+          <p className="eyebrow mb-3">Rendimiento</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              label="Consumo promedio"
+              value={metrics?.avgKmPerLiter != null ? `${metrics.avgKmPerLiter} km/L` : '—'}
+              icon={Gauge}
+              tone="info"
+              hint="Sobre viajes con litros cargados"
+            />
+            <StatCard
+              label="Combustible del mes"
+              value={metrics ? `${metrics.litersThisMonth} L` : '—'}
+              icon={Fuel}
+              tone="primary"
+              hint={metrics ? `${metrics.kmThisMonth} km recorridos` : undefined}
+            />
+            <StatCard
+              label="Entregas a tiempo"
+              value={metrics?.onTimeDeliveries ?? '—'}
+              icon={Timer}
+              tone="success"
+              hint={
+                metrics?.onTimeRate != null
+                  ? `${Math.round(metrics.onTimeRate * 100)}% de las medibles`
+                  : 'Sin fechas comprometidas aún'
+              }
+            />
+            <StatCard
+              label="Entregas demoradas"
+              value={metrics?.lateDeliveries ?? '—'}
+              icon={AlertTriangle}
+              tone={metrics && metrics.lateDeliveries > 0 ? 'danger' : 'ink'}
+              hint="Llegaron después de la fecha comprometida"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">

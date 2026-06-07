@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TripStatus, LoadStatus } from '@prisma/client';
+import { fetchRouteDistanceKm } from '../common/routing';
+import { computeFuelAndDeliveryMetrics } from '../common/metrics';
 
 @Injectable()
 export class TripsService {
@@ -112,7 +114,7 @@ export class TripsService {
     ]);
   }
 
-  async completeTrip(id: string, carrierId: string) {
+  async completeTrip(id: string, carrierId: string, fuelLiters?: number) {
     const trip = await this.findById(id);
     if (trip.carrierId !== carrierId) {
       throw new ForbiddenException('No es tu viaje');
@@ -121,16 +123,57 @@ export class TripsService {
       throw new BadRequestException('El viaje no está en progreso');
     }
 
+    // La distancia se calcula en el backend con OSRM (la misma ruta que ve el
+    // usuario en el mapa) para no depender de lo que mande el cliente. Es
+    // best-effort: si OSRM falla, se guarda null y la métrica simplemente no
+    // suma ese viaje.
+    const distanceKm = trip.load
+      ? await fetchRouteDistanceKm(
+          trip.load.originLat,
+          trip.load.originLng,
+          trip.load.destLat,
+          trip.load.destLng,
+        )
+      : null;
+
     return this.prisma.$transaction([
       this.prisma.trip.update({
         where: { id },
-        data: { status: TripStatus.COMPLETED, completedAt: new Date() },
+        data: {
+          status: TripStatus.COMPLETED,
+          completedAt: new Date(),
+          fuelLiters: fuelLiters ?? null,
+          distanceKm,
+        },
       }),
       this.prisma.load.update({
         where: { id: trip.loadId },
         data: { status: LoadStatus.DELIVERED },
       }),
     ]);
+  }
+
+  /** Métricas de combustible y puntualidad del transportista logueado. */
+  async getCarrierMetrics(carrierId: string) {
+    const trips = await this.prisma.trip.findMany({
+      where: { carrierId },
+      select: {
+        status: true,
+        completedAt: true,
+        fuelLiters: true,
+        distanceKm: true,
+        load: { select: { deliveryDate: true } },
+      },
+    });
+
+    const completedTrips = trips.filter(
+      (t) => t.status === TripStatus.COMPLETED,
+    ).length;
+
+    return {
+      completedTrips,
+      ...computeFuelAndDeliveryMetrics(trips, new Date()),
+    };
   }
 
   async updateLocation(id: string, carrierId: string, lat: number, lng: number) {
