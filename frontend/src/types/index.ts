@@ -57,6 +57,7 @@ export interface Trip {
   fuelLiters?: number | null;
   distanceKm?: number | null;
   notes?: string;
+  ratings?: Rating[];
   createdAt: string;
 }
 

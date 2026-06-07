@@ -4,11 +4,18 @@ import { useQuery } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
-import { tripsApi, loadsApi, postulationsApi } from '@/lib/api';
+import { tripsApi, loadsApi, postulationsApi, ratingsApi } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 import { formatCurrency } from '@/lib/utils';
-import { Truck, Package, Clock, CheckCircle, ArrowRight, Inbox, Hand, Gauge, Fuel, Timer, AlertTriangle } from 'lucide-react';
+import { Truck, Package, Clock, CheckCircle, ArrowRight, Inbox, Hand, Gauge, Fuel, Timer, AlertTriangle, Star } from 'lucide-react';
 import Link from 'next/link';
-import type { PostulationWithLoad, CarrierMetrics } from '@/types';
+import type { PostulationWithLoad, CarrierMetrics, Rating } from '@/types';
+
+interface MyRatingSummary {
+  ratings: Rating[];
+  averageScore: number;
+  totalRatings: number;
+}
 
 export default function CarrierDashboard() {
   const { data: tripsData, isLoading: tripsLoading } = useQuery({
@@ -32,6 +39,15 @@ export default function CarrierDashboard() {
     queryFn: () => tripsApi.getMetrics().then((r) => r.data as CarrierMetrics),
   });
 
+  const userId = useAuthStore((s) => s.user?.id);
+
+  const { data: myRating } = useQuery({
+    queryKey: ['my-rating', userId],
+    queryFn: () =>
+      ratingsApi.getUserRatings(userId as string).then((r) => r.data as MyRatingSummary),
+    enabled: !!userId,
+  });
+
   const trips = tripsData?.trips || [];
   const availableLoads = loadsData?.loads || [];
   const myPostulations = postulationsData ?? [];
@@ -53,11 +69,22 @@ export default function CarrierDashboard() {
           </h1>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard label="Total de viajes" value={stats.total} icon={Truck} tone="ink" />
           <StatCard label="En camino" value={stats.active} icon={Clock} tone="primary" />
           <StatCard label="Aceptados" value={stats.accepted} icon={Package} tone="warning" />
           <StatCard label="Completados" value={stats.completed} icon={CheckCircle} tone="success" />
+          <StatCard
+            label="Calificación"
+            value={myRating?.totalRatings ? myRating.averageScore.toFixed(1) : '—'}
+            icon={Star}
+            tone="warning"
+            hint={
+              myRating?.totalRatings
+                ? `${myRating.totalRatings} calificación${myRating.totalRatings === 1 ? '' : 'es'}`
+                : 'Sin calificaciones aún'
+            }
+          />
         </div>
 
         <div>

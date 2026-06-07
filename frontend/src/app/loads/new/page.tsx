@@ -483,11 +483,12 @@ export default function NewLoadPage() {
                 {errors.pickupDate && <p className="text-red-500 text-xs mt-1">{errors.pickupDate.message}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Entrega (opcional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Entrega <span className="text-red-500">*</span></label>
                 <input
                   type="datetime-local"
                   min={pickupDateValue || minPickup}
                   {...register('deliveryDate', {
+                    required: 'Requerido',
                     validate: (v) => {
                       if (!v || !pickupDateValue) return true;
                       return v > pickupDateValue || 'Debe ser posterior a la recogida';
