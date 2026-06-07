@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRatingDto } from './dto/create-rating.dto';
@@ -22,11 +24,28 @@ export class RatingsService {
       throw new BadRequestException('Solo se pueden calificar viajes completados');
     }
 
-    const toUserId =
-      trip.carrierId === fromUserId ? trip.load.shipperId : trip.carrierId;
+    // Por ahora la calificación es unidireccional: solo el dador de carga
+    // (shipper) califica al transportista. El sentido inverso queda fuera.
+    if (fromUserId !== trip.load.shipperId) {
+      throw new ForbiddenException(
+        'Solo el dador de carga puede calificar al transportista',
+      );
+    }
+
+    const toUserId = trip.carrierId;
 
     if (toUserId === fromUserId) {
       throw new BadRequestException('No puedes calificarte a ti mismo');
+    }
+
+    // Una sola calificación por (viaje, autor). Cubierto además por el unique
+    // constraint @@unique([tripId, fromUserId]); lo chequeamos antes para
+    // devolver un 409 claro en lugar de un error de constraint.
+    const existing = await this.prisma.rating.findUnique({
+      where: { tripId_fromUserId: { tripId: dto.tripId, fromUserId } },
+    });
+    if (existing) {
+      throw new ConflictException('Ya calificaste este viaje');
     }
 
     return this.prisma.rating.create({

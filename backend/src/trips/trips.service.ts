@@ -67,6 +67,7 @@ export class TripsService {
             },
           },
           carrier: { select: { id: true, firstName: true, lastName: true, companyName: true } },
+          ratings: true,
         },
         orderBy: { createdAt: 'desc' },
       }),

@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { loadsApi, postulationsApi } from '@/lib/api';
+import RatingModal from '@/components/ratings/RatingModal';
+import { loadsApi, postulationsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useRoute } from '@/lib/useRoute';
 import Link from 'next/link';
@@ -18,6 +19,7 @@ import {
   Truck,
   MessageSquare,
   Hand,
+  Star,
 } from 'lucide-react';
 import PostulationsPanel from '@/components/postulations/PostulationsPanel';
 import PostulateModal from '@/components/postulations/PostulateModal';
@@ -122,6 +124,7 @@ export default function LoadDetailPage() {
   const user = useAuthStore((s) => s.user);
   const id = params.id as string;
   const [showPostulateModal, setShowPostulateModal] = useState(false);
+  const [showRating, setShowRating] = useState(false);
 
   const { data: load, isLoading } = useQuery({
     queryKey: ['load', id],
@@ -138,6 +141,18 @@ export default function LoadDetailPage() {
   const isTransporter = user?.role === 'TRANSPORTER';
   const isOwner =
     user?.role === 'CARGO_GENERATOR' && load?.shipperId === user.id;
+
+  // El dador de carga califica al transportista una vez entregada la carga
+  // (viaje completado) y mientras no lo haya calificado todavía.
+  const canRateCarrier =
+    isOwner &&
+    load?.trip?.status === 'COMPLETED' &&
+    !load.trip.ratings?.some(
+      (r: { fromUserId: string }) => r.fromUserId === user?.id,
+    );
+  const carrierName = load?.trip?.carrier
+    ? `${load.trip.carrier.firstName} ${load.trip.carrier.lastName}`
+    : '';
 
   const { data: myPostulation } = useQuery({
     queryKey: ['my-postulation', id, user?.id],
@@ -183,6 +198,20 @@ export default function LoadDetailPage() {
       postulationsApi.counterOffer(postulationId, price),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-postulation', id, user?.id] });
+    },
+  });
+
+  const rateMutation = useMutation({
+    mutationFn: ({ score, comment }: { score: number; comment: string }) =>
+      ratingsApi.create({ tripId: load.trip.id, score, comment }),
+    onSuccess: () => {
+      setShowRating(false);
+      queryClient.invalidateQueries({ queryKey: ['load', id] });
+      // El mismo viaje también tiene su página propia; la refrescamos para que
+      // el botón de calificar desaparezca también ahí.
+      if (load?.trip?.id) {
+        queryClient.invalidateQueries({ queryKey: ['trip', load.trip.id] });
+      }
     },
   });
 
@@ -249,6 +278,22 @@ export default function LoadDetailPage() {
               >
                 <Truck size={16} /> Ir al viaje
               </Link>
+            )}
+            {isOwner && load.trip && (
+              <Link
+                href={`/trips/${load.trip.id}`}
+                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1"
+              >
+                <Truck size={16} /> Ir al viaje
+              </Link>
+            )}
+            {canRateCarrier && (
+              <button
+                onClick={() => setShowRating(true)}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1"
+              >
+                <Star size={16} /> Calificar al transportista
+              </button>
             )}
             {isOwner && load.status === 'PUBLISHED' && (
               <>
@@ -442,6 +487,16 @@ export default function LoadDetailPage() {
           submitting={postulateMutation.isPending}
           onClose={() => setShowPostulateModal(false)}
           onSubmit={(payload) => postulateMutation.mutate(payload)}
+        />
+      )}
+
+      {showRating && (
+        <RatingModal
+          onClose={() => setShowRating(false)}
+          onSubmit={(score, comment) => rateMutation.mutate({ score, comment })}
+          isPending={rateMutation.isPending}
+          rateeRoleLabel="al transportista"
+          rateeName={carrierName}
         />
       )}
     </DashboardLayout>

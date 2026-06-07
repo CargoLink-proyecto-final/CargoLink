@@ -6,7 +6,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import RatingModal from '@/components/ratings/RatingModal';
 import { tripsApi, ratingsApi } from '@/lib/api';
+import type { Trip, Rating } from '@/types';
 import { useAuthStore } from '@/store/auth';
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import { useRoute } from '@/lib/useRoute';
@@ -14,64 +16,6 @@ import { MapPin, Truck, Calendar, Star, MessageSquare, Fuel, Route, Gauge } from
 import Link from 'next/link';
 
 const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
-
-function RatingModal({
-  onClose,
-  onSubmit,
-  isPending,
-}: {
-  onClose: () => void;
-  onSubmit: (score: number, comment: string) => void;
-  isPending: boolean;
-}) {
-  const [score, setScore] = useState(5);
-  const [comment, setComment] = useState('');
-
-  return createPortal(
-    <div
-      style={{ zIndex: 10000 }}
-      className="fixed inset-0 bg-black/40 flex items-center justify-center p-4"
-    >
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
-        <h3 className="text-lg font-bold">Calificar este viaje</h3>
-        <div className="flex gap-2 justify-center">
-          {[1, 2, 3, 4, 5].map((s) => (
-            <button key={s} onClick={() => setScore(s)}>
-              <Star
-                size={32}
-                className={s <= score ? 'text-yellow-500' : 'text-gray-300'}
-                fill={s <= score ? 'currentColor' : 'none'}
-              />
-            </button>
-          ))}
-        </div>
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-          placeholder="Dejar un comentario (opcional)"
-          rows={3}
-        />
-        <div className="flex gap-2">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={() => onSubmit(score, comment)}
-            disabled={isPending}
-            className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-          >
-            {isPending ? 'Enviando...' : 'Enviar Calificación'}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
 
 function CompleteTripModal({
   onClose,
@@ -151,7 +95,7 @@ export default function TripDetailPage() {
   const [showRating, setShowRating] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
 
-  const { data: trip, isLoading } = useQuery({
+  const { data: trip, isLoading } = useQuery<Trip>({
     queryKey: ['trip', id],
     queryFn: () => tripsApi.getById(id).then((r) => r.data),
     refetchInterval: (query) => {
@@ -187,6 +131,11 @@ export default function TripDetailPage() {
     onSuccess: () => {
       setShowRating(false);
       queryClient.invalidateQueries({ queryKey: ['trip', id] });
+      // El mismo viaje también se ve desde el detalle de la carga, así que
+      // refrescamos esa vista para que el botón de calificar desaparezca ahí.
+      if (trip?.loadId) {
+        queryClient.invalidateQueries({ queryKey: ['load', trip.loadId] });
+      }
     },
   });
 
@@ -213,7 +162,18 @@ export default function TripDetailPage() {
     markers.push({ id: 'current', lat: trip.currentLat, lng: trip.currentLng, title: 'Ubicación Actual', status: trip.status });
   }
 
-  const canRate = trip.status === 'COMPLETED' && !trip.ratings?.some((r: any) => r.fromUserId === user?.id);
+  // Por ahora la calificación es unidireccional: solo el dador de carga
+  // (dueño de la carga) califica al transportista.
+  const isShipper = trip.load?.shipperId === user?.id;
+  const canRate =
+    isShipper &&
+    trip.status === 'COMPLETED' &&
+    !trip.ratings?.some((r) => r.fromUserId === user?.id);
+
+  const rateeRoleLabel = 'al transportista';
+  const rateeName = trip.carrier
+    ? `${trip.carrier.firstName} ${trip.carrier.lastName}`
+    : '';
 
   return (
     <DashboardLayout>
@@ -257,7 +217,7 @@ export default function TripDetailPage() {
                 onClick={() => setShowRating(true)}
                 className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1"
               >
-                <Star size={16} /> Calificar Viaje
+                <Star size={16} /> Calificar {rateeRoleLabel}
               </button>
             )}
           </div>
@@ -327,11 +287,11 @@ export default function TripDetailPage() {
           </div>
         </div>
 
-        {trip.ratings?.length > 0 && (
+        {(trip.ratings?.length ?? 0) > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h2 className="font-semibold mb-4">Calificaciones</h2>
             <div className="space-y-3">
-              {trip.ratings.map((r: any) => (
+              {trip.ratings?.map((r: Rating) => (
                 <div key={r.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-1 text-yellow-500">
                     {Array.from({ length: 5 }).map((_, i) => (
@@ -361,6 +321,8 @@ export default function TripDetailPage() {
             onClose={() => setShowRating(false)}
             onSubmit={(score, comment) => rateMutation.mutate({ score, comment })}
             isPending={rateMutation.isPending}
+            rateeRoleLabel={rateeRoleLabel}
+            rateeName={rateeName}
           />
         )}
       </div>
