@@ -135,6 +135,7 @@ export class LoadsService {
         trip: {
           include: {
             carrier: { select: { id: true, firstName: true, lastName: true, companyName: true, phone: true } },
+            ratings: true,
           },
         },
         _count: {

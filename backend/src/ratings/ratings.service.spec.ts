@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
 import { TripStatus } from '@prisma/client';
 import { RatingsService } from './ratings.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +14,7 @@ describe('RatingsService', () => {
   let service: RatingsService;
   let prisma: {
     trip: { findUnique: jest.Mock };
-    rating: { create: jest.Mock; findMany: jest.Mock };
+    rating: { create: jest.Mock; findMany: jest.Mock; findUnique: jest.Mock };
   };
 
   const carrierId = 'carrier-1';
@@ -34,6 +39,7 @@ describe('RatingsService', () => {
       rating: {
         create: jest.fn().mockResolvedValue({ id: 'rating-1' }),
         findMany: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue(null),
       },
     };
 
@@ -54,10 +60,10 @@ describe('RatingsService', () => {
   });
 
   describe('create', () => {
-    it('creates a rating when a carrier rates a completed trip (toUser = shipper)', async () => {
+    it('creates a rating when the shipper rates a completed trip (toUser = carrier)', async () => {
       prisma.trip.findUnique.mockResolvedValue(completedTrip);
 
-      const result = await service.create(carrierId, dto);
+      const result = await service.create(shipperId, dto);
 
       expect(prisma.trip.findUnique).toHaveBeenCalledWith({
         where: { id: dto.tripId },
@@ -66,8 +72,8 @@ describe('RatingsService', () => {
       expect(prisma.rating.create).toHaveBeenCalledWith({
         data: {
           tripId: dto.tripId,
-          fromUserId: carrierId,
-          toUserId: shipperId,
+          fromUserId: shipperId,
+          toUserId: carrierId,
           score: dto.score,
           comment: dto.comment,
         },
@@ -79,25 +85,19 @@ describe('RatingsService', () => {
       expect(result).toEqual({ id: 'rating-1' });
     });
 
-    it('creates a rating when a shipper rates a completed trip (toUser = carrier)', async () => {
+    it('throws ForbiddenException when the carrier (transporter) tries to rate', async () => {
       prisma.trip.findUnique.mockResolvedValue(completedTrip);
 
-      await service.create(shipperId, dto);
-
-      expect(prisma.rating.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            fromUserId: shipperId,
-            toUserId: carrierId,
-          }),
-        }),
+      await expect(service.create(carrierId, dto)).rejects.toThrow(
+        ForbiddenException,
       );
+      expect(prisma.rating.create).not.toHaveBeenCalled();
     });
 
     it('persists comment as undefined when omitted', async () => {
       prisma.trip.findUnique.mockResolvedValue(completedTrip);
 
-      await service.create(carrierId, { tripId: 'trip-1', score: 4 });
+      await service.create(shipperId, { tripId: 'trip-1', score: 4 });
 
       expect(prisma.rating.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -142,20 +142,23 @@ describe('RatingsService', () => {
       expect(prisma.rating.create).not.toHaveBeenCalled();
     });
 
-    it('rates the carrier when fromUser is neither carrier nor shipper of the trip', async () => {
-      // fromUserId !== carrierId => toUserId = trip.carrierId
+    it('throws ForbiddenException when fromUser is neither carrier nor shipper of the trip', async () => {
       prisma.trip.findUnique.mockResolvedValue(completedTrip);
 
-      await service.create('outsider-1', dto);
-
-      expect(prisma.rating.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            fromUserId: 'outsider-1',
-            toUserId: carrierId,
-          }),
-        }),
+      await expect(service.create('outsider-1', dto)).rejects.toThrow(
+        ForbiddenException,
       );
+      expect(prisma.rating.create).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when the shipper already rated this trip', async () => {
+      prisma.trip.findUnique.mockResolvedValue(completedTrip);
+      prisma.rating.findUnique.mockResolvedValue({ id: 'existing-rating' });
+
+      await expect(service.create(shipperId, dto)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.rating.create).not.toHaveBeenCalled();
     });
   });
 

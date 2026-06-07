@@ -56,10 +56,9 @@ export class CreateLoadDto {
   @IsDateString({}, { message: 'La fecha de recogida debe ser una fecha válida' })
   pickupDate: string;
 
-  @ApiProperty({ example: '2024-02-16T18:00:00Z', required: false })
-  @IsOptional()
+  @ApiProperty({ example: '2024-02-16T18:00:00Z' })
   @IsDateString({}, { message: 'La fecha de entrega debe ser una fecha válida' })
-  deliveryDate?: string;
+  deliveryDate: string;
 
   @ApiProperty({ example: 150000 })
   @IsNumber({}, { message: 'El precio debe ser un número' })

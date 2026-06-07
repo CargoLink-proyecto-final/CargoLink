@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { Mail, Phone, Star } from 'lucide-react';
+import { Mail, Phone } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
+import RatingStars from '@/components/ratings/RatingStars';
 import { formatCurrency } from '@/lib/utils';
 import type { PostulationWithTransporter } from '@/types';
 
@@ -18,25 +19,6 @@ interface Props {
 
 function initials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-}
-
-function RatingStars({ score }: { score: number }) {
-  const rounded = Math.round(score);
-  return (
-    <div className="flex items-center gap-0.5" aria-label={`${score} estrellas`}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Star
-          key={i}
-          size={14}
-          className={
-            i <= rounded
-              ? 'fill-warning-500 text-warning-500'
-              : 'text-ink-300'
-          }
-        />
-      ))}
-    </div>
-  );
 }
 
 export default function PostulationCard({

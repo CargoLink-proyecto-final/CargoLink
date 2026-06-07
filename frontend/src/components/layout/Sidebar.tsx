@@ -27,6 +27,7 @@ const navItems = {
     { href: '/dashboard/shipper', label: 'Panel', icon: LayoutDashboard },
     { href: '/loads', label: 'Mis Cargas', icon: Package },
     { href: '/loads/new', label: 'Nueva Carga', icon: Truck },
+    { href: '/trips', label: 'Viajes', icon: Truck },
     { href: '/tracking', label: 'Seguimiento', icon: MapPin },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
     { href: '/register', label: 'Registro', icon: ClipboardList },
