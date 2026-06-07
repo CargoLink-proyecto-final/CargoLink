@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JoinRequestStatus, TripStatus } from '@prisma/client';
+import { computeFuelAndDeliveryMetrics } from '../common/metrics';
 
 // Campos públicos de un conductor — nunca exponemos password ni tokens.
 const DRIVER_SELECT = {
@@ -306,6 +307,8 @@ export class CompaniesService {
       select: {
         status: true,
         completedAt: true,
+        fuelLiters: true,
+        distanceKm: true,
         load: { select: { price: true, deliveryDate: true } },
       },
     });
@@ -317,16 +320,13 @@ export class CompaniesService {
         t.status === TripStatus.ACCEPTED ||
         t.status === TripStatus.PENDING,
     );
-    const onTime = completed.filter(
-      (t) =>
-        t.load?.deliveryDate &&
-        t.completedAt &&
-        t.completedAt <= t.load.deliveryDate,
-    );
     const totalRevenue = completed.reduce(
       (sum, t) => sum + (t.load?.price ?? 0),
       0,
     );
+
+    // Puntualidad + combustible: mismo cómputo que el dashboard del transportista.
+    const fuelAndDelivery = computeFuelAndDeliveryMetrics(trips, new Date());
 
     const ratingAgg = await this.prisma.rating.aggregate({
       where: { toUserId: driverId },
@@ -340,11 +340,10 @@ export class CompaniesService {
       totalTrips: trips.length,
       completedTrips: completed.length,
       activeTrips: active.length,
-      onTimeDeliveries: onTime.length,
-      onTimeRate: completed.length ? onTime.length / completed.length : null,
       totalRevenue,
       avgRating: ratingAgg._avg.score,
       ratingsCount: ratingAgg._count.score,
+      ...fuelAndDelivery,
     };
   }
 }

@@ -7,7 +7,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatCard from '@/components/ui/StatCard';
 import { companiesApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { Truck, CheckCircle, Clock, Timer, Star, DollarSign, ArrowLeft } from 'lucide-react';
+import { Truck, CheckCircle, Clock, Timer, Star, DollarSign, ArrowLeft, Gauge, Fuel, AlertTriangle } from 'lucide-react';
 import type { DriverStats } from '@/types';
 
 export default function DriverStatsPage() {
@@ -65,7 +65,28 @@ export default function DriverStatsPage() {
                 }
                 icon={Timer}
                 tone="info"
-                hint={`${data.onTimeDeliveries} de ${data.completedTrips} a tiempo`}
+                hint={`${data.onTimeDeliveries} a tiempo · ${data.lateDeliveries} demoradas`}
+              />
+              <StatCard
+                label="Entregas demoradas"
+                value={data.lateDeliveries}
+                icon={AlertTriangle}
+                tone={data.lateDeliveries > 0 ? 'danger' : 'ink'}
+                hint="Después de la fecha comprometida"
+              />
+              <StatCard
+                label="Consumo promedio"
+                value={data.avgKmPerLiter != null ? `${data.avgKmPerLiter} km/L` : '—'}
+                icon={Gauge}
+                tone="info"
+                hint="Sobre viajes con litros cargados"
+              />
+              <StatCard
+                label="Combustible del mes"
+                value={`${data.litersThisMonth} L`}
+                icon={Fuel}
+                tone="primary"
+                hint={`${data.kmThisMonth} km recorridos`}
               />
               <StatCard
                 label="Calificación promedio"
