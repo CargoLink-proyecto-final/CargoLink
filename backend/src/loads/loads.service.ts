@@ -30,6 +30,24 @@ const DEFAULT_TERMINAL_STATUSES: LoadStatus[] = [
   LoadStatus.CANCELLED,
 ];
 
+// Campos "críticos" de una carga: definen el compromiso que el transportista aceptó
+// (mercadería, peso, fechas, origen, destino, precio). Una vez que hay una postulación
+// aceptada quedan bloqueados; solo se puede retocar título y descripción.
+const CRITICAL_LOAD_FIELDS = [
+  'originAddress',
+  'originLat',
+  'originLng',
+  'destAddress',
+  'destLat',
+  'destLng',
+  'cargoType',
+  'weight',
+  'volume',
+  'pickupDate',
+  'deliveryDate',
+  'price',
+] as const;
+
 @Injectable()
 export class LoadsService {
   constructor(private prisma: PrismaService) {}
@@ -156,8 +174,22 @@ export class LoadsService {
     if (load.shipperId !== userId) {
       throw new ForbiddenException('Solo puedes editar tus propias cargas');
     }
-    if (load.status !== LoadStatus.PUBLISHED) {
-      throw new ForbiddenException('Solo se pueden editar cargas publicadas');
+    if (load.status === LoadStatus.DELIVERED || load.status === LoadStatus.CANCELLED) {
+      throw new ForbiddenException('No se puede editar una carga finalizada o cancelada');
+    }
+    // "Postulación aceptada" ⟺ la carga ya está asignada o en viaje: los campos críticos
+    // quedan bloqueados (solo se permiten título y descripción).
+    const hasAcceptedPostulation =
+      load.status === LoadStatus.ASSIGNED || load.status === LoadStatus.IN_TRANSIT;
+    if (hasAcceptedPostulation) {
+      const attempted = CRITICAL_LOAD_FIELDS.filter(
+        (field) => (dto as Record<string, unknown>)[field] !== undefined,
+      );
+      if (attempted.length) {
+        throw new ForbiddenException(
+          'La carga tiene una postulación aceptada: solo podés editar el título y la descripción.',
+        );
+      }
     }
     return this.prisma.load.update({
       where: { id },

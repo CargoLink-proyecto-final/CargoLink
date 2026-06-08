@@ -209,9 +209,24 @@ describe('exported API groups', () => {
     expect(fakeInstance.get).toHaveBeenCalledWith('/users/me');
   });
 
-  it('usersApi.toggleActive patches /users/:id/toggle-active', () => {
-    usersApi.toggleActive('u1');
-    expect(fakeInstance.patch).toHaveBeenCalledWith('/users/u1/toggle-active');
+  it('usersApi.deactivateUser patches /users/:id/deactivate', () => {
+    usersApi.deactivateUser('u1');
+    expect(fakeInstance.patch).toHaveBeenCalledWith('/users/u1/deactivate');
+  });
+
+  it('usersApi.reactivateUser patches /users/:id/reactivate', () => {
+    usersApi.reactivateUser('u1');
+    expect(fakeInstance.patch).toHaveBeenCalledWith('/users/u1/reactivate');
+  });
+
+  it('usersApi.changeUserRole patches /users/:id/role with the role', () => {
+    usersApi.changeUserRole('u1', 'TRANSPORTER');
+    expect(fakeInstance.patch).toHaveBeenCalledWith('/users/u1/role', { role: 'TRANSPORTER' });
+  });
+
+  it('usersApi.changeUserEmail patches /users/:id/email with the email', () => {
+    usersApi.changeUserEmail('u1', 'new@x.com');
+    expect(fakeInstance.patch).toHaveBeenCalledWith('/users/u1/email', { email: 'new@x.com' });
   });
 
   // loadsApi

@@ -1,11 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 
 describe('UsersService', () => {
   let service: UsersService;
+  let mailService: { sendVerificationEmail: jest.Mock };
   let prisma: {
     user: {
       create: jest.Mock;
@@ -14,6 +21,10 @@ describe('UsersService', () => {
       count: jest.Mock;
       update: jest.Mock;
     };
+    load: { count: jest.Mock };
+    trip: { count: jest.Mock };
+    roleChangeLog: { create: jest.Mock; findMany: jest.Mock };
+    $transaction: jest.Mock;
   };
 
   const baseUser = {
@@ -38,12 +49,19 @@ describe('UsersService', () => {
         count: jest.fn(),
         update: jest.fn(),
       },
+      load: { count: jest.fn() },
+      trip: { count: jest.fn() },
+      roleChangeLog: { create: jest.fn(), findMany: jest.fn() },
+      // El service usa $transaction([...]) y espera el array de resultados resuelto.
+      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
     };
+    mailService = { sendVerificationEmail: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
         { provide: PrismaService, useValue: prisma },
+        { provide: MailService, useValue: mailService },
       ],
     }).compile();
 
@@ -225,12 +243,34 @@ describe('UsersService', () => {
     });
   });
 
-  describe('toggleActive', () => {
-    it('flips isActive from true to false', async () => {
+  describe('hasActiveOperations', () => {
+    it('returns true when there are active loads', async () => {
+      prisma.load.count.mockResolvedValue(2);
+      prisma.trip.count.mockResolvedValue(0);
+      expect(await service.hasActiveOperations('user-1')).toBe(true);
+    });
+
+    it('returns true when there are active trips', async () => {
+      prisma.load.count.mockResolvedValue(0);
+      prisma.trip.count.mockResolvedValue(1);
+      expect(await service.hasActiveOperations('user-1')).toBe(true);
+    });
+
+    it('returns false when there are no active operations', async () => {
+      prisma.load.count.mockResolvedValue(0);
+      prisma.trip.count.mockResolvedValue(0);
+      expect(await service.hasActiveOperations('user-1')).toBe(false);
+    });
+  });
+
+  describe('deactivate', () => {
+    it('sets isActive=false when there are no active operations', async () => {
       prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: true });
+      prisma.load.count.mockResolvedValue(0);
+      prisma.trip.count.mockResolvedValue(0);
       prisma.user.update.mockResolvedValue({ ...baseUser, isActive: false });
 
-      const result = await service.toggleActive('user-1');
+      const result = await service.deactivate('user-1');
 
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
@@ -239,11 +279,35 @@ describe('UsersService', () => {
       expect(result.isActive).toBe(false);
     });
 
-    it('flips isActive from false to true', async () => {
+    it('throws ConflictException when the user has active operations', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: true });
+      prisma.load.count.mockResolvedValue(1);
+      prisma.trip.count.mockResolvedValue(0);
+
+      await expect(service.deactivate('user-1')).rejects.toThrow(ConflictException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when the user is already inactive', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: false });
+      const result = await service.deactivate('user-1');
+      expect(result.isActive).toBe(false);
+      expect(prisma.load.count).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the user does not exist', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(service.deactivate('missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('reactivate', () => {
+    it('sets isActive=true', async () => {
       prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: false });
       prisma.user.update.mockResolvedValue({ ...baseUser, isActive: true });
 
-      const result = await service.toggleActive('user-1');
+      const result = await service.reactivate('user-1');
 
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
@@ -251,13 +315,116 @@ describe('UsersService', () => {
       });
       expect(result.isActive).toBe(true);
     });
+  });
 
-    it('throws NotFoundException when the user does not exist', async () => {
-      prisma.user.findUnique.mockResolvedValue(null);
-      await expect(service.toggleActive('missing')).rejects.toThrow(
-        NotFoundException,
+  describe('changeUserEmail', () => {
+    it('updates the email, unverifies the account and sends a verification email', async () => {
+      prisma.user.findUnique
+        .mockResolvedValueOnce(baseUser) // findById
+        .mockResolvedValueOnce(null); // findByEmail (not taken)
+      prisma.user.update.mockResolvedValue({ ...baseUser, email: 'new@example.com', emailVerified: false });
+
+      const result = await service.changeUserEmail('user-1', 'New@Example.com');
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-1' },
+          data: expect.objectContaining({ email: 'new@example.com', emailVerified: false }),
+        }),
+      );
+      expect(mailService.sendVerificationEmail).toHaveBeenCalled();
+      expect(result.email).toBe('new@example.com');
+    });
+
+    it('throws BadRequestException when the new email equals the current one', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce(baseUser);
+      await expect(service.changeUserEmail('user-1', baseUser.email)).rejects.toThrow(
+        BadRequestException,
       );
       expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when the new email is already taken', async () => {
+      prisma.user.findUnique
+        .mockResolvedValueOnce(baseUser) // findById
+        .mockResolvedValueOnce({ ...baseUser, id: 'other' }); // findByEmail
+      await expect(service.changeUserEmail('user-1', 'taken@example.com')).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('changeRole', () => {
+    it('updates the role and writes an audit log in a transaction', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...baseUser, role: Role.CARGO_GENERATOR });
+      prisma.user.update.mockResolvedValue({ ...baseUser, role: Role.TRANSPORTER });
+      prisma.roleChangeLog.create.mockResolvedValue({ id: 'log-1' });
+
+      const result = await service.changeRole('user-1', Role.TRANSPORTER, 'admin-1');
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.roleChangeLog.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-1',
+          changedById: 'admin-1',
+          oldRole: Role.CARGO_GENERATOR,
+          newRole: Role.TRANSPORTER,
+        },
+      });
+      expect(result.role).toBe(Role.TRANSPORTER);
+    });
+
+    it('clears companyId when demoting away from TRANSPORTER', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...baseUser, role: Role.TRANSPORTER });
+      prisma.user.update.mockResolvedValue({ ...baseUser, role: Role.CARGO_GENERATOR });
+      prisma.roleChangeLog.create.mockResolvedValue({ id: 'log-1' });
+
+      await service.changeRole('user-1', Role.CARGO_GENERATOR, 'admin-1');
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { role: Role.CARGO_GENERATOR, companyId: null },
+      });
+    });
+
+    it('rejects an admin changing their own role', async () => {
+      await expect(
+        service.changeRole('admin-1', Role.TRANSPORTER, 'admin-1'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('rejects transitions to/from COMPANY_ADMIN', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...baseUser, role: Role.CARGO_GENERATOR });
+      await expect(
+        service.changeRole('user-1', Role.COMPANY_ADMIN, 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the user already has the target role', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...baseUser, role: Role.TRANSPORTER });
+      await expect(
+        service.changeRole('user-1', Role.TRANSPORTER, 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getRoleHistory', () => {
+    it('returns the change log for a user with the author included', async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.roleChangeLog.findMany.mockResolvedValue([{ id: 'log-1' }]);
+
+      const result = await service.getRoleHistory('user-1');
+
+      expect(prisma.roleChangeLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-1' },
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+      expect(result).toEqual([{ id: 'log-1' }]);
     });
   });
 });

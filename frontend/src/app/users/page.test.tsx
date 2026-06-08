@@ -28,12 +28,17 @@ jest.mock('@/store/auth', () => ({
 jest.mock('@/lib/api', () => ({
   usersApi: {
     getAll: jest.fn(),
-    toggleActive: jest.fn(),
+    deactivateUser: jest.fn(),
+    reactivateUser: jest.fn(),
+    changeUserRole: jest.fn(),
+    getUserRoleHistory: jest.fn(),
   },
 }));
 
 const getAll = usersApi.getAll as jest.Mock;
-const toggleActive = usersApi.toggleActive as jest.Mock;
+const deactivateUser = usersApi.deactivateUser as jest.Mock;
+const reactivateUser = usersApi.reactivateUser as jest.Mock;
+const changeUserRole = usersApi.changeUserRole as jest.Mock;
 
 function makeUser(over: Record<string, unknown> = {}) {
   return {
@@ -77,7 +82,9 @@ beforeEach(() => {
       totalPages: 1,
     },
   });
-  toggleActive.mockResolvedValue({ data: {} });
+  deactivateUser.mockResolvedValue({ data: {} });
+  reactivateUser.mockResolvedValue({ data: {} });
+  changeUserRole.mockResolvedValue({ data: {} });
 });
 
 describe('UsersPage (admin)', () => {
@@ -89,22 +96,48 @@ describe('UsersPage (admin)', () => {
     await waitFor(() => expect(getAll).toHaveBeenCalled());
   });
 
-  it('shows active/inactive status and the matching action label', async () => {
+  it('shows the matching action for active vs inactive users', async () => {
     renderPage();
     await screen.findByText('Ada Lovelace');
-    // Active user → "Desactivar"; inactive user → "Activar" (anchored so
-    // "Desactivar" doesn't also match the "Activar" substring).
+    // Active user (Ada) → "Desactivar"; inactive user (Grace) → "Reactivar".
     expect(screen.getByRole('button', { name: /^Desactivar$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Activar$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Reactivar$/i })).toBeInTheDocument();
   });
 
-  it('calls toggleActive with the user id when the action is clicked', async () => {
+  it('deactivates a user through the confirmation modal', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('Ada Lovelace');
 
-    await user.click(screen.getByRole('button', { name: /Desactivar/i }));
-    await waitFor(() => expect(toggleActive).toHaveBeenCalledWith('u1'));
+    await user.click(screen.getByRole('button', { name: /^Desactivar$/i }));
+    // Modal opens; confirm with the distinct "Sí, desactivar" button.
+    await user.click(await screen.findByRole('button', { name: /Sí, desactivar/i }));
+    await waitFor(() => expect(deactivateUser).toHaveBeenCalledWith('u1'));
+  });
+
+  it('reactivates an inactive user directly', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Grace Hopper');
+
+    await user.click(screen.getByRole('button', { name: /^Reactivar$/i }));
+    await waitFor(() => expect(reactivateUser).toHaveBeenCalledWith('u2'));
+  });
+
+  it('changes a user role through the confirmation modal', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Ada Lovelace');
+
+    // Ada (TRANSPORTER) has an editable role select; pick ADMIN.
+    const selects = screen.getAllByRole('combobox');
+    // The first combobox is the role filter; Ada's row select is next.
+    const adaSelect = selects.find(
+      (s) => (s as HTMLSelectElement).value === 'TRANSPORTER',
+    ) as HTMLSelectElement;
+    await user.selectOptions(adaSelect, 'ADMIN');
+    await user.click(await screen.findByRole('button', { name: /Cambiar rol/i }));
+    await waitFor(() => expect(changeUserRole).toHaveBeenCalledWith('u1', 'ADMIN'));
   });
 
   it('filters the table client-side by the search box', async () => {

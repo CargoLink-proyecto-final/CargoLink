@@ -45,42 +45,42 @@ enum PostulationStatus {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  password      String
-  firstName     String   @map("first_name")
-  lastName      String   @map("last_name")
-  phone         String?
-  role          Role     @default(CARGO_GENERATOR)
-  companyName   String?  @map("company_name")
-  avatarUrl     String?  @map("avatar_url")
-  isActive      Boolean  @default(true) @map("is_active")
-  resetToken    String?  @map("reset_token")
-  resetTokenExp DateTime? @map("reset_token_exp")
-  emailVerified Boolean  @default(false) @map("email_verified")
-  emailVerificationToken    String?  @unique @map("email_verification_token")
+  id                        String    @id @default(uuid())
+  email                     String    @unique
+  password                  String
+  firstName                 String    @map("first_name")
+  lastName                  String    @map("last_name")
+  phone                     String?
+  role                      Role      @default(CARGO_GENERATOR)
+  companyName               String?   @map("company_name")
+  avatarUrl                 String?   @map("avatar_url")
+  isActive                  Boolean   @default(true) @map("is_active")
+  resetToken                String?   @map("reset_token")
+  resetTokenExp             DateTime? @map("reset_token_exp")
+  emailVerified             Boolean   @default(false) @map("email_verified")
+  emailVerificationToken    String?   @unique @map("email_verification_token")
   emailVerificationTokenExp DateTime? @map("email_verification_token_exp")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
 
   // Company membership (TRANSPORTER) — null = independent / not in a company
-  companyId     String?  @map("company_id")
-  company       Company? @relation("CompanyMembers", fields: [companyId], references: [id])
+  companyId String?  @map("company_id")
+  company   Company? @relation("CompanyMembers", fields: [companyId], references: [id])
 
   // Company ownership (COMPANY_ADMIN) — the company this user owns, if any
-  ownedCompany  Company? @relation("CompanyOwner")
+  ownedCompany Company? @relation("CompanyOwner")
 
   // Join requests submitted as a transporter
   companyJoinRequests CompanyJoinRequest[] @relation("DriverRequests")
 
   // Shipper relations
-  loads         Load[]   @relation("ShipperLoads")
+  loads Load[] @relation("ShipperLoads")
 
   // Carrier relations
-  trips         Trip[]   @relation("CarrierTrips")
+  trips Trip[] @relation("CarrierTrips")
 
   // Postulations submitted as a transporter
-  postulations  Postulation[] @relation("TransporterPostulations")
+  postulations Postulation[] @relation("TransporterPostulations")
 
   // Messages
   sentMessages     Message[] @relation("SentMessages")
@@ -90,18 +90,22 @@ model User {
   givenRatings    Rating[] @relation("RatingFrom")
   receivedRatings Rating[] @relation("RatingTo")
 
+  // Role-change audit (who changed this user's role / changes this user made as admin)
+  roleChangesReceived RoleChangeLog[] @relation("RoleChangeTarget")
+  roleChangesMade     RoleChangeLog[] @relation("RoleChangeAuthor")
+
   @@index([companyId])
   @@map("users")
 }
 
 model Company {
-  id        String   @id @default(uuid())
-  name      String
-  ownerId   String   @unique @map("owner_id")
-  owner     User     @relation("CompanyOwner", fields: [ownerId], references: [id])
+  id      String @id @default(uuid())
+  name    String
+  ownerId String @unique @map("owner_id")
+  owner   User   @relation("CompanyOwner", fields: [ownerId], references: [id])
 
-  members   User[]   @relation("CompanyMembers")
-  requests  CompanyJoinRequest[]
+  members  User[]               @relation("CompanyMembers")
+  requests CompanyJoinRequest[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -110,15 +114,15 @@ model Company {
 }
 
 model CompanyJoinRequest {
-  id            String            @id @default(uuid())
-  companyId     String            @map("company_id")
-  company       Company           @relation(fields: [companyId], references: [id])
-  transporterId String            @map("transporter_id")
-  transporter   User              @relation("DriverRequests", fields: [transporterId], references: [id])
+  id            String  @id @default(uuid())
+  companyId     String  @map("company_id")
+  company       Company @relation(fields: [companyId], references: [id])
+  transporterId String  @map("transporter_id")
+  transporter   User    @relation("DriverRequests", fields: [transporterId], references: [id])
 
-  status        JoinRequestStatus @default(PENDING)
-  createdAt     DateTime          @default(now()) @map("created_at")
-  decidedAt     DateTime?         @map("decided_at")
+  status    JoinRequestStatus @default(PENDING)
+  createdAt DateTime          @default(now()) @map("created_at")
+  decidedAt DateTime?         @map("decided_at")
 
   @@unique([companyId, transporterId])
   @@index([companyId, status])
@@ -127,9 +131,9 @@ model CompanyJoinRequest {
 }
 
 model Load {
-  id            String     @id @default(uuid())
-  shipperId     String     @map("shipper_id")
-  shipper       User       @relation("ShipperLoads", fields: [shipperId], references: [id])
+  id        String @id @default(uuid())
+  shipperId String @map("shipper_id")
+  shipper   User   @relation("ShipperLoads", fields: [shipperId], references: [id])
 
   title         String
   description   String?
@@ -149,8 +153,8 @@ model Load {
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @updatedAt @map("updated_at")
 
-  trip          Trip?
-  postulations  Postulation[]
+  trip         Trip?
+  postulations Postulation[]
 
   @@index([shipperId])
   @@index([status])
@@ -161,11 +165,11 @@ model Load {
 }
 
 model Postulation {
-  id             String            @id @default(uuid())
-  loadId         String            @map("load_id")
-  load           Load              @relation(fields: [loadId], references: [id])
-  transporterId  String            @map("transporter_id")
-  transporter    User              @relation("TransporterPostulations", fields: [transporterId], references: [id])
+  id                String            @id @default(uuid())
+  loadId            String            @map("load_id")
+  load              Load              @relation(fields: [loadId], references: [id])
+  transporterId     String            @map("transporter_id")
+  transporter       User              @relation("TransporterPostulations", fields: [transporterId], references: [id])
   message           String?
   proposedPrice     Float?            @map("proposed_price")
   counterOfferPrice Float?            @map("counter_offer_price")
@@ -181,27 +185,27 @@ model Postulation {
 }
 
 model Trip {
-  id            String     @id @default(uuid())
-  loadId        String     @unique @map("load_id")
-  load          Load       @relation(fields: [loadId], references: [id])
-  carrierId     String     @map("carrier_id")
-  carrier       User       @relation("CarrierTrips", fields: [carrierId], references: [id])
+  id        String @id @default(uuid())
+  loadId    String @unique @map("load_id")
+  load      Load   @relation(fields: [loadId], references: [id])
+  carrierId String @map("carrier_id")
+  carrier   User   @relation("CarrierTrips", fields: [carrierId], references: [id])
 
-  status        TripStatus @default(PENDING)
-  currentLat    Float?     @map("current_lat")
-  currentLng    Float?     @map("current_lng")
-  startedAt     DateTime?  @map("started_at")
-  completedAt   DateTime?  @map("completed_at")
+  status      TripStatus @default(PENDING)
+  currentLat  Float?     @map("current_lat")
+  currentLng  Float?     @map("current_lng")
+  startedAt   DateTime?  @map("started_at")
+  completedAt DateTime?  @map("completed_at")
   // Litros de combustible que el transportista carga al completar el viaje.
-  fuelLiters    Float?     @map("fuel_liters")
+  fuelLiters  Float?     @map("fuel_liters")
   // Distancia de la ruta (km) calculada en el backend vía OSRM al completar.
-  distanceKm    Float?     @map("distance_km")
-  notes         String?
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
+  distanceKm  Float?     @map("distance_km")
+  notes       String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
 
-  ratings       Rating[]
-  messages      Message[]
+  ratings  Rating[]
+  messages Message[]
 
   @@index([carrierId])
   @@index([status])
@@ -209,16 +213,16 @@ model Trip {
 }
 
 model Message {
-  id          String   @id @default(uuid())
-  senderId    String   @map("sender_id")
-  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
-  receiverId  String   @map("receiver_id")
-  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
-  tripId      String   @map("trip_id")
-  trip        Trip     @relation(fields: [tripId], references: [id])
-  content     String
-  isRead      Boolean  @default(false) @map("is_read")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid())
+  senderId   String   @map("sender_id")
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String   @map("receiver_id")
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  tripId     String   @map("trip_id")
+  trip       Trip     @relation(fields: [tripId], references: [id])
+  content    String
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([tripId])
   @@index([senderId, receiverId])
@@ -227,18 +231,33 @@ model Message {
 }
 
 model Rating {
-  id          String   @id @default(uuid())
-  tripId      String   @map("trip_id")
-  trip        Trip     @relation(fields: [tripId], references: [id])
-  fromUserId  String   @map("from_user_id")
-  fromUser    User     @relation("RatingFrom", fields: [fromUserId], references: [id])
-  toUserId    String   @map("to_user_id")
-  toUser      User     @relation("RatingTo", fields: [toUserId], references: [id])
-  score       Int
-  comment     String?
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid())
+  tripId     String   @map("trip_id")
+  trip       Trip     @relation(fields: [tripId], references: [id])
+  fromUserId String   @map("from_user_id")
+  fromUser   User     @relation("RatingFrom", fields: [fromUserId], references: [id])
+  toUserId   String   @map("to_user_id")
+  toUser     User     @relation("RatingTo", fields: [toUserId], references: [id])
+  score      Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@unique([tripId, fromUserId])
   @@index([toUserId])
   @@map("ratings")
+}
+
+model RoleChangeLog {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id") // usuario cuyo rol cambió
+  changedById String   @map("changed_by_id") // admin que ejecutó el cambio
+  oldRole     Role     @map("old_role")
+  newRole     Role     @map("new_role")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user      User @relation("RoleChangeTarget", fields: [userId], references: [id])
+  changedBy User @relation("RoleChangeAuthor", fields: [changedById], references: [id])
+
+  @@index([userId])
+  @@map("role_change_logs")
 }
