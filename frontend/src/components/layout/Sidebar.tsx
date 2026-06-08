@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Building2,
   UserCheck,
+  UserCog,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -174,6 +175,19 @@ function SidebarContent({ user }: { user: AuthUser }) {
                 <p className="text-[11px] font-mono text-ink-400 truncate">{user.email}</p>
               </div>
             </div>
+            <Link
+              href="/profile"
+              onClick={() => setOpen(false)}
+              className={cn(
+                'mt-1 flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] w-full transition',
+                pathname === '/profile'
+                  ? 'bg-ink-800/70 text-surface-raised'
+                  : 'text-ink-300 hover:bg-ink-800/40 hover:text-surface-raised',
+              )}
+            >
+              <UserCog size={15} />
+              Mi perfil
+            </Link>
             <button
               onClick={handleLogout}
               className="mt-1 flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-ink-300 hover:bg-danger-600/10 hover:text-danger-600 w-full transition"

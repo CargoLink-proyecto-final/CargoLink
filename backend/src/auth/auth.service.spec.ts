@@ -17,7 +17,7 @@ jest.mock('bcrypt');
 
 describe('AuthService', () => {
   let service: AuthService;
-  let usersService: { findByEmail: jest.Mock; create: jest.Mock };
+  let usersService: { findByEmail: jest.Mock; create: jest.Mock; findById: jest.Mock };
   let jwtService: { sign: jest.Mock };
   let prisma: {
     user: { update: jest.Mock; findFirst: jest.Mock };
@@ -36,10 +36,11 @@ describe('AuthService', () => {
     role: Role.CARGO_GENERATOR,
     password: 'hashed',
     emailVerified: true,
+    isActive: true,
   };
 
   beforeEach(async () => {
-    usersService = { findByEmail: jest.fn(), create: jest.fn() };
+    usersService = { findByEmail: jest.fn(), create: jest.fn(), findById: jest.fn() };
     jwtService = { sign: jest.fn().mockReturnValue('signed-token') };
     prisma = {
       user: { update: jest.fn().mockResolvedValue(baseUser), findFirst: jest.fn() },
@@ -149,6 +150,11 @@ describe('AuthService', () => {
 
     it('throws ForbiddenException when the email is not verified', async () => {
       usersService.findByEmail.mockResolvedValue({ ...baseUser, emailVerified: false });
+      await expect(service.login(dto)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws ForbiddenException when the account is deactivated', async () => {
+      usersService.findByEmail.mockResolvedValue({ ...baseUser, isActive: false });
       await expect(service.login(dto)).rejects.toThrow(ForbiddenException);
     });
   });

@@ -52,7 +52,11 @@ export const usersApi = {
   updateProfile: (data: any) => api.patch('/users/me', data),
   getAll: (params?: any) => api.get('/users', { params }),
   getById: (id: string) => api.get(`/users/${id}`),
-  toggleActive: (id: string) => api.patch(`/users/${id}/toggle-active`),
+  deactivateUser: (id: string) => api.patch(`/users/${id}/deactivate`),
+  reactivateUser: (id: string) => api.patch(`/users/${id}/reactivate`),
+  changeUserEmail: (id: string, email: string) => api.patch(`/users/${id}/email`, { email }),
+  changeUserRole: (id: string, role: string) => api.patch(`/users/${id}/role`, { role }),
+  getUserRoleHistory: (id: string) => api.get(`/users/${id}/role-history`),
 };
 
 // Loads

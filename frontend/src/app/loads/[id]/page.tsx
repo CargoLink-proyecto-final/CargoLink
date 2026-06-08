@@ -295,22 +295,22 @@ export default function LoadDetailPage() {
                 <Star size={16} /> Calificar al transportista
               </button>
             )}
+            {isOwner && load.status !== 'DELIVERED' && load.status !== 'CANCELLED' && (
+              <Link
+                href={`/loads/${id}/edit`}
+                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+              >
+                Editar
+              </Link>
+            )}
             {isOwner && load.status === 'PUBLISHED' && (
-              <>
-                <Link
-                  href={`/loads/${id}/edit`}
-                  className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                >
-                  Editar
-                </Link>
-                <button
-                  onClick={() => cancelMutation.mutate()}
-                  disabled={cancelMutation.isPending}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
-                >
-                  Cancelar Carga
-                </button>
-              </>
+              <button
+                onClick={() => cancelMutation.mutate()}
+                disabled={cancelMutation.isPending}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+              >
+                Cancelar Carga
+              </button>
             )}
             {load.trip && (
               <Link

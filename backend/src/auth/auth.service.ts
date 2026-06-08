@@ -106,6 +106,14 @@ export class AuthService {
       });
     }
 
+    if (!user.isActive) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'ACCOUNT_DEACTIVATED',
+        message: 'Tu cuenta está desactivada. Contactá a un administrador para reactivarla.',
+      });
+    }
+
     const token = this.generateToken(user.id, user.email, user.role);
 
     return {

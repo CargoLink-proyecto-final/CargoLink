@@ -9,6 +9,7 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   login: (user: AuthUser, token: string) => void;
+  updateUser: (partial: Partial<AuthUser>) => void;
   logout: () => void;
   hydrate: () => void;
 }
@@ -61,6 +62,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     queryClient.clear();
     set({ user, token, isAuthenticated: true });
   },
+
+  // Refresca datos visibles del usuario (ej. nombre tras editar el perfil) para que
+  // la UI (sidebar) los muestre al instante, manteniendo sessionStorage en sync.
+  updateUser: (partial) =>
+    set((state) => {
+      if (!state.user) return state;
+      const user = { ...state.user, ...partial };
+      storage.set('user', JSON.stringify(user));
+      return { ...state, user };
+    }),
 
   logout: () => {
     storage.remove('token');
