@@ -12,7 +12,7 @@ Referencia completa de los endpoints HTTP del backend. Todo lo de tiempo real (c
 - **Validación de input**: `class-validator` con `whitelist + forbidNonWhitelisted`. Campos extra fallan con 400.
 - **Formato de error**: `{ statusCode, message, timestamp }`. Los errores semánticos (Forbidden, NotFound, BadRequest) traen el código HTTP correcto.
 - **Paginación**: query params `page` (1-indexed) y `limit`. Defaults definidos en cada service.
-- **Roles**: ver [`arquitectura.md`](./arquitectura.md). Los valores del enum son `CARGO_GENERATOR`, `TRANSPORTER`, `ADMIN`.
+- **Roles**: ver [`arquitectura.md`](./arquitectura.md). Los valores del enum son `CARGO_GENERATOR`, `TRANSPORTER`, `ADMIN`, `COMPANY_ADMIN`.
 
 ## Auth
 
@@ -37,7 +37,7 @@ Source: [`../backend/src/auth/auth.controller.ts`](../backend/src/auth/auth.cont
   "firstName": "John",
   "lastName": "Doe",
   "phone": "+1234567890",            // obligatorio
-  "role": "CARGO_GENERATOR",         // | "TRANSPORTER" | "ADMIN"
+  "role": "CARGO_GENERATOR",         // | "TRANSPORTER" | "ADMIN" | "COMPANY_ADMIN"
   "companyName": "Acme Logistics"    // opcional
 }
 
@@ -303,15 +303,28 @@ Source: [`../backend/src/trips/trips.controller.ts`](../backend/src/trips/trips.
 | POST | `/trips/accept/:loadId` | `ADMIN` | Override: crea trip sin postulación |
 | GET | `/trips` | `ADMIN` | Listar todos los trips |
 | GET | `/trips/my` | `TRANSPORTER` | Trips propios (carrier) |
+| GET | `/trips/metrics` | `TRANSPORTER` | Métricas de combustible + puntualidad del carrier logueado |
 | GET | `/trips/my-loads` | `CARGO_GENERATOR` | Trips de mis loads (shipper) |
 | GET | `/trips/:id` | cualquier rol | Detalle |
 | PATCH | `/trips/:id/start` | `TRANSPORTER` (dueño) | `PENDING` → `IN_PROGRESS`, set `startedAt` |
-| PATCH | `/trips/:id/complete` | `TRANSPORTER` (dueño) | → `COMPLETED`, set `completedAt`, load → `DELIVERED` |
+| PATCH | `/trips/:id/complete` | `TRANSPORTER` (dueño) | → `COMPLETED`, set `completedAt` + `fuelLiters` + `distanceKm`, load → `DELIVERED` |
 | PATCH | `/trips/:id/location` | `TRANSPORTER` (dueño) | Update `currentLat`/`currentLng` |
 
 ### Query params en GET
 
 `/trips`, `/trips/my` y `/trips/my-loads` aceptan `?status=...&page=...&limit=...`.
+
+### PATCH `/trips/:id/complete`
+
+```jsonc
+{ "fuelLiters": 120.5 }    // litros cargados durante el viaje
+```
+
+Marca el trip `COMPLETED`, setea `completedAt`, guarda `fuelLiters` y calcula `distanceKm` de la ruta vía OSRM (función `fetchRouteDistanceKm` en [`../backend/src/common/routing.ts`](../backend/src/common/routing.ts)). El load asociado pasa a `DELIVERED`.
+
+### GET `/trips/metrics`
+
+Devuelve las métricas agregadas del transportista logueado, calculadas con `computeFuelAndDeliveryMetrics` ([`../backend/src/common/metrics.ts`](../backend/src/common/metrics.ts)): tasa de entregas a tiempo (solo trips con `deliveryDate`), eficiencia km/litro y resúmenes mensuales de combustible/distancia. Las mismas métricas, por chofer, las consume el admin de empresa (ver [`empresas.md`](./empresas.md)).
 
 ### PATCH `/trips/:id/location`
 
@@ -382,6 +395,27 @@ Reglas:
 ### GET `/ratings/user/:userId`
 
 Devuelve las ratings que el usuario recibió, con score, comment y datos del rater.
+
+## Companies
+
+Source: [`../backend/src/companies/companies.controller.ts`](../backend/src/companies/companies.controller.ts). Todos requieren JWT. Gestión de flotas multi-conductor. Detalle del flujo en [`empresas.md`](./empresas.md).
+
+| Método | Path | Roles | Descripción |
+|---|---|---|---|
+| GET | `/companies` | cualquier rol | Directorio de empresas |
+| GET | `/companies/my-membership` | `TRANSPORTER` | Mi empresa + historial de solicitudes |
+| POST | `/companies/join-requests` | `TRANSPORTER` | Solicitar unirse (`{ companyId }`) |
+| DELETE | `/companies/join-requests/:requestId` | `TRANSPORTER` | Cancelar solicitud pendiente propia |
+| POST | `/companies/leave` | `TRANSPORTER` | Salir de la empresa actual |
+| GET | `/companies/me` | `COMPANY_ADMIN` | Overview de mi empresa (`memberCount`, `pendingRequests`) |
+| GET | `/companies/me/drivers` | `COMPANY_ADMIN` | Listar choferes de mi flota |
+| GET | `/companies/me/drivers/:driverId/stats` | `COMPANY_ADMIN` | Métricas de un chofer |
+| DELETE | `/companies/me/drivers/:driverId` | `COMPANY_ADMIN` | Remover chofer de la flota |
+| GET | `/companies/me/requests` | `COMPANY_ADMIN` | Solicitudes (`?status=`) |
+| PATCH | `/companies/me/requests/:requestId` | `COMPANY_ADMIN` | Aprobar/rechazar (`{ decision: "APPROVE" \| "REJECT" }`) |
+| GET | `/companies/me/trips` | `COMPANY_ADMIN` | Trips de los choferes de la flota |
+
+Todo el lado admin se scopea internamente a la empresa que el usuario posee (`Company.ownerId`); no se confía en ningún `companyId` del request.
 
 ## Errores comunes
 
