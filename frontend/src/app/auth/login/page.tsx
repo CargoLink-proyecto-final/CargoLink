@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
-import { ArrowRight, Truck, Eye, EyeOff } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 
@@ -73,7 +73,7 @@ export default function LoginPage() {
           ))}
         </svg>
 
-        <div className="relative z-10 h-full flex flex-col justify-between px-10 lg:px-14 py-10 lg:py-14 min-h-[40vh] lg:min-h-screen">
+        <div className="relative z-10 h-full flex flex-col px-10 lg:px-14 py-10 lg:py-14 min-h-[40vh] lg:min-h-screen">
           <div>
             <Link href="/" className="inline-flex items-center gap-2">
               <span className="font-display font-semibold text-[32px] leading-none text-surface-raised tracking-tight">
@@ -83,19 +83,16 @@ export default function LoginPage() {
             <p className="eyebrow mt-3 text-primary-200">Plataforma de transporte terrestre</p>
           </div>
 
-          <div className="max-w-md">
-            <p className="font-display font-medium text-[40px] lg:text-[52px] leading-[1.05] text-surface-raised tracking-tight">
-              Mover carga,<br/>
-              <span className="font-semibold text-accent-300">claro como un manifiesto.</span>
-            </p>
-            <p className="mt-6 text-[15px] text-primary-100 leading-relaxed max-w-sm">
-              Conectá generadores y transportistas en una sola vista — publicación, ruta, conversación y entrega.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4 text-[11px] uppercase tracking-[0.22em] text-primary-200">
-            <Truck size={14} className="text-accent-300" />
-            <span>Manifiesto N.º 2026 · {new Date().toLocaleDateString('es-AR')}</span>
+          <div className="flex-1 flex flex-col justify-center">
+            <div className="max-w-md">
+              <p className="font-display font-medium text-[40px] lg:text-[52px] leading-[1.05] text-surface-raised tracking-tight">
+                Publica, coordina y<br/>
+                <span className="font-semibold text-accent-300">transportá.</span>
+              </p>
+              <p className="mt-6 text-[15px] text-primary-100 leading-relaxed max-w-sm">
+                Conectá generadores y transportistas en una sola vista — publicación, ruta, conversación y entrega.
+              </p>
+            </div>
           </div>
         </div>
       </aside>
