@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
@@ -9,7 +10,11 @@ describe('UsersController', () => {
     findById: jest.Mock;
     update: jest.Mock;
     findAll: jest.Mock;
-    toggleActive: jest.Mock;
+    deactivate: jest.Mock;
+    reactivate: jest.Mock;
+    changeUserEmail: jest.Mock;
+    changeRole: jest.Mock;
+    getRoleHistory: jest.Mock;
   };
 
   const baseUser = {
@@ -25,7 +30,11 @@ describe('UsersController', () => {
       findById: jest.fn(),
       update: jest.fn(),
       findAll: jest.fn(),
-      toggleActive: jest.fn(),
+      deactivate: jest.fn(),
+      reactivate: jest.fn(),
+      changeUserEmail: jest.fn(),
+      changeRole: jest.fn(),
+      getRoleHistory: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -112,24 +121,53 @@ describe('UsersController', () => {
     });
   });
 
-  describe('toggleActive', () => {
-    it('toggles the active status of the user', async () => {
-      usersService.toggleActive.mockResolvedValue({
-        ...baseUser,
-        isActive: false,
-      });
+  describe('changeEmail (admin)', () => {
+    it('forwards id and new email to the service', async () => {
+      usersService.changeUserEmail.mockResolvedValue({ ...baseUser, email: 'new@x.com' });
+      const result = await controller.changeEmail('user-1', { email: 'new@x.com' });
+      expect(usersService.changeUserEmail).toHaveBeenCalledWith('user-1', 'new@x.com');
+      expect(result.email).toBe('new@x.com');
+    });
+  });
 
-      const result = await controller.toggleActive('user-1');
-
-      expect(usersService.toggleActive).toHaveBeenCalledWith('user-1');
+  describe('deactivate (admin)', () => {
+    it('deactivates the target user', async () => {
+      usersService.deactivate.mockResolvedValue({ ...baseUser, isActive: false });
+      const result = await controller.deactivate('user-1');
+      expect(usersService.deactivate).toHaveBeenCalledWith('user-1');
       expect(result.isActive).toBe(false);
     });
 
     it('propagates NotFoundException from the service', async () => {
-      usersService.toggleActive.mockRejectedValue(new NotFoundException());
-      await expect(controller.toggleActive('missing')).rejects.toThrow(
-        NotFoundException,
-      );
+      usersService.deactivate.mockRejectedValue(new NotFoundException());
+      await expect(controller.deactivate('missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('reactivate (admin)', () => {
+    it('reactivates the target user', async () => {
+      usersService.reactivate.mockResolvedValue({ ...baseUser, isActive: true });
+      const result = await controller.reactivate('user-1');
+      expect(usersService.reactivate).toHaveBeenCalledWith('user-1');
+      expect(result.isActive).toBe(true);
+    });
+  });
+
+  describe('changeRole (admin)', () => {
+    it('forwards target id, new role and admin id to the service', async () => {
+      usersService.changeRole.mockResolvedValue({ ...baseUser, role: Role.TRANSPORTER });
+      const result = await controller.changeRole('user-1', { role: Role.TRANSPORTER }, 'admin-1');
+      expect(usersService.changeRole).toHaveBeenCalledWith('user-1', Role.TRANSPORTER, 'admin-1');
+      expect(result.role).toBe(Role.TRANSPORTER);
+    });
+  });
+
+  describe('roleHistory (admin)', () => {
+    it('returns the role change history', async () => {
+      usersService.getRoleHistory.mockResolvedValue([{ id: 'log-1' }]);
+      const result = await controller.roleHistory('user-1');
+      expect(usersService.getRoleHistory).toHaveBeenCalledWith('user-1');
+      expect(result).toEqual([{ id: 'log-1' }]);
     });
   });
 });

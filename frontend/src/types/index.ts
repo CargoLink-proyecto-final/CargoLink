@@ -141,6 +141,16 @@ export interface AuthResponse {
   accessToken: string;
 }
 
+export interface RoleChangeLog {
+  id: string;
+  userId: string;
+  changedById: string;
+  oldRole: Role;
+  newRole: Role;
+  createdAt: string;
+  changedBy?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
+}
+
 // ---- Company admin (fleet) ----
 
 export type CompanyDriver = Pick<
