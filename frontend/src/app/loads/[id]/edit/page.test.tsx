@@ -85,15 +85,28 @@ describe('EditLoadPage — prefill', () => {
     expect(screen.getByDisplayValue('Córdoba 200')).toBeInTheDocument();
   });
 
-  it('refuses to edit a non-PUBLISHED load', async () => {
-    loadsApi.getById.mockResolvedValue({ data: makeLoad({ status: 'ASSIGNED' }) });
+  it('refuses to edit a finalized/cancelled load', async () => {
+    loadsApi.getById.mockResolvedValue({ data: makeLoad({ status: 'DELIVERED' }) });
 
     renderPage();
 
     expect(
-      await screen.findByText('Solo se pueden editar cargas con estado PUBLISHED.'),
+      await screen.findByText('No se puede editar una carga finalizada o cancelada.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Guardar/ })).not.toBeInTheDocument();
+  });
+
+  it('locks critical fields when the load has an accepted postulation', async () => {
+    loadsApi.getById.mockResolvedValue({ data: makeLoad({ status: 'ASSIGNED' }) });
+
+    renderPage();
+
+    // Title stays editable; the form is still shown with a lock notice.
+    const titleInput = await screen.findByDisplayValue('Electrónica a Córdoba');
+    expect(titleInput).not.toBeDisabled();
+    expect(screen.getByText(/postulación aceptada/i)).toBeInTheDocument();
+    // A critical field (weight) is disabled.
+    expect(screen.getByDisplayValue('100')).toBeDisabled();
   });
 });
 

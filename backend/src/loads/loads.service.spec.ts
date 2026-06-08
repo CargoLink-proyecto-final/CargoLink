@@ -273,16 +273,43 @@ describe('LoadsService', () => {
       expect(prisma.load.update).not.toHaveBeenCalled();
     });
 
-    it('throws ForbiddenException when load is not PUBLISHED', async () => {
+    it('throws ForbiddenException when editing a finalized/cancelled load', async () => {
+      prisma.load.findUnique.mockResolvedValue({
+        ...baseLoad,
+        status: LoadStatus.DELIVERED,
+        _count: { postulations: 0 },
+      });
+      await expect(
+        service.update('load-1', 'shipper-1', { title: 'x' } as any),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.load.update).not.toHaveBeenCalled();
+    });
+
+    it('locks critical fields once the load has an accepted postulation', async () => {
       prisma.load.findUnique.mockResolvedValue({
         ...baseLoad,
         status: LoadStatus.ASSIGNED,
         _count: { postulations: 0 },
       });
       await expect(
-        service.update('load-1', 'shipper-1', {} as any),
+        service.update('load-1', 'shipper-1', { weight: 999 } as any),
       ).rejects.toThrow(ForbiddenException);
       expect(prisma.load.update).not.toHaveBeenCalled();
+    });
+
+    it('allows editing title/description on an assigned load', async () => {
+      prisma.load.findUnique.mockResolvedValue({
+        ...baseLoad,
+        status: LoadStatus.ASSIGNED,
+        _count: { postulations: 0 },
+      });
+      prisma.load.update.mockResolvedValue({ ...baseLoad, title: 'New title' });
+      const result = await service.update('load-1', 'shipper-1', {
+        title: 'New title',
+        description: 'Updated notes',
+      } as any);
+      expect(prisma.load.update).toHaveBeenCalled();
+      expect(result.title).toBe('New title');
     });
 
     it('propagates NotFoundException from findById', async () => {
