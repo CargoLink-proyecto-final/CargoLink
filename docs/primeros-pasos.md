@@ -66,13 +66,17 @@ Endpoints a abrir:
 
 Todas con password `password123`:
 
-| Email | Rol | Nombre | Empresa |
+| Email | Rol | Nombre | Notas |
 |---|---|---|---|
 | `admin@cargolink.com` | `ADMIN` | Admin CargoLink | — |
 | `shipper@example.com` | `CARGO_GENERATOR` | Juan García | Logística Sur S.A. |
-| `carrier@example.com` | `TRANSPORTER` | Carlos Martínez | Transporte Rápido |
+| `carrier@example.com` | `TRANSPORTER` | Carlos Martínez | transportista independiente |
+| `empresa@example.com` | `COMPANY_ADMIN` | Laura Fernández | dueña de la empresa "Flota Andina" |
+| `driver1@example.com` | `TRANSPORTER` | Pedro Gómez | chofer de Flota Andina |
+| `driver2@example.com` | `TRANSPORTER` | Sofía Ramírez | chofer de Flota Andina |
+| `driver3@example.com` | `TRANSPORTER` | Diego López | con solicitud `PENDING` a Flota Andina |
 
-El seed también crea un load demo "Electrónica a Córdoba" asociado al shipper. Si el seed se corrió antes y la load ya existe, no se duplica.
+El seed también crea la empresa demo "Flota Andina" (con 2 choferes y 1 solicitud pendiente) y un load demo "Electrónica a Córdoba" asociado al shipper. Es idempotente: si se corrió antes, reutiliza lo existente y no duplica. Detalle del seed en [`base-de-datos.md`](./base-de-datos.md); del flujo de empresas en [`empresas.md`](./empresas.md).
 
 ### 5. Re-seed y reset
 

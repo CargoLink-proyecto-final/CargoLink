@@ -7,15 +7,16 @@ PostgreSQL 15 con Prisma 5.8 como ORM. Schema en [`../backend/prisma/schema.pris
 - IDs son `String` UUID con `@default(uuid())` — generados por Prisma del lado del cliente.
 - Snake case para columnas DB (`@map("first_name")`), camelCase en TS.
 - Snake case para nombres de tabla (`@@map("users")`).
-- Todos los modelos con `createdAt`/`updatedAt` salvo donde solo aplica `createdAt` (Message, Rating).
+- Todos los modelos con `createdAt`/`updatedAt` salvo donde solo aplica `createdAt` (Message, Rating, CompanyJoinRequest).
 - Índices declarados explícitamente sobre columnas usadas en filtros y joins.
 
 ## Enums
 
 ```prisma
-enum Role           { CARGO_GENERATOR  TRANSPORTER  ADMIN }
-enum LoadStatus     { PUBLISHED  ASSIGNED  IN_TRANSIT  DELIVERED  CANCELLED }
-enum TripStatus     { PENDING  ACCEPTED  IN_PROGRESS  COMPLETED  CANCELLED }
+enum Role              { CARGO_GENERATOR  TRANSPORTER  ADMIN  COMPANY_ADMIN }
+enum JoinRequestStatus { PENDING  APPROVED  REJECTED }
+enum LoadStatus        { PUBLISHED  ASSIGNED  IN_TRANSIT  DELIVERED  CANCELLED }
+enum TripStatus        { PENDING  ACCEPTED  IN_PROGRESS  COMPLETED  CANCELLED }
 enum PostulationStatus { PENDING  NEGOTIATING  ACCEPTED  REJECTED  WITHDRAWN }
 ```
 
@@ -40,6 +41,7 @@ Estados manejados desde la capa de servicio — Prisma no enforced transitions.
 | `emailVerified` | `Boolean` | default `false` |
 | `emailVerificationToken` | `String? @unique` | |
 | `emailVerificationTokenExp` | `DateTime?` | |
+| `companyId` | `String?` | `company_id`; empresa a la que pertenece (chofer). `null` = independiente |
 | `createdAt` / `updatedAt` | `DateTime` | |
 
 Relaciones:
@@ -48,6 +50,41 @@ Relaciones:
 - `postulations` — como transporter (`TransporterPostulations`).
 - `sentMessages` / `receivedMessages` (`SentMessages` / `ReceivedMessages`).
 - `givenRatings` / `receivedRatings` (`RatingFrom` / `RatingTo`).
+- `company` — empresa a la que pertenece como chofer (`CompanyMembers`, vía `companyId`).
+- `ownedCompany` — empresa que administra como `COMPANY_ADMIN` (`CompanyOwner`, 1:1).
+- `companyJoinRequests` — solicitudes enviadas como chofer (`DriverRequests`).
+
+Índice: `@@index([companyId])`.
+
+### `Company` (tabla `companies`)
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | |
+| `name` | `String` | |
+| `ownerId` | `String @unique` → `User.id` | `owner_id`; el `COMPANY_ADMIN` dueño (1:1) |
+| `createdAt` / `updatedAt` | `DateTime` | |
+
+Relaciones:
+- `owner` (User, `CompanyOwner`).
+- `members` (User[], `CompanyMembers`) — los choferes de la flota.
+- `requests` (CompanyJoinRequest[]).
+
+### `CompanyJoinRequest` (tabla `company_join_requests`)
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | |
+| `companyId` → `Company.id` | | `company_id` |
+| `transporterId` → `User.id` | | `transporter_id`; el chofer solicitante (`DriverRequests`) |
+| `status` | `JoinRequestStatus` default `PENDING` | |
+| `createdAt` | `DateTime` | |
+| `decidedAt` | `DateTime?` | `decided_at`; cuándo se aprobó/rechazó |
+
+Constraints e índices:
+- `@@unique([companyId, transporterId])` — una fila por par; se reutiliza en re-postulaciones (upsert a `PENDING`).
+- `@@index([companyId, status])`
+- `@@index([transporterId])`
 
 ### `Load` (tabla `loads`)
 
@@ -109,8 +146,12 @@ Constraints e índices:
 | `status` | `TripStatus` default `PENDING` |
 | `currentLat` / `currentLng` | `Float?` (GPS actual) |
 | `startedAt` / `completedAt` | `DateTime?` |
+| `fuelLiters` | `Float?` (`fuel_liters`; litros que el carrier carga al completar) |
+| `distanceKm` | `Float?` (`distance_km`; distancia de ruta calculada vía OSRM al completar) |
 | `notes` | `String?` |
 | `createdAt` / `updatedAt` | |
+
+`fuelLiters` + `distanceKm` alimentan las métricas de eficiencia (km/litro) y puntualidad — ver `computeFuelAndDeliveryMetrics` en [`../backend/src/common/metrics.ts`](../backend/src/common/metrics.ts), expuestas por `GET /trips/metrics` (transportista) y las stats de flota ([`empresas.md`](./empresas.md)).
 
 Relaciones:
 - `load` (Load).
@@ -187,6 +228,9 @@ Cardinalidades clave:
 - `Load 1:1 Trip` — un load asignado tiene exactamente un trip (loadId es unique en Trip).
 - `Trip 1:N Message` — todo mensaje vive bajo un trip.
 - `Trip 1:N Rating` — hasta 2 ratings (uno por participante) por trip.
+- `User 1:1 Company` — un `COMPANY_ADMIN` posee a lo sumo una empresa (`Company.ownerId` unique).
+- `Company 1:N User` — una empresa agrupa varios choferes (`User.companyId`).
+- `Company 1:N CompanyJoinRequest` — una solicitud por par empresa-chofer (unique compuesto). Detalle del flujo en [`empresas.md`](./empresas.md).
 
 ## Migraciones
 
@@ -200,6 +244,8 @@ Folder: [`../backend/prisma/migrations/`](../backend/prisma/migrations/).
 | `20260515223353_add_email_verification` | Campos `emailVerified`, `emailVerificationToken`, `emailVerificationTokenExp` |
 | `20260516230123_add_postulations` | Tabla `postulations` con flujo de bidding |
 | `20260520000000_add_price_negotiation` | Columnas `counterOfferPrice`, `lastOfferBy` para negociación |
+| `20260606214458_add_company_admin` | Rol `COMPANY_ADMIN`, tablas `companies` y `company_join_requests`, `companyId` en `users` |
+| `20260606233212_add_trip_fuel_and_distance` | Columnas `fuelLiters`, `distanceKm` en `trips` |
 
 `migration_lock.toml` registra el provider (`postgresql`) — no editarlo.
 
@@ -248,18 +294,24 @@ npx prisma studio    # http://localhost:5555
 
 Archivo: [`../backend/prisma/seed.ts`](../backend/prisma/seed.ts).
 
-Crea 3 usuarios y 1 load. Idempotente:
+Crea 7 usuarios, 1 empresa demo (con 2 choferes miembros + 1 solicitud pendiente) y 1 load. Idempotente:
 
-- **Users**: `prisma.user.upsert()` por email — no duplica si ya existen, no actualiza nada si update es `{}`.
+- **Users**: `prisma.user.upsert()` por email — no duplica si ya existen; en update setea `emailVerified: true` (y `companyId` para los choferes de la empresa).
+- **Empresa**: `prisma.company.upsert()` por `ownerId`.
+- **Solicitud de unión**: `companyJoinRequest.upsert()` por `(companyId, transporterId)`, dejada en `PENDING` para probar el inbox de aprobación.
 - **Load demo**: primero `findFirst` por `(shipperId, title='Electrónica a Córdoba')`; si existe, lo reusa; si no, `create`.
 
 Cuentas creadas (password `password123` para todas, hasheado con bcrypt cost 10):
 
-| Email | Rol |
-|---|---|
-| `admin@cargolink.com` | `ADMIN` |
-| `shipper@example.com` | `CARGO_GENERATOR` |
-| `carrier@example.com` | `TRANSPORTER` |
+| Email | Rol | Notas |
+|---|---|---|
+| `admin@cargolink.com` | `ADMIN` | |
+| `shipper@example.com` | `CARGO_GENERATOR` | |
+| `carrier@example.com` | `TRANSPORTER` | independiente |
+| `empresa@example.com` | `COMPANY_ADMIN` | dueño de la empresa "Flota Andina" |
+| `driver1@example.com` | `TRANSPORTER` | miembro de Flota Andina |
+| `driver2@example.com` | `TRANSPORTER` | miembro de Flota Andina |
+| `driver3@example.com` | `TRANSPORTER` | con solicitud `PENDING` a Flota Andina |
 
 Load: "Electrónica a Córdoba", pickup +5 días, delivery +7 días desde el momento del seed.
 

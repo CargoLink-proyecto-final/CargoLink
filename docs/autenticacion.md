@@ -1,6 +1,6 @@
 # Autenticación y autorización
 
-JWT (Bearer token) con Passport en el backend; localStorage / AsyncStorage en los clientes. RBAC simple a través de un decorator + guard. Source en [`../backend/src/auth/`](../backend/src/auth/) y [`../backend/src/common/`](../backend/src/common/).
+JWT (Bearer token) con Passport en el backend; `sessionStorage` (web) / `AsyncStorage` (mobile) en los clientes. RBAC simple a través de un decorator + guard. Source en [`../backend/src/auth/`](../backend/src/auth/) y [`../backend/src/common/`](../backend/src/common/).
 
 ## Flujo de registro completo
 
@@ -28,7 +28,7 @@ JWT (Bearer token) con Passport en el backend; localStorage / AsyncStorage en lo
    │                      │                         ├──verifica emailVerified
    │                      │                         ├──firma JWT (sub, email, role)
    │                      │◀──{ access_token, user }┤                      │
-   │                      ├──localStorage.setItem('token', ...)            │
+   │                      ├──sessionStorage.setItem('token', ...)          │
    │                      │                                                │
    │                      │  desde acá todas las requests llevan Bearer    │
 ```
@@ -43,7 +43,7 @@ Firma con `JWT_SECRET` (env var, **requerida**). Lifetime `JWT_EXPIRATION` (defa
 interface JwtPayload {
   sub: string;     // userId
   email: string;
-  role: 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN';
+  role: 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN' | 'COMPANY_ADMIN';
 }
 ```
 
@@ -225,32 +225,36 @@ El frontend lo agarra y redirige a una pantalla que ofrece reenviar el email (`P
 
 ### Frontend web
 
-`localStorage`. Definido en [`../frontend/src/store/auth.ts`](../frontend/src/store/auth.ts):
+`sessionStorage` (**no** `localStorage`), vía un pequeño wrapper SSR-safe. Definido en [`../frontend/src/store/auth.ts`](../frontend/src/store/auth.ts):
 
 ```ts
+// Sesión POR PESTAÑA: sessionStorage está aislado por browsing context, así que
+// dos cuentas abiertas en dos pestañas no comparten token (localStorage sí lo
+// compartía y causaba 403 cruzados: una pestaña mandaba el token de la otra).
 login: (user, token) => {
-  localStorage.setItem('token', token);
-  localStorage.setItem('user', JSON.stringify(user));
+  storage.set('token', token);
+  storage.set('user', JSON.stringify(user));
+  queryClient.clear();            // evita filtrar datos de la cuenta anterior
   set({ user, token, isAuthenticated: true });
 },
 
 logout: () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+  storage.remove('token');
+  storage.remove('user');
+  queryClient.clear();
   set({ user: null, token: null, isAuthenticated: false });
 },
 
 hydrate: () => {
   if (typeof window === 'undefined') return;   // SSR-safe
-  const token = localStorage.getItem('token');
-  const userStr = localStorage.getItem('user');
-  if (token && userStr) {
-    set({ user: JSON.parse(userStr), token, isAuthenticated: true });
-  }
+  const token = storage.get('token');
+  const userStr = storage.get('user');
+  // ...descarta la sesión si el token expiró o no matchea al user guardado
+  // (claims.sub === user.id && claims.role === user.role). Defensa en profundidad.
 },
 ```
 
-El `hydrate()` se llama desde un client component al inicializar (`Providers.tsx`) — sino tras un reload el store arranca vacío y el user aparece "deslogueado" hasta que un fetch falle con 401.
+El `hydrate()` se llama desde un client component al inicializar (`Providers.tsx`) — sino tras un reload el store arranca vacío y el user aparece "deslogueado" hasta que un fetch falle con 401. Además valida el JWT guardado (`parseJwt`): si expiró o el `sub`/`role` del token no coincide con el user persistido, descarta la sesión en vez de confiar en datos inconsistentes.
 
 ### Mobile
 
@@ -275,7 +279,7 @@ Source: [`../frontend/src/lib/api.ts`](../frontend/src/lib/api.ts).
 ```ts
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (token) config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -287,8 +291,8 @@ api.interceptors.response.use(
     const requestUrl: string = error.config?.url || '';
     const isAuthEndpoint = requestUrl.includes('/auth/');
     if (error.response?.status === 401 && typeof window !== 'undefined' && !isAuthEndpoint) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
       window.location.href = '/auth/login';
     }
     return Promise.reject(error);

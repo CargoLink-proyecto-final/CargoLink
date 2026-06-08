@@ -133,6 +133,8 @@ Source: [`../mobile/src/navigation/AppNavigator.tsx`](../mobile/src/navigation/A
   - Carrier: Dashboard / AvailableLoads / Tracking / Messages / Profile.
 - **Iconos**: Ionicons del paquete `@expo/vector-icons`.
 
+> La app mobile cubre solo los roles **Shipper** (`CARGO_GENERATOR`) y **Carrier** (`TRANSPORTER`) — el `RegisterScreen` solo ofrece esos dos. Los roles **`ADMIN`** y **`COMPANY_ADMIN`** (gestión de plataforma y de flotas) son exclusivos de la web; ver [`empresas.md`](./empresas.md) y [`frontend.md`](./frontend.md).
+
 `App.tsx` arranca con `useAuthStore.hydrate()` (asíncrono, lee AsyncStorage) y muestra un splash hasta que termina — sino habría flash de la pantalla de login antes de saber que ya hay sesión.
 
 ## Pantallas por rol

@@ -147,7 +147,7 @@ const api = axios.create({
 
 ### Interceptors
 
-- **Request**: inyecta `Authorization: Bearer <token>` desde `localStorage.token`.
+- **Request**: inyecta `Authorization: Bearer <token>` desde `sessionStorage.token` (sesión aislada por pestaña).
 - **Response**: si llega 401 fuera de `/auth/*`, limpia storage y redirige a `/auth/login` con `window.location.href`. Detalle en [`autenticacion.md`](./autenticacion.md).
 
 ### Módulos exportados
@@ -157,10 +157,11 @@ Cada uno es un objeto con métodos que retornan promesas de Axios:
 - `authApi` — login, register, forgotPassword, resetPassword, verifyEmail, resendVerification.
 - `usersApi` — getProfile, updateProfile, getAll, getById, toggleActive.
 - `loadsApi` — create, getAll, getAvailable, getMy, getById, update, cancel, getRegister, exportRegister (`responseType: 'blob'` para el ZIP).
-- `tripsApi` — accept (admin), getAll, getMy, getMyLoads, getById, start, complete, updateLocation.
+- `tripsApi` — accept (admin), getAll, getMy, getMyLoads, getById, getMetrics, start, complete, updateLocation.
 - `messagesApi` — send, getConversations, getTripMessages, markAsRead, getUnreadCount.
 - `ratingsApi` — create, getUserRatings.
 - `postulationsApi` — create, getForLoad, getMy, accept, counterOffer, acceptOffer, withdraw.
+- `companiesApi` — list, getMyMembership, requestToJoin, cancelJoinRequest, leave, getMyCompany, getDrivers, removeDriver, getDriverStats, getRequests, decideRequest, getTrips. Ver [`empresas.md`](./empresas.md).
 
 Los componentes los usan envueltos en `useQuery` / `useMutation` de TanStack Query.
 
@@ -181,7 +182,7 @@ interface AuthState {
 }
 ```
 
-Persistencia manual a `localStorage` en `login()` / `logout()`. `hydrate()` se llama desde `Providers.tsx` para restaurar después de un reload.
+Persistencia manual a `sessionStorage` en `login()` / `logout()`. Se usa `sessionStorage` (no `localStorage`) a propósito: está aislado por pestaña, así que dos cuentas abiertas en dos pestañas del mismo navegador no comparten token ni usuario (evita el 403 cruzado). `hydrate()` se llama desde `Providers.tsx` para restaurar la sesión de la pestaña después de un reload.
 
 ### Server state — TanStack Query
 
@@ -289,7 +290,7 @@ Nota: `npm run dev` levanta en **3003** (no 3000). El runtime de la imagen Docke
 
 - Componentes de `app/**/page.tsx` son **server components** por default (no `'use client'`).
 - Cualquier componente que use hooks (`useState`, `useEffect`, Zustand, React Query) **tiene que llevar `'use client'`** en la primera línea del archivo.
-- `localStorage` no existe en server — siempre chequeá `typeof window !== 'undefined'` o usá `useEffect`.
+- `sessionStorage`/`localStorage` no existen en server — siempre chequeá `typeof window !== 'undefined'` o usá `useEffect`.
 - El layout root (`app/layout.tsx`) corre en server; el `Providers.tsx` que renderiza es client (lleva `'use client'`).
 
 ## WebSockets desde el frontend

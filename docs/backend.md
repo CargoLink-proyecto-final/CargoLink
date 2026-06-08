@@ -48,10 +48,11 @@ backend/src/
 │   ├── postulations.service.ts
 │   ├── postulations.module.ts
 │   └── dto/                   # create-postulation, counter-offer
-├── trips/                     # /trips, /trips/my, location updates
+├── trips/                     # /trips, /trips/my, /trips/metrics, location updates
 │   ├── trips.controller.ts
 │   ├── trips.service.ts
-│   └── trips.module.ts
+│   ├── trips.module.ts
+│   └── dto/complete-trip.dto.ts  # fuelLiters
 ├── messages/                  # REST + Socket.IO gateway
 │   ├── messages.controller.ts
 │   ├── messages.gateway.ts    # /chat namespace
@@ -62,6 +63,11 @@ backend/src/
 │   ├── ratings.service.ts
 │   ├── ratings.module.ts
 │   └── dto/create-rating.dto.ts
+├── companies/                 # /companies — flotas multi-conductor (COMPANY_ADMIN)
+│   ├── companies.controller.ts
+│   ├── companies.service.ts
+│   ├── companies.module.ts
+│   └── dto/                   # create-join-request, decide-join-request
 ├── mail/                      # Nodemailer wrapper
 │   ├── mail.service.ts
 │   └── mail.module.ts
@@ -75,8 +81,10 @@ backend/src/
     ├── guards/
     │   ├── jwt-auth.guard.ts
     │   └── roles.guard.ts
-    └── filters/
-        └── http-exception.filter.ts
+    ├── filters/
+    │   └── http-exception.filter.ts
+    ├── metrics.ts             # computeFuelAndDeliveryMetrics (km/litro, on-time)
+    └── routing.ts             # fetchRouteDistanceKm (distancia de ruta vía OSRM)
 ```
 
 ## Bootstrap (`main.ts`)
@@ -193,6 +201,7 @@ Unique compuesto `(loadId, transporterId)` — un mismo carrier no puede postula
 | `/api/trips/accept/:loadId` | POST | `ADMIN` (override) |
 | `/api/trips` | GET | `ADMIN` |
 | `/api/trips/my` | GET | `TRANSPORTER` |
+| `/api/trips/metrics` | GET | `TRANSPORTER` |
 | `/api/trips/my-loads` | GET | `CARGO_GENERATOR` |
 | `/api/trips/:id` | GET | cualquier rol autenticado |
 | `/api/trips/:id/start` | PATCH | `TRANSPORTER` |
@@ -202,6 +211,8 @@ Unique compuesto `(loadId, transporterId)` — un mismo carrier no puede postula
 `POST /trips/accept/:loadId` es un override de admin que **no requiere postulación** — útil para asignar manualmente. El flujo normal de carrier va por `POST /postulations/:id/accept` (lo invoca el shipper, no el carrier).
 
 `PATCH /trips/:id/location` se llama desde mobile periódicamente con `{ lat, lng }`. El service valida que el carrier sea el dueño del trip y que el estado sea `IN_PROGRESS`.
+
+`PATCH /trips/:id/complete` recibe `{ fuelLiters }` (litros cargados durante el viaje), marca el trip `COMPLETED` y calcula `distanceKm` de la ruta vía OSRM (`fetchRouteDistanceKm` en `src/common/routing.ts`). `GET /trips/metrics` agrega esos datos con `computeFuelAndDeliveryMetrics` (`src/common/metrics.ts`): eficiencia km/litro y tasa de entregas a tiempo. Las mismas métricas, por chofer, las consume el admin de empresa (ver más abajo y [`empresas.md`](./empresas.md)).
 
 ### Messages (`src/messages/`)
 
@@ -225,6 +236,27 @@ El WebSocket reusa `MessagesService.create()`, así que mandar por POST o por `s
 | `/api/ratings/user/:userId` | GET | cualquier rol autenticado |
 
 Cada usuario califica una vez por trip (`@@unique([tripId, fromUserId])`). El service valida que el solicitante sea participante del trip y que el trip esté en estado `COMPLETED`.
+
+### Companies (`src/companies/`)
+
+Gestión de flotas multi-conductor. Un `COMPANY_ADMIN` administra una empresa y sus choferes (`TRANSPORTER`). Endpoints divididos por lado:
+
+| Endpoint | Método | Roles |
+|---|---|---|
+| `/api/companies` | GET | cualquier rol (directorio) |
+| `/api/companies/my-membership` | GET | `TRANSPORTER` |
+| `/api/companies/join-requests` | POST | `TRANSPORTER` |
+| `/api/companies/join-requests/:requestId` | DELETE | `TRANSPORTER` |
+| `/api/companies/leave` | POST | `TRANSPORTER` |
+| `/api/companies/me` | GET | `COMPANY_ADMIN` |
+| `/api/companies/me/drivers` | GET | `COMPANY_ADMIN` |
+| `/api/companies/me/drivers/:driverId/stats` | GET | `COMPANY_ADMIN` |
+| `/api/companies/me/drivers/:driverId` | DELETE | `COMPANY_ADMIN` |
+| `/api/companies/me/requests` | GET | `COMPANY_ADMIN` |
+| `/api/companies/me/requests/:requestId` | PATCH | `COMPANY_ADMIN` |
+| `/api/companies/me/trips` | GET | `COMPANY_ADMIN` |
+
+Patrón clave de seguridad: el lado admin nunca confía en un `companyId` del request — `companies.service.ts` resuelve la empresa con `getOwnedCompany(ownerId)` desde el usuario logueado. La aprobación de una solicitud asigna `user.companyId` y actualiza el estado en una transacción (`prisma.$transaction`). Flujo completo, modelo de datos y respuestas en [`empresas.md`](./empresas.md).
 
 ### Mail (`src/mail/`)
 
