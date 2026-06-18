@@ -1,4 +1,12 @@
-import { cn, formatCurrency, formatDate, getStatusColor, getStatusLabel } from './utils';
+import {
+  cn,
+  formatCurrency,
+  formatDate,
+  getStatusColor,
+  getStatusLabel,
+  getSolicitudStage,
+  getSolicitudStageLabel,
+} from './utils';
 
 describe('cn', () => {
   it('merges class names', () => {
@@ -54,5 +62,44 @@ describe('getStatusLabel', () => {
 
   it('echoes the input for an unknown status', () => {
     expect(getStatusLabel('UNKNOWN')).toBe('UNKNOWN');
+  });
+});
+
+describe('getSolicitudStage', () => {
+  it('derives the unified stage from a LoadStatus', () => {
+    expect(getSolicitudStage('PUBLISHED')).toBe('CREATED');
+    expect(getSolicitudStage('ASSIGNED')).toBe('ASSIGNED');
+    expect(getSolicitudStage('IN_TRANSIT')).toBe('STARTED');
+    expect(getSolicitudStage('DELIVERED')).toBe('COMPLETED');
+  });
+
+  it('derives the unified stage from a TripStatus', () => {
+    expect(getSolicitudStage('PENDING')).toBe('CREATED');
+    expect(getSolicitudStage('ACCEPTED')).toBe('ASSIGNED');
+    expect(getSolicitudStage('IN_PROGRESS')).toBe('STARTED');
+    expect(getSolicitudStage('COMPLETED')).toBe('COMPLETED');
+  });
+
+  it('maps the shared CANCELLED value', () => {
+    expect(getSolicitudStage('CANCELLED')).toBe('CANCELLED');
+  });
+
+  it('returns null for a non-load/trip status', () => {
+    expect(getSolicitudStage('NEGOTIATING')).toBeNull();
+    expect(getSolicitudStage('UNKNOWN')).toBeNull();
+  });
+});
+
+describe('getSolicitudStageLabel', () => {
+  it('labels Load and Trip statuses with the unified vocabulary', () => {
+    expect(getSolicitudStageLabel('PUBLISHED')).toBe('Creado');
+    expect(getSolicitudStageLabel('ACCEPTED')).toBe('Asignado');
+    expect(getSolicitudStageLabel('IN_TRANSIT')).toBe('Iniciado');
+    expect(getSolicitudStageLabel('COMPLETED')).toBe('Completado');
+    expect(getSolicitudStageLabel('CANCELLED')).toBe('Cancelado');
+  });
+
+  it('falls back to the raw status label when not part of the solicitud cycle', () => {
+    expect(getSolicitudStageLabel('NEGOTIATING')).toBe('En negociación');
   });
 });

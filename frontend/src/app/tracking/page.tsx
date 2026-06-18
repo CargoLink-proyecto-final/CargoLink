@@ -5,7 +5,7 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { tripsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { getStatusColor, getStatusLabel } from '@/lib/utils';
+import { getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import { fetchRoute } from '@/lib/routing';
 import Link from 'next/link';
 
@@ -94,7 +94,7 @@ export default function TrackingPage() {
                     </p>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>
-                    {getStatusLabel(trip.status)}
+                    {getSolicitudStageLabel(trip.status)}
                   </span>
                 </Link>
               ))}

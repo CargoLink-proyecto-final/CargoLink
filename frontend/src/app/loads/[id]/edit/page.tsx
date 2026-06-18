@@ -247,8 +247,9 @@ export default function EditLoadPage() {
                 <input type="datetime-local" {...register('pickupDate', { required: 'Requerido' })} disabled={isLocked} className={inputClass} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Entrega (opcional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha deseada de entrega (opcional)</label>
                 <input type="datetime-local" {...register('deliveryDate')} disabled={isLocked} className={inputClass} />
+                <p className="text-gray-500 text-xs mt-1">Fecha estimativa solicitada; no es la fecha definitiva de realización del viaje.</p>
               </div>
             </div>
           </div>

@@ -6,7 +6,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { loadsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { formatDate, getStatusLabel } from '@/lib/utils';
+import { formatDate, getSolicitudStageLabel } from '@/lib/utils';
 import Link from 'next/link';
 import { Search, Filter, X, Calendar, ChevronDown, Plus, ArrowRight } from 'lucide-react';
 import { LoadStatus } from '@/types';
@@ -153,7 +153,7 @@ export default function LoadsPage() {
                 className="w-full sm:w-auto px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
               >
                 <option value="">Todos los estados</option>
-                {statuses.map((s) => <option key={s} value={s}>{getStatusLabel(s)}</option>)}
+                {statuses.map((s) => <option key={s} value={s}>{getSolicitudStageLabel(s)}</option>)}
               </select>
             )}
           </div>
@@ -246,7 +246,7 @@ export default function LoadsPage() {
                           {load.deliveryDate ? formatDate(load.deliveryDate) : <span className="text-ink-300">—</span>}
                         </td>
                         <td className="px-5 py-3.5">
-                          <StatusBadge status={load.status} />
+                          <StatusBadge status={load.status} kind="solicitud" />
                         </td>
                       </tr>
                     ))}

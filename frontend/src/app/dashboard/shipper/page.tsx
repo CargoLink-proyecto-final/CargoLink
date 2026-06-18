@@ -29,7 +29,7 @@ export default function ShipperDashboard() {
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
-            <p className="eyebrow">Panel del generador</p>
+            <p className="eyebrow">Panel del publicador</p>
             <h1 className="mt-2 font-display text-[38px] leading-[1.05]">
               Tu <span className="font-semibold text-primary-700">operación</span> de hoy
             </h1>
@@ -86,7 +86,7 @@ export default function ShipperDashboard() {
                       </span>
                     )}
                     <span className="font-mono text-[13px] tabular-nums text-ink-700">{formatCurrency(load.price)}</span>
-                    <StatusBadge status={load.status} />
+                    <StatusBadge status={load.status} kind="solicitud" />
                   </div>
                 </Link>
               ))}

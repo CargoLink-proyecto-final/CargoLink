@@ -90,7 +90,7 @@ export default function LoginPage() {
                 <span className="font-semibold text-accent-300">transportá.</span>
               </p>
               <p className="mt-6 text-[15px] text-primary-100 leading-relaxed max-w-sm">
-                Conectá generadores y transportistas en una sola vista — publicación, ruta, conversación y entrega.
+                Conectá publicadores y transportistas en una sola vista — publicación, ruta, conversación y entrega.
               </p>
             </div>
           </div>

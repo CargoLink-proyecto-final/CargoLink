@@ -66,7 +66,7 @@ export default function RegisterPage() {
           <div className="grid grid-cols-3 gap-2">
             <label className={`text-center py-2 px-1 rounded-lg border-2 cursor-pointer transition text-xs font-medium ${selectedRole === 'CARGO_GENERATOR' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600'}`}>
               <input type="radio" value="CARGO_GENERATOR" {...register('role')} className="sr-only" />
-              Generador de carga
+              Publicador de carga
             </label>
             <label className={`text-center py-2 px-1 rounded-lg border-2 cursor-pointer transition text-xs font-medium ${selectedRole === 'TRANSPORTER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600'}`}>
               <input type="radio" value="TRANSPORTER" {...register('role')} className="sr-only" />

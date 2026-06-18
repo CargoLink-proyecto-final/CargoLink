@@ -58,7 +58,7 @@ const navItems = {
 };
 
 const ROLE_LABEL: Record<string, string> = {
-  CARGO_GENERATOR: 'Generador de carga',
+  CARGO_GENERATOR: 'Publicador de carga',
   TRANSPORTER: 'Transportista',
   ADMIN: 'Administrador',
   COMPANY_ADMIN: 'Administrador de empresa',

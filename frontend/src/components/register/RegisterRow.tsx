@@ -118,7 +118,7 @@ export default function RegisterRow({ item }: Props) {
               </div>
             </Section>
 
-            <Section title="Generador de carga">
+            <Section title="Publicador de carga">
               <Row label="Nombre" value={participantLabel(item.shipper)} />
               <Row label="Email" value={<span className="font-mono text-[12px] break-all">{item.shipper.email ?? '—'}</span>} />
               <Row label="Teléfono" value={<span className="font-mono">{item.shipper.phone ?? '—'}</span>} />

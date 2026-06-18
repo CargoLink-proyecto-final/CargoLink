@@ -41,12 +41,12 @@ describe('RegisterFiltersBar', () => {
   it('hides the participant input for non-admins and shows it for admins', () => {
     const { props } = renderBar({ isAdmin: false });
     expect(
-      screen.queryByPlaceholderText(/Generador o transportista/),
+      screen.queryByPlaceholderText(/Publicador o transportista/),
     ).not.toBeInTheDocument();
 
     render(<RegisterFiltersBar {...props} isAdmin />);
     expect(
-      screen.getByPlaceholderText(/Generador o transportista/),
+      screen.getByPlaceholderText(/Publicador o transportista/),
     ).toBeInTheDocument();
   });
 
@@ -61,7 +61,7 @@ describe('RegisterFiltersBar', () => {
     const user = userEvent.setup();
     const { onChange } = renderBar({ isAdmin: true });
     await user.type(
-      screen.getByPlaceholderText(/Generador o transportista/),
+      screen.getByPlaceholderText(/Publicador o transportista/),
       'A',
     );
     expect(onChange).toHaveBeenCalledWith(
