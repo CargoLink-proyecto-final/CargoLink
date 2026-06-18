@@ -27,7 +27,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: 'CargoLink — Plataforma de Transporte de Carga Terrestre',
-  description: 'Plataforma digital que conecta generadores de carga y transportistas para gestionar el transporte terrestre con claridad.',
+  description: 'Plataforma digital que conecta publicadores de carga y transportistas para gestionar el transporte terrestre con claridad.',
   keywords: ['carga', 'logística', 'transporte', 'envíos', 'flete'],
 };
 

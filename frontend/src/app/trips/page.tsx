@@ -7,7 +7,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { tripsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { formatDate, getStatusLabel } from '@/lib/utils';
+import { formatDate, getSolicitudStageLabel } from '@/lib/utils';
 import { ArrowRight, Star, Truck } from 'lucide-react';
 import type { Trip, TripStatus } from '@/types';
 
@@ -56,7 +56,7 @@ export default function TripsPage() {
             className="w-full sm:w-auto px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
           >
             <option value="">Todos los estados</option>
-            {STATUSES.map((s) => <option key={s} value={s}>{getStatusLabel(s)}</option>)}
+            {STATUSES.map((s) => <option key={s} value={s}>{getSolicitudStageLabel(s)}</option>)}
           </select>
         </div>
 
@@ -73,7 +73,7 @@ export default function TripsPage() {
                   <thead>
                     <tr className="text-left text-ink-500">
                       <Th>Carga</Th>
-                      <Th>{isShipper ? 'Transportista' : 'Dador de carga'}</Th>
+                      <Th>{isShipper ? 'Transportista' : 'Publicador de carga'}</Th>
                       <Th>Creación</Th>
                       <Th>Estado</Th>
                       <Th>Acción</Th>
@@ -104,7 +104,7 @@ export default function TripsPage() {
                           </td>
                           <td className="px-5 py-3.5 font-mono text-[12px] text-ink-700 whitespace-nowrap">{formatDate(trip.createdAt)}</td>
                           <td className="px-5 py-3.5">
-                            <StatusBadge status={trip.status} />
+                            <StatusBadge status={trip.status} kind="solicitud" />
                           </td>
                           <td className="px-5 py-3.5">
                             {canRate ? (

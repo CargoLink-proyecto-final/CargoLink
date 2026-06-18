@@ -483,7 +483,7 @@ export default function NewLoadPage() {
                 {errors.pickupDate && <p className="text-red-500 text-xs mt-1">{errors.pickupDate.message}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Entrega <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha deseada de entrega <span className="text-red-500">*</span></label>
                 <input
                   type="datetime-local"
                   min={pickupDateValue || minPickup}
@@ -497,6 +497,7 @@ export default function NewLoadPage() {
                   className={inputClass}
                 />
                 {errors.deliveryDate && <p className="text-red-500 text-xs mt-1">{errors.deliveryDate.message}</p>}
+                <p className="text-gray-500 text-xs mt-1">Fecha estimativa solicitada; no es la fecha definitiva de realización del viaje.</p>
               </div>
             </div>
           </div>

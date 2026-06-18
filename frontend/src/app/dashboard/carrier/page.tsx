@@ -183,7 +183,7 @@ export default function CarrierDashboard() {
                     className={`flex items-center justify-between gap-3 px-5 py-4 transition hover:bg-surface-sunk/60 ${i !== 0 ? 'border-t border-ink-200/60' : ''}`}
                   >
                     <p className="font-medium text-ink-900 truncate min-w-0 flex-1">{trip.load?.title}</p>
-                    <StatusBadge status={trip.status} />
+                    <StatusBadge status={trip.status} kind="solicitud" />
                   </Link>
                 ))}
               </div>

@@ -49,7 +49,7 @@ async function fillSharedFields(user: ReturnType<typeof userEvent.setup>) {
 describe('RegisterPage — rendering', () => {
   it('renders the role selector and core fields (CARGO_GENERATOR default)', () => {
     render(<RegisterPage />);
-    expect(screen.getByText('Generador de carga')).toBeInTheDocument();
+    expect(screen.getByText('Publicador de carga')).toBeInTheDocument();
     expect(screen.getByText('Transportista')).toBeInTheDocument();
     expect(screen.getByText('Empresa')).toBeInTheDocument();
     expect(getFirstName()).toBeInTheDocument();

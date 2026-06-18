@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { messagesApi, tripsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { getStatusColor, getStatusLabel } from '@/lib/utils';
+import { getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import { Send, Truck, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
@@ -84,7 +84,7 @@ export default function TripConversationPage() {
               <span className="truncate">{trip?.load?.title}</span>
               {trip?.status && (
                 <span className={`px-1.5 py-0.5 rounded-full ${getStatusColor(trip.status)}`}>
-                  {getStatusLabel(trip.status)}
+                  {getSolicitudStageLabel(trip.status)}
                 </span>
               )}
             </div>

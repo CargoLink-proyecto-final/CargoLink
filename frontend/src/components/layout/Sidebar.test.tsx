@@ -90,7 +90,7 @@ describe('Sidebar', () => {
   it('shows the role label in the brand block', () => {
     mockAuth({ user: SHIPPER, logout });
     renderSidebar();
-    expect(screen.getByText('Generador de carga')).toBeInTheDocument();
+    expect(screen.getByText('Publicador de carga')).toBeInTheDocument();
   });
 
   it('renders the user name, email and initials', () => {
