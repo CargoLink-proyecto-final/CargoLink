@@ -8,7 +8,7 @@ import { loadsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { formatDate, getSolicitudStageLabel } from '@/lib/utils';
 import Link from 'next/link';
-import { Search, Filter, X, Calendar, ChevronDown, Plus, ArrowRight } from 'lucide-react';
+import { Search, Filter, X, Calendar, ChevronDown, Plus, ArrowRight, Users } from 'lucide-react';
 import { LoadStatus } from '@/types';
 
 interface DateRange { from: string; to: string }
@@ -237,6 +237,11 @@ export default function LoadsPage() {
                             {load.title}
                             <ArrowRight size={13} className="opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition" />
                           </Link>
+                          {user?.role === 'TRANSPORTER' && (load.pendingPostulationsCount ?? 0) > 0 && (
+                            <div className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-info-700">
+                              <Users size={11} /> {load.pendingPostulationsCount} {load.pendingPostulationsCount === 1 ? 'interesado' : 'interesados'}
+                            </div>
+                          )}
                         </td>
                         <td className="px-5 py-3.5 text-ink-600 max-w-[120px] sm:max-w-[220px] truncate">{load.originAddress}</td>
                         <td className="px-5 py-3.5 text-ink-600 max-w-[120px] sm:max-w-[220px] truncate">{load.destAddress}</td>

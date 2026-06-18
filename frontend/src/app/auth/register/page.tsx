@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { Eye, EyeOff } from 'lucide-react';
 import { authApi } from '@/lib/api';
+import ZonePicker from '@/components/maps/ZonePicker';
 
 interface RegisterForm {
   email: string;
@@ -35,13 +36,19 @@ export default function RegisterPage() {
 
   const selectedRole = watch('role');
   const passwordValue = watch('password');
+  // Zona de influencia (P12) — solo aplica al transportista; opcional.
+  const [zone, setZone] = useState<{ lat: number; lng: number; radiusKm: number } | null>(null);
 
   const onSubmit = async (data: RegisterForm) => {
     setError('');
     setLoading(true);
     try {
       const { confirmPassword: _, ...submitData } = data;
-      await authApi.register(submitData);
+      const payload =
+        data.role === 'TRANSPORTER' && zone
+          ? { ...submitData, zoneLat: zone.lat, zoneLng: zone.lng, zoneRadiusKm: zone.radiusKm }
+          : submitData;
+      await authApi.register(payload);
       router.push(`/auth/check-email?email=${encodeURIComponent(data.email)}`);
     } catch (err) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -225,6 +232,18 @@ export default function RegisterPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
               />
               <p className="text-xs text-gray-500 mt-1">Tu rubro o actividad da contexto a los transportistas.</p>
+            </div>
+          )}
+
+          {selectedRole === 'TRANSPORTER' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Zona de influencia (opcional)</label>
+              <ZonePicker
+                lat={zone?.lat}
+                lng={zone?.lng}
+                radiusKm={zone?.radiusKm}
+                onChange={setZone}
+              />
             </div>
           )}
 

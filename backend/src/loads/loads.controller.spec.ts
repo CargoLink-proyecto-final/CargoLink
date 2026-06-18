@@ -22,6 +22,7 @@ describe('LoadsController', () => {
   let service: {
     create: jest.Mock;
     findAll: jest.Mock;
+    findAvailable: jest.Mock;
     findById: jest.Mock;
     update: jest.Mock;
     cancel: jest.Mock;
@@ -33,6 +34,7 @@ describe('LoadsController', () => {
     service = {
       create: jest.fn().mockResolvedValue({ id: 'load-1' }),
       findAll: jest.fn().mockResolvedValue({ loads: [], total: 0 }),
+      findAvailable: jest.fn().mockResolvedValue({ loads: [], total: 0 }),
       findById: jest.fn().mockResolvedValue({ id: 'load-1' }),
       update: jest.fn().mockResolvedValue({ id: 'load-1' }),
       cancel: jest.fn().mockResolvedValue({ id: 'load-1' }),
@@ -112,10 +114,12 @@ describe('LoadsController', () => {
   });
 
   describe('findAvailable', () => {
-    it('forces PUBLISHED status and forwards filters', async () => {
-      await controller.findAvailable('Electronics', 'q');
-      const arg = service.findAll.mock.calls[0][0];
-      expect(arg.status).toBe(LoadStatus.PUBLISHED);
+    it('delegates to service.findAvailable with the carrier id and filters', async () => {
+      // El primer argumento es el userId del transportista (zona de influencia, P12).
+      await controller.findAvailable('carrier-1', 'Electronics', 'q');
+      expect(service.findAvailable).toHaveBeenCalled();
+      const [carrierId, arg] = service.findAvailable.mock.calls[0];
+      expect(carrierId).toBe('carrier-1');
       expect(arg.cargoType).toBe('Electronics');
       expect(arg.q).toBe('q');
     });

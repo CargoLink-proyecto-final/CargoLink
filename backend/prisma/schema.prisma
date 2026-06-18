@@ -57,6 +57,12 @@ model User {
   // transportistas y base para segmentaciones futuras.
   industry                  String?   @map("industry")
   avatarUrl                 String?   @map("avatar_url")
+  // Zona de influencia del transportista (P12): centro (lat/lng) + radio del
+  // área habitual de trabajo. Se usa para priorizar cargas cercanas en
+  // /loads/available. Todo opcional — null = sin zona definida.
+  zoneLat                   Float?    @map("zone_lat")
+  zoneLng                   Float?    @map("zone_lng")
+  zoneRadiusKm              Float?    @map("zone_radius_km")
   isActive                  Boolean   @default(true) @map("is_active")
   resetToken                String?   @map("reset_token")
   resetTokenExp             DateTime? @map("reset_token_exp")

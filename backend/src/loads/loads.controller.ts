@@ -71,6 +71,7 @@ export class LoadsController {
   @Get('available')
   @ApiOperation({ summary: 'List available loads for carriers with filters' })
   findAvailable(
+    @CurrentUser('id') userId: string,
     @Query('cargoType') cargoType?: string,
     @Query('q') q?: string,
     @Query('minWeight') minWeight?: number,
@@ -86,8 +87,9 @@ export class LoadsController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.loadsService.findAll({
-      status: LoadStatus.PUBLISHED,
+    // Las cargas se priorizan por la zona de influencia del transportista (P12)
+    // dentro del service, según el userId.
+    return this.loadsService.findAvailable(userId, {
       cargoType, q,
       minWeight: minWeight ? Number(minWeight) : undefined,
       maxWeight: maxWeight ? Number(maxWeight) : undefined,
