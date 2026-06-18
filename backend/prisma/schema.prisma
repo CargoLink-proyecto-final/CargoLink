@@ -53,6 +53,9 @@ model User {
   phone                     String?
   role                      Role      @default(CARGO_GENERATOR)
   companyName               String?   @map("company_name")
+  // Rubro o actividad de la empresa del publicador — contexto para los
+  // transportistas y base para segmentaciones futuras.
+  industry                  String?   @map("industry")
   avatarUrl                 String?   @map("avatar_url")
   isActive                  Boolean   @default(true) @map("is_active")
   resetToken                String?   @map("reset_token")
@@ -146,9 +149,18 @@ model Load {
   cargoType     String     @map("cargo_type")
   weight        Float
   volume        Float?
+  // Información logística del bulto (opcional) — habilita evaluar
+  // compatibilidad entre cargas para compartir un mismo viaje.
+  packageCount  Int?       @map("package_count")
+  heightCm      Float?     @map("height_cm")
+  widthCm       Float?     @map("width_cm")
+  lengthCm      Float?     @map("length_cm")
   pickupDate    DateTime   @map("pickup_date")
   deliveryDate  DateTime?  @map("delivery_date")
   price         Float
+  // Monto máximo opcional que el publicador está dispuesto a pagar;
+  // visible para los transportistas al postularse.
+  maxBudget     Float?     @map("max_budget")
   status        LoadStatus @default(PUBLISHED)
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @updatedAt @map("updated_at")

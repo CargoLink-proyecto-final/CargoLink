@@ -16,6 +16,7 @@ interface RegisterForm {
   phone: string;
   role: 'CARGO_GENERATOR' | 'TRANSPORTER' | 'COMPANY_ADMIN';
   companyName?: string;
+  industry?: string;
 }
 
 export default function RegisterPage() {
@@ -212,6 +213,18 @@ export default function RegisterPage() {
               {errors.companyName && (
                 <p className="text-red-500 text-xs mt-1">{errors.companyName.message}</p>
               )}
+            </div>
+          )}
+
+          {selectedRole === 'CARGO_GENERATOR' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rubro (opcional)</label>
+              <input
+                {...register('industry')}
+                placeholder="Ej., Agroindustria, Construcción, Retail"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              />
+              <p className="text-xs text-gray-500 mt-1">Tu rubro o actividad da contexto a los transportistas.</p>
             </div>
           )}
 

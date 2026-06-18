@@ -87,7 +87,7 @@ export class UsersService {
     return { users, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async update(id: string, data: Partial<{ firstName: string; lastName: string; phone: string; companyName: string }>) {
+  async update(id: string, data: Partial<{ firstName: string; lastName: string; phone: string; companyName: string; industry: string }>) {
     return this.prisma.user.update({ where: { id }, data });
   }
 

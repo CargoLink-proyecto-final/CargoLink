@@ -28,4 +28,11 @@ export class UpdateProfileDto {
   @IsString({ message: 'El nombre de la empresa debe ser texto' })
   @IsNotEmpty({ message: 'El nombre de la empresa no puede quedar vacío' })
   companyName?: string;
+
+  // Rubro o actividad del publicador. Opcional y puede quedar vacío (se permite
+  // limpiarlo), a diferencia de los campos obligatorios de arriba.
+  @ApiProperty({ example: 'Agroindustria', required: false })
+  @IsOptional()
+  @IsString({ message: 'El rubro debe ser texto' })
+  industry?: string;
 }

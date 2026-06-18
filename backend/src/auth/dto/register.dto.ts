@@ -47,4 +47,11 @@ export class RegisterDto {
   @IsOptional()
   @IsString({ message: 'El nombre de la empresa debe ser texto' })
   companyName?: string;
+
+  // Rubro o actividad del publicador de carga (opcional) — contexto para los
+  // transportistas y base para segmentaciones futuras.
+  @ApiProperty({ example: 'Agroindustria', required: false })
+  @IsOptional()
+  @IsString({ message: 'El rubro debe ser texto' })
+  industry?: string;
 }

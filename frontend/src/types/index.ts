@@ -14,6 +14,7 @@ export interface User {
   phone?: string;
   role: Role;
   companyName?: string;
+  industry?: string;
   avatarUrl?: string;
   isActive: boolean;
   createdAt: string;
@@ -22,7 +23,7 @@ export interface User {
 export interface Load {
   id: string;
   shipperId: string;
-  shipper: Pick<User, 'id' | 'firstName' | 'lastName' | 'companyName'>;
+  shipper: Pick<User, 'id' | 'firstName' | 'lastName' | 'companyName' | 'industry'>;
   title: string;
   description?: string;
   originAddress: string;
@@ -34,9 +35,14 @@ export interface Load {
   cargoType: string;
   weight: number;
   volume?: number;
+  packageCount?: number;
+  heightCm?: number;
+  widthCm?: number;
+  lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
   price: number;
+  maxBudget?: number;
   status: LoadStatus;
   trip?: Trip;
   pendingPostulationsCount?: number;

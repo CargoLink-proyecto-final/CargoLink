@@ -14,6 +14,7 @@ interface ProfileForm {
   lastName: string;
   phone: string;
   companyName: string;
+  industry: string;
 }
 
 const inputClass =
@@ -45,6 +46,7 @@ export default function ProfilePage() {
         lastName: profile.lastName ?? '',
         phone: profile.phone ?? '',
         companyName: profile.companyName ?? '',
+        industry: profile.industry ?? '',
       });
     }
   }, [profile, reset]);
@@ -58,6 +60,7 @@ export default function ProfilePage() {
         lastName: updated.lastName ?? '',
         phone: updated.phone ?? '',
         companyName: updated.companyName ?? '',
+        industry: updated.industry ?? '',
       });
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
@@ -72,7 +75,9 @@ export default function ProfilePage() {
           firstName: data.firstName.trim(),
           lastName: data.lastName.trim(),
           phone: data.phone.trim(),
-          ...(showCompanyName ? { companyName: data.companyName.trim() } : {}),
+          ...(showCompanyName
+            ? { companyName: data.companyName.trim(), industry: data.industry.trim() }
+            : {}),
         };
     profileMutation.mutate(payload);
   };
@@ -145,6 +150,16 @@ export default function ProfilePage() {
                   Empresa <span className="text-ink-400">(opcional)</span>
                 </label>
                 <input className={inputClass} {...register('companyName')} />
+              </div>
+            )}
+
+            {showCompanyName && (
+              <div>
+                <label className="block text-[12px] font-medium text-ink-700 mb-1.5">
+                  Rubro <span className="text-ink-400">(opcional)</span>
+                </label>
+                <input className={inputClass} {...register('industry')} placeholder="Ej., Agroindustria, Construcción, Retail" />
+                <p className="text-ink-500 text-xs mt-1.5">Tu rubro o actividad da contexto a los transportistas.</p>
               </div>
             )}
 

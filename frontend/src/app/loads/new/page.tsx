@@ -141,9 +141,14 @@ interface LoadForm {
   cargoType: string;
   weight: number;
   volume?: number;
+  packageCount?: number;
+  heightCm?: number;
+  widthCm?: number;
+  lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
   price: number;
+  maxBudget?: number;
 }
 
 type LocationMode = 'address' | 'coords';
@@ -320,9 +325,14 @@ export default function NewLoadPage() {
         cargoType: data.cargoType,
         weight: Number(data.weight),
         volume: data.volume ? Number(data.volume) : undefined,
+        packageCount: data.packageCount ? Number(data.packageCount) : undefined,
+        heightCm: data.heightCm ? Number(data.heightCm) : undefined,
+        widthCm: data.widthCm ? Number(data.widthCm) : undefined,
+        lengthCm: data.lengthCm ? Number(data.lengthCm) : undefined,
         pickupDate: data.pickupDate,
         deliveryDate: data.deliveryDate,
         price: Number(data.price),
+        maxBudget: data.maxBudget ? Number(data.maxBudget) : undefined,
         originAddress: origin.address,
         originLat: origin.lat,
         originLng: origin.lng,
@@ -406,6 +416,39 @@ export default function NewLoadPage() {
                 <input type="number" step="0.01" {...register('price', { required: 'Requerido', min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
                 {errors.price && <p className="text-red-500 text-xs mt-1">{errors.price.message}</p>}
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad de bultos (opcional)</label>
+                <input type="number" step="1" {...register('packageCount', { min: { value: 1, message: 'Debe ser al menos 1' } })} className={inputClass} />
+                {errors.packageCount && <p className="text-red-500 text-xs mt-1">{errors.packageCount.message}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Presupuesto máximo (ARS, opcional)</label>
+                <input type="number" step="0.01" {...register('maxBudget', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                <p className="text-gray-500 text-xs mt-1">Monto máximo que estás dispuesto a pagar; visible para los transportistas.</p>
+                {errors.maxBudget && <p className="text-red-500 text-xs mt-1">{errors.maxBudget.message}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Dimensiones del bulto (cm, opcional)</label>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <input type="number" step="0.1" placeholder="Alto" {...register('heightCm', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                  {errors.heightCm && <p className="text-red-500 text-xs mt-1">{errors.heightCm.message}</p>}
+                </div>
+                <div>
+                  <input type="number" step="0.1" placeholder="Ancho" {...register('widthCm', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                  {errors.widthCm && <p className="text-red-500 text-xs mt-1">{errors.widthCm.message}</p>}
+                </div>
+                <div>
+                  <input type="number" step="0.1" placeholder="Largo" {...register('lengthCm', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                  {errors.lengthCm && <p className="text-red-500 text-xs mt-1">{errors.lengthCm.message}</p>}
+                </div>
+              </div>
+              <p className="text-gray-500 text-xs mt-1">Ayuda a evaluar la compatibilidad con otras cargas para compartir un mismo viaje.</p>
             </div>
           </div>
 
