@@ -18,6 +18,9 @@ describe('LoadsService', () => {
       findUnique: jest.Mock;
       update: jest.Mock;
     };
+    user: {
+      findUnique: jest.Mock;
+    };
   };
 
   const baseLoad = {
@@ -44,6 +47,9 @@ describe('LoadsService', () => {
         count: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+      },
+      user: {
+        findUnique: jest.fn(),
       },
     };
 
@@ -131,6 +137,21 @@ describe('LoadsService', () => {
       expect(result.loads[0].pendingPostulationsCount).toBe(0);
     });
 
+    it('orders loads by proximity to the zone when prioritizeZone is set (P12)', async () => {
+      // La query devuelve lejos→cerca (orden por createdAt); la priorización por
+      // zona debe reordenar dejando el origen más cercano primero.
+      prisma.load.findMany.mockResolvedValue([
+        { ...baseLoad, id: 'far', originLat: -34.6, originLng: -58.4, _count: { postulations: 0 } }, // Buenos Aires
+        { ...baseLoad, id: 'near', originLat: -31.4, originLng: -64.2, _count: { postulations: 0 } }, // Córdoba
+      ]);
+      const result = await service.findAll({
+        status: LoadStatus.PUBLISHED,
+        prioritizeZone: { lat: -31.42, lng: -64.19 }, // Córdoba
+      });
+      expect(result.loads.map((l: any) => l.id)).toEqual(['near', 'far']);
+      expect(result.total).toBe(2);
+    });
+
     it('applies status and shipperId filters', async () => {
       await service.findAll({ status: LoadStatus.PUBLISHED, shipperId: 'shipper-1' });
       const where = prisma.load.findMany.mock.calls[0][0].where;
@@ -208,10 +229,28 @@ describe('LoadsService', () => {
   });
 
   describe('findAvailable', () => {
-    it('delegates to findAll forcing PUBLISHED status', async () => {
+    it('delegates to findAll forcing PUBLISHED status (no zone → no prioritization)', async () => {
+      prisma.user.findUnique.mockResolvedValue({ zoneLat: null, zoneLng: null });
       const spy = jest.spyOn(service, 'findAll').mockResolvedValue({} as any);
-      await service.findAvailable({ page: 2, limit: 5 });
-      expect(spy).toHaveBeenCalledWith({ page: 2, limit: 5, status: LoadStatus.PUBLISHED });
+      await service.findAvailable('carrier-1', { page: 2, limit: 5 });
+      expect(spy).toHaveBeenCalledWith({
+        page: 2,
+        limit: 5,
+        status: LoadStatus.PUBLISHED,
+        prioritizeZone: undefined,
+      });
+    });
+
+    it('prioritizes by the carrier zone when one is set', async () => {
+      prisma.user.findUnique.mockResolvedValue({ zoneLat: -31.42, zoneLng: -64.18 });
+      const spy = jest.spyOn(service, 'findAll').mockResolvedValue({} as any);
+      await service.findAvailable('carrier-1', { page: 1, limit: 5 });
+      expect(spy).toHaveBeenCalledWith({
+        page: 1,
+        limit: 5,
+        status: LoadStatus.PUBLISHED,
+        prioritizeZone: { lat: -31.42, lng: -64.18 },
+      });
     });
   });
 

@@ -23,6 +23,15 @@ const CARGO_TYPES = [
   'Otro',
 ] as const;
 
+// Form dinámico (P6): las dimensiones del bulto aplican a cargas en
+// bultos/unidades. Para mercadería a granel (alimentos, materiales de
+// construcción) el volumen total es la métrica representativa, así que esos
+// campos no se muestran ni se envían.
+const BULK_CARGO_TYPES = new Set<string>(['Alimentos y bebidas', 'Materiales de construcción']);
+function showsPackageDetails(cargoType: string | undefined): boolean {
+  return !!cargoType && cargoType !== 'Otro' && !BULK_CARGO_TYPES.has(cargoType);
+}
+
 // Only chars valid in street names/numbers. Blocks <>{}&% etc.
 const STREET_PATTERN = /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9\s.\-/'°]+$/;
 // City, province, country: letters only (no digits).
@@ -201,6 +210,7 @@ export default function NewLoadPage() {
   const { register, handleSubmit, watch, getValues, formState: { errors } } = useForm<LoadForm>();
 
   const pickupDateValue = watch('pickupDate');
+  const cargoTypeValue = watch('cargoType');
 
   const verifyAddress = async (
     prefix: 'origin' | 'dest',
@@ -319,16 +329,19 @@ export default function NewLoadPage() {
         return;
       }
 
+      const pkg = showsPackageDetails(data.cargoType);
       await loadsApi.create({
         title: data.title,
         description: data.description,
         cargoType: data.cargoType,
         weight: Number(data.weight),
         volume: data.volume ? Number(data.volume) : undefined,
-        packageCount: data.packageCount ? Number(data.packageCount) : undefined,
-        heightCm: data.heightCm ? Number(data.heightCm) : undefined,
-        widthCm: data.widthCm ? Number(data.widthCm) : undefined,
-        lengthCm: data.lengthCm ? Number(data.lengthCm) : undefined,
+        // Solo enviamos info del bulto para los tipos que la muestran (P6),
+        // evitando datos obsoletos si el usuario cambió de tipo de carga.
+        packageCount: pkg && data.packageCount ? Number(data.packageCount) : undefined,
+        heightCm: pkg && data.heightCm ? Number(data.heightCm) : undefined,
+        widthCm: pkg && data.widthCm ? Number(data.widthCm) : undefined,
+        lengthCm: pkg && data.lengthCm ? Number(data.lengthCm) : undefined,
         pickupDate: data.pickupDate,
         deliveryDate: data.deliveryDate,
         price: Number(data.price),
@@ -418,38 +431,43 @@ export default function NewLoadPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad de bultos (opcional)</label>
-                <input type="number" step="1" {...register('packageCount', { min: { value: 1, message: 'Debe ser al menos 1' } })} className={inputClass} />
-                {errors.packageCount && <p className="text-red-500 text-xs mt-1">{errors.packageCount.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Presupuesto máximo (ARS, opcional)</label>
-                <input type="number" step="0.01" {...register('maxBudget', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
-                <p className="text-gray-500 text-xs mt-1">Monto máximo que estás dispuesto a pagar; visible para los transportistas.</p>
-                {errors.maxBudget && <p className="text-red-500 text-xs mt-1">{errors.maxBudget.message}</p>}
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Presupuesto máximo (ARS, opcional)</label>
+              <input type="number" step="0.01" {...register('maxBudget', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+              <p className="text-gray-500 text-xs mt-1">Monto máximo que estás dispuesto a pagar; visible para los transportistas.</p>
+              {errors.maxBudget && <p className="text-red-500 text-xs mt-1">{errors.maxBudget.message}</p>}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dimensiones del bulto (cm, opcional)</label>
-              <div className="grid grid-cols-3 gap-4">
+            {/* Form dinámico (P6): la info del bulto solo se pide para cargas en
+                bultos/unidades; para mercadería a granel el volumen alcanza. */}
+            {showsPackageDetails(cargoTypeValue) && (
+              <div className="space-y-4 rounded-lg border border-gray-200 p-4">
+                <p className="text-sm font-medium text-gray-700">Información del bulto (opcional)</p>
                 <div>
-                  <input type="number" step="0.1" placeholder="Alto" {...register('heightCm', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
-                  {errors.heightCm && <p className="text-red-500 text-xs mt-1">{errors.heightCm.message}</p>}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad de bultos</label>
+                  <input type="number" step="1" {...register('packageCount', { min: { value: 1, message: 'Debe ser al menos 1' } })} className={inputClass} />
+                  {errors.packageCount && <p className="text-red-500 text-xs mt-1">{errors.packageCount.message}</p>}
                 </div>
                 <div>
-                  <input type="number" step="0.1" placeholder="Ancho" {...register('widthCm', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
-                  {errors.widthCm && <p className="text-red-500 text-xs mt-1">{errors.widthCm.message}</p>}
-                </div>
-                <div>
-                  <input type="number" step="0.1" placeholder="Largo" {...register('lengthCm', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
-                  {errors.lengthCm && <p className="text-red-500 text-xs mt-1">{errors.lengthCm.message}</p>}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Dimensiones del bulto (cm)</label>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <input type="number" step="0.1" placeholder="Alto" {...register('heightCm', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                      {errors.heightCm && <p className="text-red-500 text-xs mt-1">{errors.heightCm.message}</p>}
+                    </div>
+                    <div>
+                      <input type="number" step="0.1" placeholder="Ancho" {...register('widthCm', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                      {errors.widthCm && <p className="text-red-500 text-xs mt-1">{errors.widthCm.message}</p>}
+                    </div>
+                    <div>
+                      <input type="number" step="0.1" placeholder="Largo" {...register('lengthCm', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                      {errors.lengthCm && <p className="text-red-500 text-xs mt-1">{errors.lengthCm.message}</p>}
+                    </div>
+                  </div>
+                  <p className="text-gray-500 text-xs mt-1">Ayuda a evaluar la compatibilidad con otras cargas para compartir un mismo viaje.</p>
                 </div>
               </div>
-              <p className="text-gray-500 text-xs mt-1">Ayuda a evaluar la compatibilidad con otras cargas para compartir un mismo viaje.</p>
-            </div>
+            )}
           </div>
 
           {/* Origen */}

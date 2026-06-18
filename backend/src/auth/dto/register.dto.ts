@@ -2,8 +2,10 @@ import {
   IsEmail,
   IsEnum,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
+  Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -54,4 +56,22 @@ export class RegisterDto {
   @IsOptional()
   @IsString({ message: 'El rubro debe ser texto' })
   industry?: string;
+
+  // Zona de influencia del transportista (P12): centro + radio del área habitual
+  // de trabajo. Se captura en el registro y se usa para priorizar cargas cercanas.
+  @ApiProperty({ example: -31.42, required: false })
+  @IsOptional()
+  @IsNumber({}, { message: 'La latitud de la zona debe ser un número' })
+  zoneLat?: number;
+
+  @ApiProperty({ example: -64.18, required: false })
+  @IsOptional()
+  @IsNumber({}, { message: 'La longitud de la zona debe ser un número' })
+  zoneLng?: number;
+
+  @ApiProperty({ example: 50, required: false })
+  @IsOptional()
+  @IsNumber({}, { message: 'El radio de la zona debe ser un número' })
+  @Min(0, { message: 'El radio no puede ser negativo' })
+  zoneRadiusKm?: number;
 }

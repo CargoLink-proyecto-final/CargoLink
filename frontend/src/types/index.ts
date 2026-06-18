@@ -16,6 +16,9 @@ export interface User {
   companyName?: string;
   industry?: string;
   avatarUrl?: string;
+  zoneLat?: number;
+  zoneLng?: number;
+  zoneRadiusKm?: number;
   isActive: boolean;
   createdAt: string;
 }

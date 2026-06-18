@@ -12,6 +12,42 @@ import { LoadStatus, Prisma } from '@prisma/client';
 
 type AuthUser = { id: string; role: string };
 
+// Distancia en línea recta (km) entre dos puntos. Suficiente para ordenar
+// cargas por cercanía a la zona de influencia del transportista (P12); no
+// pretende exactitud de ruta (para eso está OSRM en common/routing).
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+type LoadListParams = {
+  status?: LoadStatus;
+  page?: number;
+  limit?: number;
+  shipperId?: string;
+  cargoType?: string;
+  q?: string;
+  minWeight?: number;
+  maxWeight?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  createdFrom?: string;
+  createdTo?: string;
+  pickupFrom?: string;
+  pickupTo?: string;
+  deliveryFrom?: string;
+  deliveryTo?: string;
+  // Si viene, las cargas se ordenan por cercanía del origen a este punto
+  // (zona del transportista, P12) en lugar de por fecha de creación.
+  prioritizeZone?: { lat: number; lng: number };
+};
+
 function applyDateRange(where: any, field: string, from?: string, to?: string) {
   if (!from && !to) return;
   const range: any = {};
@@ -64,24 +100,7 @@ export class LoadsService {
     });
   }
 
-  async findAll(params?: {
-    status?: LoadStatus;
-    page?: number;
-    limit?: number;
-    shipperId?: string;
-    cargoType?: string;
-    q?: string;
-    minWeight?: number;
-    maxWeight?: number;
-    minPrice?: number;
-    maxPrice?: number;
-    createdFrom?: string;
-    createdTo?: string;
-    pickupFrom?: string;
-    pickupTo?: string;
-    deliveryFrom?: string;
-    deliveryTo?: string;
-  }) {
+  async findAll(params?: LoadListParams) {
     const page = params?.page || 1;
     const limit = params?.limit || 20;
     const where: any = {};
@@ -116,33 +135,72 @@ export class LoadsService {
     applyDateRange(where, 'pickupDate', params?.pickupFrom, params?.pickupTo);
     applyDateRange(where, 'deliveryDate', params?.deliveryFrom, params?.deliveryTo);
 
+    const include = {
+      shipper: { select: { id: true, firstName: true, lastName: true, companyName: true } },
+      trip: { select: { id: true, status: true, carrierId: true } },
+      _count: {
+        select: { postulations: { where: { status: 'PENDING' as const } } },
+      },
+    };
+    const shape = ({ _count, ...rest }: any) => ({
+      ...rest,
+      pendingPostulationsCount: _count?.postulations ?? 0,
+    });
+
+    // Priorización por zona de influencia (P12): cuando el transportista definió
+    // una zona, ordenamos las cargas por cercanía del origen a ese punto
+    // (haversine) y paginamos en memoria. Cap defensivo para no traer todo el
+    // universo de cargas en un único query.
+    if (params?.prioritizeZone) {
+      const { lat, lng } = params.prioritizeZone;
+      const all = await this.prisma.load.findMany({
+        where,
+        include,
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      });
+      const sorted = all
+        .map((l) => ({ l, d: haversineKm(lat, lng, l.originLat, l.originLng) }))
+        .sort((a, b) => a.d - b.d)
+        .map(({ l }) => shape(l));
+      const total = sorted.length;
+      const start = (page - 1) * limit;
+      return {
+        loads: sorted.slice(start, start + limit),
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    }
+
     const [loads, total] = await Promise.all([
       this.prisma.load.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
-        include: {
-          shipper: { select: { id: true, firstName: true, lastName: true, companyName: true } },
-          trip: { select: { id: true, status: true, carrierId: true } },
-          _count: {
-            select: { postulations: { where: { status: 'PENDING' } } },
-          },
-        },
+        include,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.load.count({ where }),
     ]);
 
-    const shaped = loads.map(({ _count, ...rest }) => ({
-      ...rest,
-      pendingPostulationsCount: _count?.postulations ?? 0,
-    }));
-
-    return { loads: shaped, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { loads: loads.map(shape), total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findAvailable(params?: { page?: number; limit?: number }) {
-    return this.findAll({ ...params, status: LoadStatus.PUBLISHED });
+  async findAvailable(
+    carrierId: string,
+    params?: Omit<LoadListParams, 'status' | 'prioritizeZone' | 'shipperId'>,
+  ) {
+    const carrier = await this.prisma.user.findUnique({
+      where: { id: carrierId },
+      select: { zoneLat: true, zoneLng: true },
+    });
+    const prioritizeZone =
+      carrier?.zoneLat != null && carrier?.zoneLng != null
+        ? { lat: carrier.zoneLat, lng: carrier.zoneLng }
+        : undefined;
+    return this.findAll({ ...params, status: LoadStatus.PUBLISHED, prioritizeZone });
   }
 
   async findById(id: string) {
