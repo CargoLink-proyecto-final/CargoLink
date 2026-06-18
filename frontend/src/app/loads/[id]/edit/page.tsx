@@ -21,9 +21,14 @@ interface LoadForm {
   cargoType: string;
   weight: number;
   volume?: number;
+  packageCount?: number;
+  heightCm?: number;
+  widthCm?: number;
+  lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
   price: number;
+  maxBudget?: number;
 }
 
 function toDatetimeLocal(iso: string | undefined | null): string {
@@ -61,9 +66,14 @@ export default function EditLoadPage() {
         cargoType: load.cargoType,
         weight: load.weight,
         volume: load.volume || undefined,
+        packageCount: load.packageCount ?? undefined,
+        heightCm: load.heightCm ?? undefined,
+        widthCm: load.widthCm ?? undefined,
+        lengthCm: load.lengthCm ?? undefined,
         pickupDate: toDatetimeLocal(load.pickupDate),
         deliveryDate: toDatetimeLocal(load.deliveryDate),
         price: load.price,
+        maxBudget: load.maxBudget ?? undefined,
       });
     }
   }, [load, reset]);
@@ -95,7 +105,12 @@ export default function EditLoadPage() {
       destLng: Number(data.destLng),
       weight: Number(data.weight),
       volume: data.volume ? Number(data.volume) : undefined,
+      packageCount: data.packageCount ? Number(data.packageCount) : undefined,
+      heightCm: data.heightCm ? Number(data.heightCm) : undefined,
+      widthCm: data.widthCm ? Number(data.widthCm) : undefined,
+      lengthCm: data.lengthCm ? Number(data.lengthCm) : undefined,
       price: Number(data.price),
+      maxBudget: data.maxBudget ? Number(data.maxBudget) : undefined,
     });
   };
 
@@ -199,6 +214,26 @@ export default function EditLoadPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS) <span className="text-red-500">*</span></label>
                 <input type="number" {...register('price', { required: 'Requerido' })} disabled={isLocked} className={inputClass} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad de bultos (opcional)</label>
+                <input type="number" step="1" {...register('packageCount')} disabled={isLocked} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Presupuesto máximo (ARS, opcional)</label>
+                <input type="number" step="0.01" {...register('maxBudget')} disabled={isLocked} className={inputClass} />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Dimensiones del bulto (cm, opcional)</label>
+              <div className="grid grid-cols-3 gap-4">
+                <input type="number" step="0.1" placeholder="Alto" {...register('heightCm')} disabled={isLocked} className={inputClass} />
+                <input type="number" step="0.1" placeholder="Ancho" {...register('widthCm')} disabled={isLocked} className={inputClass} />
+                <input type="number" step="0.1" placeholder="Largo" {...register('lengthCm')} disabled={isLocked} className={inputClass} />
               </div>
             </div>
           </div>

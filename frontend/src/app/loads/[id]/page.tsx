@@ -423,7 +423,12 @@ export default function LoadDetailPage() {
               <div><span className="text-gray-500">Tipo:</span> <span className="font-medium">{load.cargoType}</span></div>
               <div><span className="text-gray-500">Peso:</span> <span className="font-medium">{load.weight} kg</span></div>
               {load.volume && <div><span className="text-gray-500">Volumen:</span> <span className="font-medium">{load.volume} m3</span></div>}
+              {load.packageCount != null && <div><span className="text-gray-500">Bultos:</span> <span className="font-medium">{load.packageCount}</span></div>}
+              {(load.heightCm != null || load.widthCm != null || load.lengthCm != null) && (
+                <div><span className="text-gray-500">Dimensiones:</span> <span className="font-medium">{[load.heightCm, load.widthCm, load.lengthCm].map((d) => (d != null ? d : '—')).join(' × ')} cm</span></div>
+              )}
               <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatCurrency(load.price)}</span></div>
+              {load.maxBudget != null && <div><span className="text-gray-500">Presupuesto máx.:</span> <span className="font-medium">{formatCurrency(load.maxBudget)}</span></div>}
             </div>
           </div>
 
@@ -455,6 +460,7 @@ export default function LoadDetailPage() {
             <div className="text-sm">
               <p className="font-medium">{load.shipper?.firstName} {load.shipper?.lastName}</p>
               {load.shipper?.companyName && <p className="text-gray-500">{load.shipper.companyName}</p>}
+              {load.shipper?.industry && <p className="text-gray-500">Rubro: {load.shipper.industry}</p>}
             </div>
             {load.trip && (
               <>

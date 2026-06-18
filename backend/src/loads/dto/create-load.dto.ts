@@ -1,4 +1,4 @@
-import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateLoadDto {
@@ -52,6 +52,30 @@ export class CreateLoadDto {
   @IsNumber({}, { message: 'El volumen debe ser un número' })
   volume?: number;
 
+  @ApiProperty({ example: 10, required: false, description: 'Cantidad de bultos' })
+  @IsOptional()
+  @IsInt({ message: 'La cantidad de bultos debe ser un número entero' })
+  @Min(1, { message: 'La cantidad de bultos debe ser al menos 1' })
+  packageCount?: number;
+
+  @ApiProperty({ example: 120, required: false, description: 'Alto del bulto en cm' })
+  @IsOptional()
+  @IsNumber({}, { message: 'La altura debe ser un número' })
+  @Min(0, { message: 'La altura no puede ser negativa' })
+  heightCm?: number;
+
+  @ApiProperty({ example: 80, required: false, description: 'Ancho del bulto en cm' })
+  @IsOptional()
+  @IsNumber({}, { message: 'El ancho debe ser un número' })
+  @Min(0, { message: 'El ancho no puede ser negativo' })
+  widthCm?: number;
+
+  @ApiProperty({ example: 100, required: false, description: 'Largo del bulto en cm' })
+  @IsOptional()
+  @IsNumber({}, { message: 'El largo debe ser un número' })
+  @Min(0, { message: 'El largo no puede ser negativo' })
+  lengthCm?: number;
+
   @ApiProperty({ example: '2024-02-15T10:00:00Z' })
   @IsDateString({}, { message: 'La fecha de recogida debe ser una fecha válida' })
   pickupDate: string;
@@ -63,4 +87,10 @@ export class CreateLoadDto {
   @ApiProperty({ example: 150000 })
   @IsNumber({}, { message: 'El precio debe ser un número' })
   price: number;
+
+  @ApiProperty({ example: 180000, required: false, description: 'Presupuesto máximo opcional que el publicador está dispuesto a pagar' })
+  @IsOptional()
+  @IsNumber({}, { message: 'El presupuesto máximo debe ser un número' })
+  @Min(0, { message: 'El presupuesto máximo no puede ser negativo' })
+  maxBudget?: number;
 }

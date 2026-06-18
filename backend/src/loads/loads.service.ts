@@ -149,7 +149,7 @@ export class LoadsService {
     const load = await this.prisma.load.findUnique({
       where: { id },
       include: {
-        shipper: { select: { id: true, firstName: true, lastName: true, companyName: true, phone: true } },
+        shipper: { select: { id: true, firstName: true, lastName: true, companyName: true, industry: true, phone: true } },
         trip: {
           include: {
             carrier: { select: { id: true, firstName: true, lastName: true, companyName: true, phone: true } },
