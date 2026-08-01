@@ -1,10 +1,12 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_URL = 'http://localhost:3002/api';
+import { API_URL } from '../config/env';
 
 const api = axios.create({
   baseURL: API_URL,
+  // Sin timeout axios espera indefinidamente: en móvil, con red inestable o una
+  // IP de LAN equivocada, eso deja la pantalla colgada sin feedback.
+  timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
 
