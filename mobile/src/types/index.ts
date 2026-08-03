@@ -1,6 +1,14 @@
 export type Role = 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN' | 'COMPANY_ADMIN';
 export type LoadStatus = 'PUBLISHED' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type TripStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+/**
+ * Autor de la última oferta en una negociación.
+ *
+ * Son valores propios del dominio de postulaciones, **no** roles: el backend
+ * escribe `'SHIPPER'` (`postulations.service.ts`), no `'CARGO_GENERATOR'`.
+ */
+export type OfferParty = 'SHIPPER' | 'TRANSPORTER';
+
 export type PostulationStatus =
   | 'PENDING'
   | 'NEGOTIATING'
@@ -95,7 +103,8 @@ export interface Postulation {
   proposedPrice?: number;
   counterOfferPrice?: number;
   // Quién hizo la última oferta: sirve para saber a quién le toca responder.
-  lastOfferBy?: string;
+  // Ojo: el backend usa 'SHIPPER', no el nombre del rol ('CARGO_GENERATOR').
+  lastOfferBy?: OfferParty;
   status: PostulationStatus;
   createdAt: string;
   updatedAt: string;

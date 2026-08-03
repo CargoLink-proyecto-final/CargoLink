@@ -488,7 +488,7 @@ describe('LoadDetailScreen', () => {
       (postulationsApi.listMine as jest.Mock).mockResolvedValue({
         data: [{
           id: 'p1', loadId: 'l1', transporterId: 'carrier1', status: 'NEGOTIATING',
-          counterOfferPrice: 55000, lastOfferBy: 'CARGO_GENERATOR',
+          counterOfferPrice: 55000, lastOfferBy: 'SHIPPER',
         }],
       });
       (postulationsApi.acceptOffer as jest.Mock).mockResolvedValue({ data: {} });

@@ -366,7 +366,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
             )}
 
             {myPostulation.counterOfferPrice != null &&
-              myPostulation.lastOfferBy === 'CARGO_GENERATOR' && (
+              myPostulation.lastOfferBy === 'SHIPPER' && (
                 <>
                   <Text style={styles.counterOffer}>
                     El publicador propuso {formatCurrency(myPostulation.counterOfferPrice)}
