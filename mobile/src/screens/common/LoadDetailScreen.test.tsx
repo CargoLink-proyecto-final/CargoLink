@@ -331,6 +331,38 @@ describe('LoadDetailScreen', () => {
       expect(queryByText('Calificar al transportista')).toBeNull();
     });
 
+    it('hides it when the load has no trip at all', async () => {
+      asShipper();
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, status: 'DELIVERED', trip: undefined },
+      });
+
+      const { getByText, queryByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+      expect(queryByText('Calificar al transportista')).toBeNull();
+    });
+
+    it('still offers it when the payload omits ratings entirely', async () => {
+      // El gate falla "abierto" si `ratings` no viniera: se muestra el botón y el
+      // backend contestaría 409 si ya había calificado. Hoy `GET /loads/:id`
+      // siempre incluye `trip.ratings`, y este test fija esa dependencia — si
+      // alguien saca el include del backend, el comportamiento queda documentado.
+      asShipper();
+      const { ratings, ...tripWithoutRatings } = completedTrip;
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, status: 'DELIVERED', trip: tripWithoutRatings },
+      });
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Calificar al transportista')).toBeTruthy());
+    });
+
     it('refetches the load on focus so the button clears after rating', async () => {
       asShipper();
       (loadsApi.getById as jest.Mock).mockResolvedValue({
