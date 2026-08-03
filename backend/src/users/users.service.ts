@@ -31,6 +31,37 @@ const ACTIVE_TRIP_STATUSES: TripStatus[] = [
 // titularidad de una Company (ownership) y se gestiona por su propio flujo.
 const ASSIGNABLE_ROLES: Role[] = [Role.CARGO_GENERATOR, Role.TRANSPORTER, Role.ADMIN];
 
+/**
+ * Campos de `User` que pueden salir por HTTP.
+ *
+ * Es una allowlist y no una lista de exclusión a propósito: devolver el registro
+ * crudo de Prisma filtraba el hash de la contraseña y los tokens de verificación
+ * y de reset de password, y con una denylist cada columna nueva del modelo se
+ * expone sola hasta que alguien se acuerde de agregarla.
+ *
+ * Todo lo que devuelva un usuario por la API tiene que usar este select. La
+ * excepción es `findByEmail`, que necesita el hash para comparar credenciales y
+ * por eso nunca se devuelve directo desde un controller.
+ */
+export const PUBLIC_USER_SELECT = {
+  id: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  role: true,
+  companyName: true,
+  industry: true,
+  avatarUrl: true,
+  zoneLat: true,
+  zoneLng: true,
+  zoneRadiusKm: true,
+  isActive: true,
+  emailVerified: true,
+  companyId: true,
+  createdAt: true,
+} as const;
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -48,12 +79,17 @@ export class UsersService {
     });
   }
 
+  // Única lectura que trae el registro completo: `login` y los flujos de reset
+  // necesitan el hash y los tokens. No exponer su retorno desde un controller.
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
   async findById(id: string) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: PUBLIC_USER_SELECT,
+    });
     if (!user) throw new NotFoundException('Usuario no encontrado');
     return user;
   }
@@ -68,17 +104,7 @@ export class UsersService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          phone: true,
-          role: true,
-          companyName: true,
-          isActive: true,
-          createdAt: true,
-        },
+        select: PUBLIC_USER_SELECT,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.user.count({ where }),
@@ -88,7 +114,11 @@ export class UsersService {
   }
 
   async update(id: string, data: Partial<{ firstName: string; lastName: string; phone: string; companyName: string; industry: string; zoneLat: number; zoneLng: number; zoneRadiusKm: number }>) {
-    return this.prisma.user.update({ where: { id }, data });
+    return this.prisma.user.update({
+      where: { id },
+      data,
+      select: PUBLIC_USER_SELECT,
+    });
   }
 
   // True si el usuario tiene cargas (como dador) o viajes (como transportista) en curso.
@@ -113,12 +143,20 @@ export class UsersService {
         'No se puede desactivar la cuenta: tiene cargas o viajes activos. Cerralos primero.',
       );
     }
-    return this.prisma.user.update({ where: { id }, data: { isActive: false } });
+    return this.prisma.user.update({
+      where: { id },
+      data: { isActive: false },
+      select: PUBLIC_USER_SELECT,
+    });
   }
 
   async reactivate(id: string) {
     await this.findById(id);
-    return this.prisma.user.update({ where: { id }, data: { isActive: true } });
+    return this.prisma.user.update({
+      where: { id },
+      data: { isActive: true },
+      select: PUBLIC_USER_SELECT,
+    });
   }
 
   // Cambio de email por un admin. Como el email es el identificador, exige revalidación:
@@ -146,6 +184,7 @@ export class UsersService {
         emailVerificationToken: verificationToken,
         emailVerificationTokenExp: verificationExp,
       },
+      select: PUBLIC_USER_SELECT,
     });
 
     try {
@@ -184,6 +223,7 @@ export class UsersService {
       this.prisma.user.update({
         where: { id: targetId },
         data: { role: newRole, ...clearCompany },
+        select: PUBLIC_USER_SELECT,
       }),
       this.prisma.roleChangeLog.create({
         data: { userId: targetId, changedById: adminId, oldRole, newRole },
