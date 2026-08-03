@@ -368,6 +368,9 @@ describe('UsersService', () => {
         expect.objectContaining({
           where: { id: 'user-1' },
           data: expect.objectContaining({ email: 'new@example.com', emailVerified: false }),
+          // Esta ruta escribe un token de verificación nuevo: sin el select, la
+          // respuesta se lo devolvería al admin junto con el hash.
+          select: PUBLIC_USER_SELECT,
         }),
       );
       expect(mailService.sendVerificationEmail).toHaveBeenCalled();
