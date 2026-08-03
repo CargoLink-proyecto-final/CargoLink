@@ -94,6 +94,32 @@ Las **remotas** (app cerrada) necesitan dos cosas que todavía no existen:
    columna en `User`) ni desde dónde emitir pushes. El hook ya pide el token y lo
    loguea; falta el endpoint que lo persista y el sender contra la Expo Push API.
 
+## Correr en un iPhone físico
+
+**Expo Go no sirve para este proyecto.** La app está en SDK 57 y la App Store
+publica Expo Go **54.0.2** (sept-2025) en todas las regiones, que sólo llega a
+SDK 54. El teléfono muestra "Project is incompatible with this version of Expo
+Go" y no hay actualización que instalar. La alternativa es el build nativo:
+
+```bash
+npx expo run:ios --device
+```
+
+Requiere un Apple ID cargado en Xcode (Settings → Accounts). Con cuenta gratuita
+("Personal Team") el certificado dura **7 días**; después hay que reinstalar.
+
+**Las cuentas gratuitas no soportan la capability Push Notifications**, y el
+prebuild deja `aps-environment` en `ios/CargoLink/CargoLink.entitlements` porque
+lo agrega el plugin `expo-notifications`. Con eso puesto, Xcode falla con
+"Personal development teams … do not support the Push Notifications capability".
+Hay que vaciar el `<dict>` de ese archivo. No se pierde nada verificable: las
+push remotas ya están bloqueadas por lo de arriba. **Ojo: `ios/` está
+gitignoreado y `expo prebuild` regenera el entitlements — hay que repetirlo.**
+
+La primera instalación también pide activar **Settings → Privacy & Security →
+Developer Mode** en el iPhone. Esa opción **no aparece** hasta que la Mac intenta
+instalar una app de desarrollo por primera vez.
+
 ## Mapas
 
 `TrackingScreen` usa `PROVIDER_DEFAULT`: Apple Maps en iOS (sin credenciales) y

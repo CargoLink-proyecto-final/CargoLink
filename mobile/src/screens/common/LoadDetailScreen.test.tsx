@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import LoadDetailScreen from './LoadDetailScreen';
-import { loadsApi, tripsApi } from '../../services/api';
+import { loadsApi, tripsApi, postulationsApi } from '../../services/api';
 
 jest.mock('../../services/api', () => ({
   loadsApi: {
@@ -13,6 +13,12 @@ jest.mock('../../services/api', () => ({
     accept: jest.fn(),
     start: jest.fn(),
     complete: jest.fn(),
+  },
+  postulationsApi: {
+    create: jest.fn(),
+    listMine: jest.fn(),
+    acceptOffer: jest.fn(),
+    withdraw: jest.fn(),
   },
 }));
 
@@ -55,6 +61,8 @@ describe('LoadDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUser = { id: 'carrier1', role: 'TRANSPORTER', firstName: 'Carl', lastName: 'Driver' };
+    (postulationsApi.listMine as jest.Mock).mockResolvedValue({ data: [] });
+    (postulationsApi.create as jest.Mock).mockResolvedValue({ data: {} });
   });
 
   it('fetches the load by id and renders its details', async () => {
@@ -175,27 +183,7 @@ describe('LoadDetailScreen', () => {
     await waitFor(() => expect(getByText('Carga no encontrada')).toBeTruthy());
   });
 
-  it('lets a TRANSPORTER accept a PUBLISHED load', async () => {
-    (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
-    (tripsApi.accept as jest.Mock).mockResolvedValue({});
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    const nav = makeNav();
-
-    const { getByText } = render(
-      <LoadDetailScreen route={makeRoute()} navigation={nav} />,
-    );
-
-    await waitFor(() => expect(getByText('Aceptar Carga')).toBeTruthy());
-    fireEvent.press(getByText('Aceptar Carga'));
-
-    await waitFor(() => expect(tripsApi.accept).toHaveBeenCalledWith('l1'));
-    await waitFor(() => expect(nav.goBack).toHaveBeenCalled());
-    expect(alertSpy).toHaveBeenCalledWith('Éxito', '¡Carga aceptada!');
-
-    alertSpy.mockRestore();
-  });
-
-  it('does not show the accept button for a CARGO_GENERATOR', async () => {
+  it('does not show the postulate button for a CARGO_GENERATOR', async () => {
     mockUser = { id: 'shipper1', role: 'CARGO_GENERATOR' };
     (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
 
@@ -204,8 +192,188 @@ describe('LoadDetailScreen', () => {
     );
 
     await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
-    expect(queryByText('Aceptar Carga')).toBeNull();
+    expect(queryByText('Postularme')).toBeNull();
     // Owner of a PUBLISHED load sees the cancel button instead.
     expect(getByText('Cancelar Carga')).toBeTruthy();
+  });
+
+  describe('postulación del transportista', () => {
+    it('never calls the admin-only accept endpoint', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Postularme')).toBeTruthy());
+      fireEvent.press(getByText('Postularme'));
+      fireEvent.press(getByText('Enviar postulación'));
+
+      await waitFor(() => expect(postulationsApi.create).toHaveBeenCalled());
+      // POST /trips/accept/:loadId es override de ADMIN: 403 para un TRANSPORTER.
+      expect(tripsApi.accept).not.toHaveBeenCalled();
+    });
+
+    it('omits the price when the carrier accepts the listed one', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Postularme')).toBeTruthy());
+      fireEvent.press(getByText('Postularme'));
+      fireEvent.press(getByText('Enviar postulación'));
+
+      await waitFor(() =>
+        expect(postulationsApi.create).toHaveBeenCalledWith('l1', {
+          message: undefined,
+          proposedPrice: undefined,
+        }),
+      );
+    });
+
+    it('sends the typed message and proposed price as a number', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      const { getByText, getByPlaceholderText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Postularme')).toBeTruthy());
+      fireEvent.press(getByText('Postularme'));
+      fireEvent.changeText(
+        getByPlaceholderText('Ej., tengo camión refrigerado disponible'),
+        'Tengo semi disponible',
+      );
+      fireEvent.changeText(getByPlaceholderText('Mayor a 50000'), '60000');
+      fireEvent.press(getByText('Enviar postulación'));
+
+      await waitFor(() =>
+        expect(postulationsApi.create).toHaveBeenCalledWith('l1', {
+          message: 'Tengo semi disponible',
+          proposedPrice: 60000,
+        }),
+      );
+    });
+
+    it('surfaces the server rejection of a too-low price', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+      (postulationsApi.create as jest.Mock).mockRejectedValue({
+        response: { data: { message: 'El precio propuesto debe ser mayor al precio listado ($50000).' } },
+      });
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Postularme')).toBeTruthy());
+      fireEvent.press(getByText('Postularme'));
+      fireEvent.press(getByText('Enviar postulación'));
+
+      await waitFor(() =>
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Error',
+          'El precio propuesto debe ser mayor al precio listado ($50000).',
+        ),
+      );
+      alertSpy.mockRestore();
+    });
+
+    it('shows the existing postulation instead of the postulate button', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+      (postulationsApi.listMine as jest.Mock).mockResolvedValue({
+        data: [{ id: 'p1', loadId: 'l1', transporterId: 'carrier1', status: 'PENDING', proposedPrice: 60000 }],
+      });
+
+      const { getByText, queryByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Tu postulación')).toBeTruthy());
+      expect(queryByText('Postularme')).toBeNull();
+      expect(getByText('Pendiente')).toBeTruthy();
+    });
+
+    it('offers to accept a shipper counter-offer', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+      (postulationsApi.listMine as jest.Mock).mockResolvedValue({
+        data: [{
+          id: 'p1', loadId: 'l1', transporterId: 'carrier1', status: 'NEGOTIATING',
+          counterOfferPrice: 55000, lastOfferBy: 'CARGO_GENERATOR',
+        }],
+      });
+      (postulationsApi.acceptOffer as jest.Mock).mockResolvedValue({ data: {} });
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Aceptar contra-oferta')).toBeTruthy());
+      fireEvent.press(getByText('Aceptar contra-oferta'));
+
+      await waitFor(() => expect(postulationsApi.acceptOffer).toHaveBeenCalledWith('p1'));
+    });
+
+    it('does not offer to accept the carrier own counter-offer', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+      (postulationsApi.listMine as jest.Mock).mockResolvedValue({
+        data: [{
+          id: 'p1', loadId: 'l1', transporterId: 'carrier1', status: 'NEGOTIATING',
+          counterOfferPrice: 70000, lastOfferBy: 'TRANSPORTER',
+        }],
+      });
+
+      const { getByText, queryByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Tu postulación')).toBeTruthy());
+      expect(queryByText('Aceptar contra-oferta')).toBeNull();
+    });
+
+    it('treats a withdrawn postulation as none, so the carrier can retry', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+      (postulationsApi.listMine as jest.Mock).mockResolvedValue({
+        data: [{ id: 'p1', loadId: 'l1', transporterId: 'carrier1', status: 'WITHDRAWN' }],
+      });
+
+      const { getByText, queryByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Postularme')).toBeTruthy());
+      expect(queryByText('Tu postulación')).toBeNull();
+    });
+
+    it('ignores postulations belonging to other loads', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+      (postulationsApi.listMine as jest.Mock).mockResolvedValue({
+        data: [{ id: 'p9', loadId: 'other-load', transporterId: 'carrier1', status: 'PENDING' }],
+      });
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Postularme')).toBeTruthy());
+    });
+
+    it('does not query postulations for a shipper', async () => {
+      mockUser = { id: 'shipper1', role: 'CARGO_GENERATOR' };
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+      // El endpoint es TRANSPORTER-only: llamarlo como shipper daría 403.
+      expect(postulationsApi.listMine).not.toHaveBeenCalled();
+    });
   });
 });

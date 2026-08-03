@@ -1,26 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { loadsApi, tripsApi } from '../../services/api';
+import { loadsApi, tripsApi, postulationsApi } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import {
   formatCurrency,
   getSolicitudStageColor,
   getSolicitudStageLabel,
+  getStatusLabel,
 } from '../../lib/labels';
-import { Load } from '../../types';
+import { Load, Postulation } from '../../types';
 
 export default function LoadDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
   const user = useAuthStore((s) => s.user);
   const [load, setLoad] = useState<Load | null>(null);
+  const [myPostulation, setMyPostulation] = useState<Postulation | null>(null);
+  const [postulating, setPostulating] = useState(false);
+  const [proposedPrice, setProposedPrice] = useState('');
+  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -35,19 +41,81 @@ export default function LoadDetailScreen({ route, navigation }: any) {
     }
   };
 
-  useEffect(() => { fetchLoad(); }, [id]);
+  // Sólo el transportista tiene postulaciones propias; el endpoint es TRANSPORTER-only.
+  const fetchMyPostulation = useCallback(async () => {
+    if (user?.role !== 'TRANSPORTER') return;
+    try {
+      const res = await postulationsApi.listMine();
+      const list: Postulation[] = res.data?.postulations ?? res.data ?? [];
+      // Una retirada cuenta como "sin postulación": el backend revive el mismo
+      // registro si el transportista se vuelve a postular.
+      setMyPostulation(
+        list.find((p) => p.loadId === id && p.status !== 'WITHDRAWN') ?? null,
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  }, [id, user?.role]);
 
-  const handleAccept = async () => {
+  useEffect(() => { fetchLoad(); }, [id]);
+  useEffect(() => { fetchMyPostulation(); }, [fetchMyPostulation]);
+
+  const handlePostulate = async () => {
     setActionLoading(true);
     try {
-      await tripsApi.accept(id);
-      Alert.alert('Éxito', '¡Carga aceptada!');
-      navigation.goBack();
+      // El backend rechaza un precio menor o igual al listado: vacío significa
+      // "acepto el precio publicado".
+      await postulationsApi.create(id, {
+        message: message.trim() || undefined,
+        proposedPrice: proposedPrice.trim() ? Number(proposedPrice) : undefined,
+      });
+      Alert.alert('Postulación enviada', 'El publicador va a revisar tu propuesta.');
+      setPostulating(false);
+      setProposedPrice('');
+      setMessage('');
+      fetchMyPostulation();
+      fetchLoad();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Error al aceptar');
+      Alert.alert('Error', err.response?.data?.message || 'Error al postularte');
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleAcceptCounterOffer = async () => {
+    if (!myPostulation) return;
+    setActionLoading(true);
+    try {
+      await postulationsApi.acceptOffer(myPostulation.id);
+      Alert.alert('Listo', 'Aceptaste la contra-oferta.');
+      fetchMyPostulation();
+      fetchLoad();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Error al aceptar la oferta');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!myPostulation) return;
+    Alert.alert('Retirar postulación', '¿Estás seguro?', [
+      { text: 'No' },
+      {
+        text: 'Sí', style: 'destructive', onPress: async () => {
+          setActionLoading(true);
+          try {
+            await postulationsApi.withdraw(myPostulation.id);
+            fetchMyPostulation();
+            fetchLoad();
+          } catch (err: any) {
+            Alert.alert('Error', err.response?.data?.message || 'Error');
+          } finally {
+            setActionLoading(false);
+          }
+        },
+      },
+    ]);
   };
 
   const handleCancel = async () => {
@@ -205,14 +273,90 @@ export default function LoadDetailScreen({ route, navigation }: any) {
       </View>
 
       <View style={styles.actions}>
-        {user?.role === 'TRANSPORTER' && load.status === 'PUBLISHED' && (
+        {/* El transportista no toma la carga directo: se postula y el publicador
+            decide. `POST /trips/accept/:loadId` quedó como override de ADMIN. */}
+        {user?.role === 'TRANSPORTER' && load.status === 'PUBLISHED' && !myPostulation && !postulating && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#22c55e' }]}
-            onPress={handleAccept}
+            onPress={() => setPostulating(true)}
             disabled={actionLoading}
           >
-            <Text style={styles.actionBtnText}>Aceptar Carga</Text>
+            <Text style={styles.actionBtnText}>Postularme</Text>
           </TouchableOpacity>
+        )}
+
+        {postulating && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tu propuesta</Text>
+            <Text style={styles.gridLabel}>Mensaje (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              value={message}
+              onChangeText={setMessage}
+              placeholder="Ej., tengo camión refrigerado disponible"
+              multiline
+            />
+            <Text style={styles.gridLabel}>Precio propuesto (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              value={proposedPrice}
+              onChangeText={setProposedPrice}
+              placeholder={`Mayor a ${load.price}`}
+              keyboardType="numeric"
+            />
+            <Text style={styles.helper}>
+              Dejalo vacío si aceptás el precio publicado de {formatCurrency(load.price)}.
+            </Text>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#22c55e', marginTop: 12 }]}
+              onPress={handlePostulate}
+              disabled={actionLoading}
+            >
+              <Text style={styles.actionBtnText}>
+                {actionLoading ? 'Enviando...' : 'Enviar postulación'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setPostulating(false)} disabled={actionLoading}>
+              <Text style={styles.cancelLink}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {myPostulation && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tu postulación</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Estado</Text>
+            </View>
+            <Text style={styles.infoValue}>{getStatusLabel(myPostulation.status)}</Text>
+            {myPostulation.proposedPrice != null && (
+              <Text style={styles.infoLabel}>
+                Propusiste {formatCurrency(myPostulation.proposedPrice)}
+              </Text>
+            )}
+
+            {myPostulation.counterOfferPrice != null &&
+              myPostulation.lastOfferBy === 'CARGO_GENERATOR' && (
+                <>
+                  <Text style={styles.counterOffer}>
+                    El publicador propuso {formatCurrency(myPostulation.counterOfferPrice)}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: '#22c55e', marginTop: 10 }]}
+                    onPress={handleAcceptCounterOffer}
+                    disabled={actionLoading}
+                  >
+                    <Text style={styles.actionBtnText}>Aceptar contra-oferta</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+            {myPostulation.status !== 'ACCEPTED' && (
+              <TouchableOpacity onPress={handleWithdraw} disabled={actionLoading}>
+                <Text style={styles.withdrawLink}>Retirar postulación</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
         {user?.role === 'TRANSPORTER' && load.trip?.status === 'ACCEPTED' && load.trip?.carrierId === user.id && (
@@ -271,6 +415,17 @@ const styles = StyleSheet.create({
   gridItem: { width: '45%' },
   gridLabel: { fontSize: 12, color: '#9ca3af' },
   gridValue: { fontSize: 15, fontWeight: '600', marginTop: 2 },
+  input: {
+    borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, marginTop: 4,
+  },
+  helper: { fontSize: 11, color: '#9ca3af', marginTop: 6 },
+  counterOffer: {
+    fontSize: 14, fontWeight: '600', color: '#92400e', marginTop: 10,
+    backgroundColor: '#fffbeb', borderRadius: 8, padding: 10,
+  },
+  cancelLink: { textAlign: 'center', color: '#6b7280', fontSize: 14, marginTop: 12 },
+  withdrawLink: { textAlign: 'center', color: '#ef4444', fontSize: 14, marginTop: 12 },
   actions: { gap: 10, marginBottom: 40 },
   actionBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   actionBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
