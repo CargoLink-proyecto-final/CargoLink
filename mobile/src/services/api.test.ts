@@ -6,6 +6,8 @@ import api, {
   tripsApi,
   messagesApi,
   ratingsApi,
+  usersApi,
+  postulationsApi,
 } from './api';
 
 // The fake axios instance lives inside the (hoisted) jest.mock factory so it is
@@ -169,9 +171,9 @@ describe('api service', () => {
   });
 
   describe('messagesApi', () => {
-    it('send posts content to /messages/:receiverId', () => {
-      messagesApi.send('u2', 'hello');
-      expect(fakeInstance.post).toHaveBeenCalledWith('/messages/u2', {
+    it('send posts content to /messages/trip/:tripId', () => {
+      messagesApi.send('t1', 'hello');
+      expect(fakeInstance.post).toHaveBeenCalledWith('/messages/trip/t1', {
         content: 'hello',
       });
     });
@@ -181,16 +183,83 @@ describe('api service', () => {
       expect(fakeInstance.get).toHaveBeenCalledWith('/messages/conversations');
     });
 
-    it('getConversation gets /messages/conversation/:userId with params', () => {
-      messagesApi.getConversation('u2', { page: 1 });
-      expect(fakeInstance.get).toHaveBeenCalledWith('/messages/conversation/u2', {
+    it('getTripMessages gets /messages/trip/:tripId with params', () => {
+      messagesApi.getTripMessages('t1', { page: 1 });
+      expect(fakeInstance.get).toHaveBeenCalledWith('/messages/trip/t1', {
         params: { page: 1 },
       });
     });
 
-    it('markAsRead patches /messages/read/:senderId', () => {
-      messagesApi.markAsRead('u2');
-      expect(fakeInstance.patch).toHaveBeenCalledWith('/messages/read/u2');
+    it('markAsRead patches /messages/trip/:tripId/read', () => {
+      messagesApi.markAsRead('t1');
+      expect(fakeInstance.patch).toHaveBeenCalledWith('/messages/trip/t1/read');
+    });
+
+    it('getUnreadCount gets /messages/unread-count', () => {
+      messagesApi.getUnreadCount();
+      expect(fakeInstance.get).toHaveBeenCalledWith('/messages/unread-count');
+    });
+  });
+
+  describe('usersApi', () => {
+    it('getMe gets /users/me', () => {
+      usersApi.getMe();
+      expect(fakeInstance.get).toHaveBeenCalledWith('/users/me');
+    });
+
+    it('updateMe patches /users/me with the given fields', () => {
+      const data = { industry: 'Agroindustria' };
+      usersApi.updateMe(data);
+      expect(fakeInstance.patch).toHaveBeenCalledWith('/users/me', data);
+    });
+  });
+
+  describe('postulationsApi', () => {
+    it('create posts to /loads/:loadId/postulations', () => {
+      const data = { message: 'tengo camión', proposedPrice: 145000 };
+      postulationsApi.create('l1', data);
+      expect(fakeInstance.post).toHaveBeenCalledWith('/loads/l1/postulations', data);
+    });
+
+    it('listForLoad gets /loads/:loadId/postulations', () => {
+      postulationsApi.listForLoad('l1');
+      expect(fakeInstance.get).toHaveBeenCalledWith('/loads/l1/postulations');
+    });
+
+    it('listMine gets /postulations/my with an optional status filter', () => {
+      postulationsApi.listMine('PENDING');
+      expect(fakeInstance.get).toHaveBeenCalledWith('/postulations/my', {
+        params: { status: 'PENDING' },
+      });
+    });
+
+    it('listMine omits params when no status is given', () => {
+      postulationsApi.listMine();
+      expect(fakeInstance.get).toHaveBeenCalledWith('/postulations/my', {
+        params: undefined,
+      });
+    });
+
+    it('accept posts to /postulations/:id/accept', () => {
+      postulationsApi.accept('p1');
+      expect(fakeInstance.post).toHaveBeenCalledWith('/postulations/p1/accept');
+    });
+
+    it('counterOffer posts the price to /postulations/:id/counter-offer', () => {
+      postulationsApi.counterOffer('p1', 150000);
+      expect(fakeInstance.post).toHaveBeenCalledWith('/postulations/p1/counter-offer', {
+        price: 150000,
+      });
+    });
+
+    it('acceptOffer posts to /postulations/:id/accept-offer', () => {
+      postulationsApi.acceptOffer('p1');
+      expect(fakeInstance.post).toHaveBeenCalledWith('/postulations/p1/accept-offer');
+    });
+
+    it('withdraw deletes /postulations/:id', () => {
+      postulationsApi.withdraw('p1');
+      expect(fakeInstance.delete).toHaveBeenCalledWith('/postulations/p1');
     });
   });
 

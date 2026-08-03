@@ -110,7 +110,11 @@ export default function AppNavigator() {
             <Stack.Screen
               name="Chat"
               component={ChatScreen}
-              options={{ headerShown: true, title: 'Chat' }}
+              options={({ route }: any) => ({
+                headerShown: true,
+                title: route.params?.name || 'Chat',
+                headerBackTitle: 'Mensajes',
+              })}
             />
             <Stack.Screen
               name="CreateLoad"

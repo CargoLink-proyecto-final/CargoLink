@@ -56,6 +56,44 @@ El script dibuja la marca con la paleta de `frontend/tailwind.config.ts`
 (`primary-600 #2563EB`, `accent-400 #F59E0B`) y escribe los PNG en `assets/`.
 Para cambiar el logo, editar `drawTruck()` y volver a correrlo.
 
+## Chat en tiempo real
+
+`ChatScreen` y `ChatListScreen` se conectan al gateway de WebSockets del backend
+(`backend/src/messages/messages.gateway.ts`, namespace `/chat`) vía
+`src/services/socket.ts`.
+
+- Las conversaciones son **por viaje** (`tripId`), no entre usuarios sueltos.
+- El gateway autentica con `handshake.query.userId` y mete al socket en una room
+  por cada viaje del usuario — el cliente sólo escucha `newMessage`.
+- Si el socket no conecta, `ChatScreen` cae a polling cada 3s y muestra un aviso.
+  El `POST /messages/trip/:tripId` no dispara broadcast, así que ese camino sólo
+  se usa como fallback.
+- El listener global (`src/hooks/useMessageNotifications.ts`) dispara una
+  notificación local por los mensajes que llegan fuera de la conversación abierta.
+
+## Notificaciones push
+
+Las **locales** funcionan hoy sin configuración: las emite el propio dispositivo
+cuando llega un mensaje por el socket.
+
+Las **remotas** (app cerrada) necesitan dos cosas que todavía no existen:
+
+1. **Un projectId de EAS.** `eas init` no puede escribir en un `app.config.js`
+   dinámico, así que el id entra por env:
+
+   ```bash
+   npx eas-cli login
+   npx eas-cli init          # imprime el projectId
+   echo "EAS_PROJECT_ID=<el-id>" >> .env
+   ```
+
+   Sin esa variable `registerForPushNotifications()` devuelve `null` y loguea un
+   warning, en vez de romper.
+
+2. **Soporte en el backend.** Hoy no hay dónde guardar el token (no existe
+   columna en `User`) ni desde dónde emitir pushes. El hook ya pide el token y lo
+   loguea; falta el endpoint que lo persista y el sender contra la Expo Push API.
+
 ## Mapas
 
 `TrackingScreen` usa `PROVIDER_DEFAULT`: Apple Maps en iOS (sin credenciales) y
@@ -64,13 +102,15 @@ Google Maps en Android, que **sí** necesita `GOOGLE_MAPS_API_KEY_ANDROID` en el
 
 ## Pendientes conocidos
 
-- **Chat por polling.** `ChatScreen` refetchea cada 3s en vez de usar el gateway
-  de WebSockets (`backend/src/messages/messages.gateway.ts`, namespace `/chat`).
-  `socket.io-client` ya está instalado pero sin usar.
-- **Push notifications sin proyecto EAS.** `registerForPushNotifications()`
-  devuelve `null` hasta que se corra `eas init` y exista un `projectId`.
+- **Push remotas incompletas.** Falta el `EAS_PROJECT_ID` y, sobre todo, el
+  soporte del backend (persistir el token + emitir). Ver § "Notificaciones push".
+- **Sin flujo de postulaciones.** El transportista todavía toma la carga directo
+  con `POST /trips/accept/:loadId`; el web usa el ciclo de postulación con
+  negociación de precio (`postulationsApi` ya está en `src/services/api.ts`, sin
+  pantalla que lo consuma).
+- **Direcciones a mano.** `CreateLoadScreen` pide lat/lng tipeadas; el web
+  geocodifica con Nominatim y tiene un picker sobre el mapa.
 - **Testing Library pineada en v13.** La v14 volvió `render()` asíncrono; migrar
-  requiere `await` en los 12 archivos de test de pantallas.
-- **Paridad con el web.** Las mejoras de cargas mergeadas en `develop`
-  (insights de postulaciones, presupuesto máximo, industria, zona del carrier)
-  todavía no están reflejadas en las pantallas mobile.
+  requiere `await` en los archivos de test de pantallas.
+- **Tipos de carga duplicados.** `src/constants/cargo.ts` es copia manual de la
+  lista del web: si se agrega un tipo allá, hay que agregarlo acá.

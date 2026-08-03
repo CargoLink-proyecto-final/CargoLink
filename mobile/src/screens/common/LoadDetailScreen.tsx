@@ -10,6 +10,11 @@ import {
 } from 'react-native';
 import { loadsApi, tripsApi } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
+import {
+  formatCurrency,
+  getSolicitudStageColor,
+  getSolicitudStageLabel,
+} from '../../lib/labels';
 import { Load } from '../../types';
 
 export default function LoadDetailScreen({ route, navigation }: any) {
@@ -101,21 +106,33 @@ export default function LoadDetailScreen({ route, navigation }: any) {
     return <View style={styles.center}><Text>Carga no encontrada</Text></View>;
   }
 
-  const statusColor: Record<string, string> = {
-    PUBLISHED: '#3b82f6', ASSIGNED: '#f59e0b', IN_TRANSIT: '#f97316',
-    DELIVERED: '#22c55e', CANCELLED: '#ef4444',
-  };
+  const stageColor = getSolicitudStageColor(load.status);
+  const interestedCount = load.pendingPostulationsCount ?? 0;
+  const hasDimensions =
+    load.heightCm != null || load.widthCm != null || load.lengthCm != null;
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>{load.title}</Text>
-        <View style={[styles.badge, { backgroundColor: (statusColor[load.status] || '#6b7280') + '20' }]}>
-          <Text style={[styles.badgeText, { color: statusColor[load.status] }]}>{load.status}</Text>
+        <View style={[styles.badge, { backgroundColor: stageColor + '20' }]}>
+          <Text style={[styles.badgeText, { color: stageColor }]}>
+            {getSolicitudStageLabel(load.status)}
+          </Text>
         </View>
       </View>
 
       {load.description && <Text style={styles.desc}>{load.description}</Text>}
+
+      {user?.role === 'TRANSPORTER' && load.status === 'PUBLISHED' && interestedCount > 0 && (
+        <View style={styles.interestBanner}>
+          <Text style={styles.interestText}>
+            {interestedCount === 1
+              ? 'Hay 1 transportista interesado en esta carga.'
+              : `Hay ${interestedCount} transportistas interesados en esta carga.`}
+          </Text>
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Ruta</Text>
@@ -142,23 +159,49 @@ export default function LoadDetailScreen({ route, navigation }: any) {
           </View>
           <View style={styles.gridItem}>
             <Text style={styles.gridLabel}>Precio</Text>
-            <Text style={[styles.gridValue, { color: '#2563eb' }]}>${load.price.toLocaleString()}</Text>
+            <Text style={[styles.gridValue, { color: '#2563eb' }]}>{formatCurrency(load.price)}</Text>
           </View>
-          {load.volume && (
+          {load.maxBudget != null && (
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Presupuesto máx.</Text>
+              <Text style={styles.gridValue}>{formatCurrency(load.maxBudget)}</Text>
+            </View>
+          )}
+          {load.volume != null && (
             <View style={styles.gridItem}>
               <Text style={styles.gridLabel}>Volumen</Text>
               <Text style={styles.gridValue}>{load.volume} m3</Text>
+            </View>
+          )}
+          {load.packageCount != null && (
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Bultos</Text>
+              <Text style={styles.gridValue}>{load.packageCount}</Text>
+            </View>
+          )}
+          {hasDimensions && (
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Dimensiones</Text>
+              <Text style={styles.gridValue}>
+                {[load.heightCm, load.widthCm, load.lengthCm]
+                  .map((d) => (d != null ? d : '—'))
+                  .join(' × ')}{' '}
+                cm
+              </Text>
             </View>
           )}
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Generador de carga</Text>
+        <Text style={styles.sectionTitle}>Publicador de carga</Text>
         <Text style={styles.infoValue}>
           {load.shipper?.firstName} {load.shipper?.lastName}
         </Text>
         {load.shipper?.companyName && <Text style={styles.infoLabel}>{load.shipper.companyName}</Text>}
+        {load.shipper?.industry && (
+          <Text style={styles.infoLabel}>Rubro: {load.shipper.industry}</Text>
+        )}
       </View>
 
       <View style={styles.actions}>
@@ -214,6 +257,11 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   badgeText: { fontSize: 12, fontWeight: '600' },
   desc: { fontSize: 14, color: '#6b7280', marginBottom: 16 },
+  interestBanner: {
+    backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe',
+    borderRadius: 12, padding: 12, marginBottom: 12,
+  },
+  interestText: { fontSize: 13, fontWeight: '500', color: '#1e40af' },
   section: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 10, color: '#374151' },
   infoRow: { marginBottom: 8 },

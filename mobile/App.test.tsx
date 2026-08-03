@@ -15,6 +15,19 @@ jest.mock('expo-constants', () => ({
   expoGoConfig: null,
 }));
 
+// Con sesión hidratada el árbol engancha el listener global de mensajes. Sin
+// estos mocks el smoke test abriría un websocket real contra localhost:3001 y
+// dejaría el handle colgado al terminar la suite.
+jest.mock('./src/services/socket', () => ({
+  getChatSocket: jest.fn(() => ({ on: jest.fn(), off: jest.fn(), connected: false })),
+  disconnectChatSocket: jest.fn(),
+}));
+
+jest.mock('./src/services/notifications', () => ({
+  registerForPushNotifications: jest.fn().mockResolvedValue(null),
+  scheduleLocalNotification: jest.fn(),
+}));
+
 describe('App', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();

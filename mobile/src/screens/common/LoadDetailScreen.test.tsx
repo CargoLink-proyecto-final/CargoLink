@@ -71,7 +71,98 @@ describe('LoadDetailScreen', () => {
     expect(getByText('Sam Shipper')).toBeTruthy();
     expect(getByText('Acme')).toBeTruthy();
     expect(getByText('1200 kg')).toBeTruthy();
-    expect(getByText('PUBLISHED')).toBeTruthy();
+    // El badge muestra el stage unificado de la solicitud, no el enum crudo.
+    expect(getByText('Creado')).toBeTruthy();
+  });
+
+  it('renders the package details, max budget and shipper industry', async () => {
+    (loadsApi.getById as jest.Mock).mockResolvedValue({
+      data: {
+        ...baseLoad,
+        maxBudget: 65000,
+        packageCount: 12,
+        heightCm: 120,
+        widthCm: 80,
+        lengthCm: 100,
+        shipper: { ...baseLoad.shipper, industry: 'Agroindustria' },
+      },
+    });
+
+    const { getByText } = render(
+      <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+    );
+
+    await waitFor(() => expect(getByText('12')).toBeTruthy());
+    expect(getByText('120 × 80 × 100 cm')).toBeTruthy();
+    expect(getByText('Presupuesto máx.')).toBeTruthy();
+    expect(getByText('Rubro: Agroindustria')).toBeTruthy();
+  });
+
+  it('renders a dash for the dimensions that are missing', async () => {
+    (loadsApi.getById as jest.Mock).mockResolvedValue({
+      data: { ...baseLoad, heightCm: 120 },
+    });
+
+    const { getByText } = render(
+      <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+    );
+
+    await waitFor(() => expect(getByText('120 × — × — cm')).toBeTruthy());
+  });
+
+  it('omits the optional blocks when the load has no package data', async () => {
+    (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+
+    const { queryByText, getByText } = render(
+      <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+    );
+
+    await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+    expect(queryByText('Bultos')).toBeNull();
+    expect(queryByText('Dimensiones')).toBeNull();
+    expect(queryByText('Presupuesto máx.')).toBeNull();
+  });
+
+  it('tells a transporter how many others are interested in a published load', async () => {
+    (loadsApi.getById as jest.Mock).mockResolvedValue({
+      data: { ...baseLoad, pendingPostulationsCount: 3 },
+    });
+
+    const { getByText } = render(
+      <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+    );
+
+    await waitFor(() =>
+      expect(getByText('Hay 3 transportistas interesados en esta carga.')).toBeTruthy(),
+    );
+  });
+
+  it('uses the singular wording for a single interested transporter', async () => {
+    (loadsApi.getById as jest.Mock).mockResolvedValue({
+      data: { ...baseLoad, pendingPostulationsCount: 1 },
+    });
+
+    const { getByText } = render(
+      <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+    );
+
+    await waitFor(() =>
+      expect(getByText('Hay 1 transportista interesado en esta carga.')).toBeTruthy(),
+    );
+  });
+
+  it('hides the interest banner from the shipper', async () => {
+    mockUser = { id: 'shipper1', role: 'CARGO_GENERATOR' };
+    (loadsApi.getById as jest.Mock).mockResolvedValue({
+      data: { ...baseLoad, pendingPostulationsCount: 3 },
+    });
+
+    const { queryByText, getByText } = render(
+      <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+    );
+
+    await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+    expect(queryByText('Hay 3 transportistas interesados en esta carga.')).toBeNull();
   });
 
   it('shows "Carga no encontrada" when the load is missing', async () => {

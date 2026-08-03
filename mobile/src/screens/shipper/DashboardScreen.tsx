@@ -9,6 +9,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadsApi } from '../../services/api';
+import {
+  formatCurrency,
+  getSolicitudStageColor,
+  getSolicitudStageLabel,
+} from '../../lib/labels';
 import { Load } from '../../types';
 
 export default function ShipperDashboard({ navigation }: any) {
@@ -39,14 +44,12 @@ export default function ShipperDashboard({ navigation }: any) {
     published: loads.filter((l) => l.status === 'PUBLISHED').length,
     inTransit: loads.filter((l) => l.status === 'IN_TRANSIT').length,
     delivered: loads.filter((l) => l.status === 'DELIVERED').length,
-  };
-
-  const statusColor: Record<string, string> = {
-    PUBLISHED: '#3b82f6',
-    ASSIGNED: '#f59e0b',
-    IN_TRANSIT: '#f97316',
-    DELIVERED: '#22c55e',
-    CANCELLED: '#ef4444',
+    // Total de ofertas esperando respuesta en todas las cargas del publicador:
+    // es lo que le dice si tiene algo que atender hoy.
+    pendingPostulations: loads.reduce(
+      (acc, l) => acc + (l.pendingPostulationsCount ?? 0),
+      0,
+    ),
   };
 
   return (
@@ -67,6 +70,16 @@ export default function ShipperDashboard({ navigation }: any) {
         ))}
       </View>
 
+      {stats.pendingPostulations > 0 && (
+        <View style={styles.pendingBanner}>
+          <Text style={styles.pendingText}>
+            {stats.pendingPostulations === 1
+              ? 'Tenés 1 postulación esperando respuesta.'
+              : `Tenés ${stats.pendingPostulations} postulaciones esperando respuesta.`}
+          </Text>
+        </View>
+      )}
+
       <FlatList
         data={loads}
         keyExtractor={(item) => item.id}
@@ -78,15 +91,24 @@ export default function ShipperDashboard({ navigation }: any) {
           >
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-              <View style={[styles.badge, { backgroundColor: statusColor[item.status] + '20' }]}>
-                <Text style={[styles.badgeText, { color: statusColor[item.status] }]}>{item.status}</Text>
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: getSolicitudStageColor(item.status) + '20' },
+                ]}
+              >
+                <Text
+                  style={[styles.badgeText, { color: getSolicitudStageColor(item.status) }]}
+                >
+                  {getSolicitudStageLabel(item.status)}
+                </Text>
               </View>
             </View>
             <Text style={styles.cardRoute} numberOfLines={1}>
               {item.originAddress} → {item.destAddress}
             </Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardPrice}>${item.price.toLocaleString()}</Text>
+              <Text style={styles.cardPrice}>{formatCurrency(item.price)}</Text>
               <Text style={styles.cardWeight}>{item.weight} kg</Text>
             </View>
           </TouchableOpacity>
@@ -109,6 +131,11 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 20, fontWeight: 'bold' },
   statLabel: { fontSize: 11, color: '#6b7280', marginTop: 2 },
+  pendingBanner: {
+    backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe',
+    borderRadius: 10, padding: 12, marginBottom: 12,
+  },
+  pendingText: { fontSize: 13, fontWeight: '600', color: '#1e40af' },
   card: {
     backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,

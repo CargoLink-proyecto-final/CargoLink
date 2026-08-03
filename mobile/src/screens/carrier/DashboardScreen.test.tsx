@@ -46,7 +46,7 @@ describe('CarrierDashboard', () => {
     await waitFor(() => expect(mockedTripsApi.getMy).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Cemento a Rosario')).toBeTruthy();
     expect(screen.getByText('Buenos Aires → Rosario')).toBeTruthy();
-    expect(screen.getByText('Generador de carga: Ana Diaz')).toBeTruthy();
+    expect(screen.getByText('Publicador de carga: Ana Diaz')).toBeTruthy();
   });
 
   it('computes trip stat counters by status', async () => {

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { tripsApi } from '../../services/api';
+import { getSolicitudStageColor, getSolicitudStageLabel } from '../../lib/labels';
 import { Trip } from '../../types';
 
 export default function CarrierDashboard({ navigation }: any) {
@@ -30,13 +31,6 @@ export default function CarrierDashboard({ navigation }: any) {
     setRefreshing(true);
     await fetchTrips();
     setRefreshing(false);
-  };
-
-  const statusColor: Record<string, string> = {
-    ACCEPTED: '#3b82f6',
-    IN_PROGRESS: '#f97316',
-    COMPLETED: '#22c55e',
-    CANCELLED: '#ef4444',
   };
 
   const stats = {
@@ -75,15 +69,24 @@ export default function CarrierDashboard({ navigation }: any) {
           >
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle} numberOfLines={1}>{item.load?.title}</Text>
-              <View style={[styles.badge, { backgroundColor: (statusColor[item.status] || '#6b7280') + '20' }]}>
-                <Text style={[styles.badgeText, { color: statusColor[item.status] || '#6b7280' }]}>{item.status}</Text>
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: getSolicitudStageColor(item.status) + '20' },
+                ]}
+              >
+                <Text
+                  style={[styles.badgeText, { color: getSolicitudStageColor(item.status) }]}
+                >
+                  {getSolicitudStageLabel(item.status)}
+                </Text>
               </View>
             </View>
             <Text style={styles.cardRoute} numberOfLines={1}>
               {item.load?.originAddress} → {item.load?.destAddress}
             </Text>
             <Text style={styles.cardShipper}>
-              Generador de carga: {item.load?.shipper?.firstName} {item.load?.shipper?.lastName}
+              Publicador de carga: {item.load?.shipper?.firstName} {item.load?.shipper?.lastName}
             </Text>
           </TouchableOpacity>
         )}

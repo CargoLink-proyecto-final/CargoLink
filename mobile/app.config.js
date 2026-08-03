@@ -74,6 +74,12 @@ module.exports = () => ({
       // Leído en runtime desde src/config/env.ts. Si queda undefined, la app
       // deduce el host de la máquina de desarrollo desde el server de Metro.
       apiUrl: process.env.EXPO_PUBLIC_API_URL,
+      // `eas init` no puede escribir en un app.config.js dinámico, así que el
+      // projectId entra por env. Sin él, getExpoPushTokenAsync no puede emitir
+      // token y registerForPushNotifications() devuelve null (ver README).
+      eas: {
+        projectId: process.env.EAS_PROJECT_ID,
+      },
     },
   },
 });
