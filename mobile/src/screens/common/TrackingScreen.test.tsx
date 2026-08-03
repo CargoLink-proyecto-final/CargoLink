@@ -7,6 +7,7 @@ import { fetchRoute } from '../../services/routing';
 jest.mock('../../services/api', () => ({
   tripsApi: {
     getMy: jest.fn(),
+    getMyLoads: jest.fn(),
     updateLocation: jest.fn(),
   },
 }));
@@ -66,6 +67,8 @@ describe('TrackingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUser = { id: 'shipper1', role: 'CARGO_GENERATOR' };
+    (tripsApi.getMy as jest.Mock).mockResolvedValue({ data: { trips: [] } });
+    (tripsApi.getMyLoads as jest.Mock).mockResolvedValue({ data: { trips: [] } });
     (fetchRoute as jest.Mock).mockResolvedValue([
       { latitude: -34.6, longitude: -58.38 },
       { latitude: -31.4, longitude: -64.18 },
@@ -73,11 +76,11 @@ describe('TrackingScreen', () => {
   });
 
   it('fetches trips and renders the active trip in the list', async () => {
-    (tripsApi.getMy as jest.Mock).mockResolvedValue({ data: { trips: [trip] } });
+    (tripsApi.getMyLoads as jest.Mock).mockResolvedValue({ data: { trips: [trip] } });
 
     const { getByText } = render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
 
-    await waitFor(() => expect(tripsApi.getMy).toHaveBeenCalled());
+    await waitFor(() => expect(tripsApi.getMyLoads).toHaveBeenCalled());
     await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
     expect(getByText('1 viaje activo')).toBeTruthy();
     expect(getByText('Buenos Aires → Cordoba')).toBeTruthy();
@@ -85,7 +88,7 @@ describe('TrackingScreen', () => {
   });
 
   it('renders origin, destination and current-position markers from trip data', async () => {
-    (tripsApi.getMy as jest.Mock).mockResolvedValue({ data: { trips: [trip] } });
+    (tripsApi.getMyLoads as jest.Mock).mockResolvedValue({ data: { trips: [trip] } });
 
     const { getAllByText } = render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
 
@@ -97,7 +100,7 @@ describe('TrackingScreen', () => {
   });
 
   it('shows the empty state when there are no trips', async () => {
-    (tripsApi.getMy as jest.Mock).mockResolvedValue({ data: { trips: [] } });
+    (tripsApi.getMyLoads as jest.Mock).mockResolvedValue({ data: { trips: [] } });
 
     const { getByText } = render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
 
@@ -107,12 +110,32 @@ describe('TrackingScreen', () => {
 
   it('filters by IN_PROGRESS status for a TRANSPORTER', async () => {
     mockUser = { id: 'carrier1', role: 'TRANSPORTER' };
-    (tripsApi.getMy as jest.Mock).mockResolvedValue({ data: { trips: [] } });
 
     render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
 
     await waitFor(() =>
       expect(tripsApi.getMy).toHaveBeenCalledWith({ status: 'IN_PROGRESS' }),
+    );
+    expect(tripsApi.getMyLoads).not.toHaveBeenCalled();
+  });
+
+  // Los viajes propios están partidos por rol en el backend: `GET /trips/my` es
+  // TRANSPORTER-only y `GET /trips/my-loads` CARGO_GENERATOR-only. Llamar el que
+  // no corresponde devuelve 403 y deja la pantalla muda.
+  it('uses the shipper-only endpoint for a CARGO_GENERATOR', async () => {
+    render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => expect(tripsApi.getMyLoads).toHaveBeenCalled());
+    expect(tripsApi.getMy).not.toHaveBeenCalled();
+  });
+
+  it('filters by IN_PROGRESS for the shipper too', async () => {
+    // Sin el filtro entrarían viajes COMPLETED/CANCELLED, que la pantalla
+    // contaría como activos y dibujaría con la última posición del conductor.
+    render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() =>
+      expect(tripsApi.getMyLoads).toHaveBeenCalledWith({ status: 'IN_PROGRESS' }),
     );
   });
 });

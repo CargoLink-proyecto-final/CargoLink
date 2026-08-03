@@ -8,3 +8,12 @@ dist/
 *.mobileprovision
 *.orig.*
 web-build/
+
+# Proyectos nativos generados por `expo prebuild`. Se regeneran desde
+# app.config.js, por eso no se versionan (workflow CNG de Expo).
+/ios/
+/android/
+
+# Config local (URL del API, key de Google Maps). Versionamos .env.example.
+.env
+.env.local

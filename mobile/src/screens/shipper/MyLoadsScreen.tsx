@@ -10,23 +10,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { loadsApi } from '../../services/api';
-import { Load, LoadStatus } from '../../types';
-
-const STATUS_COLORS: Record<LoadStatus, string> = {
-  PUBLISHED: '#2563eb',
-  ASSIGNED: '#eab308',
-  IN_TRANSIT: '#f97316',
-  DELIVERED: '#16a34a',
-  CANCELLED: '#dc2626',
-};
-
-const STATUS_LABELS: Record<LoadStatus, string> = {
-  PUBLISHED: 'Publicada',
-  ASSIGNED: 'Asignada',
-  IN_TRANSIT: 'En tránsito',
-  DELIVERED: 'Entregada',
-  CANCELLED: 'Cancelada',
-};
+import {
+  formatCurrency,
+  getSolicitudStageColor,
+  getSolicitudStageLabel,
+} from '../../lib/labels';
+import { Load } from '../../types';
 
 export default function MyLoadsScreen({ navigation }: any) {
   const [loads, setLoads] = useState<Load[]>([]);
@@ -61,8 +50,9 @@ export default function MyLoadsScreen({ navigation }: any) {
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         renderItem={({ item }) => {
-          const statusColor = STATUS_COLORS[item.status] || '#6b7280';
-          const statusLabel = STATUS_LABELS[item.status] || item.status;
+          const statusColor = getSolicitudStageColor(item.status);
+          const statusLabel = getSolicitudStageLabel(item.status);
+          const pending = item.pendingPostulationsCount ?? 0;
 
           return (
             <TouchableOpacity
@@ -80,8 +70,24 @@ export default function MyLoadsScreen({ navigation }: any) {
                 {item.originAddress} → {item.destAddress}
               </Text>
 
+              {/* Insight de postulaciones: la señal más accionable para el
+                  publicador — le dice qué carga tiene ofertas esperando. */}
+              {pending > 0 && (
+                <TouchableOpacity
+                  style={styles.postulationsPill}
+                  onPress={() => navigation.navigate('LoadDetail', { id: item.id })}
+                >
+                  <Ionicons name="people" size={14} color="#1e40af" />
+                  <Text style={styles.postulationsText}>
+                    {pending === 1
+                      ? '1 postulación pendiente'
+                      : `${pending} postulaciones pendientes`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               <View style={styles.cardFooter}>
-                <Text style={styles.cardPrice}>${item.price.toLocaleString()}</Text>
+                <Text style={styles.cardPrice}>{formatCurrency(item.price)}</Text>
                 <View style={styles.cardMeta}>
                   <Text style={styles.cardMetaText}>{item.weight} kg</Text>
                   <Text style={styles.cardMetaText}>{item.cargoType}</Text>
@@ -141,6 +147,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cardRoute: { fontSize: 13, color: '#6b7280', marginTop: 6 },
+  postulationsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+  },
+  postulationsText: { fontSize: 12, fontWeight: '600', color: '#1e40af' },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',

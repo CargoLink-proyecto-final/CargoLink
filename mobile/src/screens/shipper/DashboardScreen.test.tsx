@@ -2,6 +2,7 @@ import React from 'react';
 import { render, fireEvent, waitFor, screen } from '@testing-library/react-native';
 import ShipperDashboard from './DashboardScreen';
 import { loadsApi } from '../../services/api';
+import { formatCurrency } from '../../lib/labels';
 
 jest.mock('../../services/api', () => ({
   loadsApi: {
@@ -53,8 +54,47 @@ describe('ShipperDashboard', () => {
     });
     expect(await screen.findByText('Electrónica a Córdoba')).toBeTruthy();
     expect(screen.getByText('Buenos Aires → Córdoba')).toBeTruthy();
-    expect(screen.getByText('$150,000')).toBeTruthy();
+    expect(screen.getByText(formatCurrency(150000))).toBeTruthy();
     expect(screen.getByText('5000 kg')).toBeTruthy();
+    // Stage unificado en vez del enum crudo.
+    expect(screen.getByText('Creado')).toBeTruthy();
+  });
+
+  it('adds up the pending postulations across every load', async () => {
+    mockedLoadsApi.getMy.mockResolvedValue({
+      data: {
+        loads: [
+          makeLoad({ id: 'a', pendingPostulationsCount: 2 }),
+          makeLoad({ id: 'b', pendingPostulationsCount: 3 }),
+          makeLoad({ id: 'c' }),
+        ],
+      },
+    } as any);
+
+    render(<ShipperDashboard navigation={navigation} />);
+
+    expect(
+      await screen.findByText('Tenés 5 postulaciones esperando respuesta.'),
+    ).toBeTruthy();
+  });
+
+  it('uses the singular wording for a single pending postulation', async () => {
+    mockedLoadsApi.getMy.mockResolvedValue({
+      data: { loads: [makeLoad({ pendingPostulationsCount: 1 })] },
+    } as any);
+
+    render(<ShipperDashboard navigation={navigation} />);
+
+    expect(await screen.findByText('Tenés 1 postulación esperando respuesta.')).toBeTruthy();
+  });
+
+  it('hides the banner when nothing is pending', async () => {
+    mockedLoadsApi.getMy.mockResolvedValue({ data: { loads: [makeLoad()] } } as any);
+
+    render(<ShipperDashboard navigation={navigation} />);
+
+    await screen.findByText('Electrónica a Córdoba');
+    expect(screen.queryByText(/esperando respuesta/)).toBeNull();
   });
 
   it('computes stat counters by load status', async () => {

@@ -2,6 +2,9 @@ import React from 'react';
 import { render, fireEvent, waitFor, screen } from '@testing-library/react-native';
 import MyLoadsScreen from './MyLoadsScreen';
 import { loadsApi } from '../../services/api';
+// Se importa el helper en vez de hardcodear "$ 250.000": el separador que mete
+// Intl con es-AR es un espacio no-quebrable y depende del ICU del runtime.
+import { formatCurrency } from '../../lib/labels';
 
 jest.mock('../../services/api', () => ({
   loadsApi: {
@@ -58,11 +61,42 @@ describe('MyLoadsScreen', () => {
 
     expect(await screen.findByText('Cemento a Rosario')).toBeTruthy();
     expect(screen.getByText('Buenos Aires → Rosario')).toBeTruthy();
-    expect(screen.getByText('$250,000')).toBeTruthy();
+    expect(screen.getByText(formatCurrency(250000))).toBeTruthy();
     expect(screen.getByText('8000 kg')).toBeTruthy();
     expect(screen.getByText('Construcción')).toBeTruthy();
-    // STATUS_LABELS mapping
-    expect(screen.getByText('En tránsito')).toBeTruthy();
+    // Stage unificado de la solicitud, igual que en el web.
+    expect(screen.getByText('Iniciado')).toBeTruthy();
+  });
+
+  it('surfaces the pending postulations count on the card', async () => {
+    mockedLoadsApi.getMy.mockResolvedValue({
+      data: { loads: [makeLoad({ pendingPostulationsCount: 4 })] },
+    } as any);
+
+    render(<MyLoadsScreen navigation={navigation} />);
+
+    expect(await screen.findByText('4 postulaciones pendientes')).toBeTruthy();
+  });
+
+  it('uses the singular wording for a single pending postulation', async () => {
+    mockedLoadsApi.getMy.mockResolvedValue({
+      data: { loads: [makeLoad({ pendingPostulationsCount: 1 })] },
+    } as any);
+
+    render(<MyLoadsScreen navigation={navigation} />);
+
+    expect(await screen.findByText('1 postulación pendiente')).toBeTruthy();
+  });
+
+  it('hides the postulations pill when there are none pending', async () => {
+    mockedLoadsApi.getMy.mockResolvedValue({
+      data: { loads: [makeLoad({ pendingPostulationsCount: 0 })] },
+    } as any);
+
+    render(<MyLoadsScreen navigation={navigation} />);
+
+    await screen.findByText('Cemento a Rosario');
+    expect(screen.queryByText(/postulaci/)).toBeNull();
   });
 
   it('shows a pluralized count of loads', async () => {

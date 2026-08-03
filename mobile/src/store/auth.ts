@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Role } from '../types';
+import { disconnectChatSocket } from '../services/socket';
 
 interface AuthState {
   user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role'> | null;
@@ -27,6 +28,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('user');
+    // El socket de chat está unido a las rooms del usuario que se va: si no lo
+    // cerramos, quien loguee después sigue recibiendo sus mensajes.
+    disconnectChatSocket();
     set({ user: null, token: null, isAuthenticated: false });
   },
 

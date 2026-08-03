@@ -1,10 +1,14 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 Notifications.setNotificationHandler({
+  // `shouldShowAlert` quedó deprecado: ahora se distingue entre el banner que
+  // aparece con la app abierta y la entrada en el centro de notificaciones.
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -37,8 +41,26 @@ export async function registerForPushNotifications(): Promise<string | null> {
     });
   }
 
-  const tokenData = await Notifications.getExpoPushTokenAsync();
-  return tokenData.data;
+  // Desde SDK 49 el token se emite contra un proyecto EAS concreto. Todavía no
+  // hay uno creado para CargoLink, así que si falta el projectId devolvemos null
+  // en vez de dejar que la excepción tumbe la pantalla que llamó a esta función.
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+
+  if (!projectId) {
+    console.warn(
+      'Sin projectId de EAS: no se puede pedir un push token. Correr `eas init` para habilitarlo.',
+    );
+    return null;
+  }
+
+  try {
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+    return tokenData.data;
+  } catch (error) {
+    console.warn('No se pudo obtener el push token', error);
+    return null;
+  }
 }
 
 export function scheduleLocalNotification(title: string, body: string) {
