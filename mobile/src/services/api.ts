@@ -37,8 +37,13 @@ export const loadsApi = {
 };
 
 export const tripsApi = {
+  // Override de ADMIN que saltea el ciclo de postulación: un TRANSPORTER recibe
+  // 403. Para postularse va `postulationsApi.create`.
   accept: (loadId: string) => api.post(`/trips/accept/${loadId}`),
+  // Los viajes propios están partidos por rol: `my` es TRANSPORTER-only y
+  // `my-loads` CARGO_GENERATOR-only. Llamar el que no corresponde da 403.
   getMy: (params?: any) => api.get('/trips/my', { params }),
+  getMyLoads: (params?: any) => api.get('/trips/my-loads', { params }),
   getById: (id: string) => api.get(`/trips/${id}`),
   start: (id: string) => api.patch(`/trips/${id}/start`),
   complete: (id: string) => api.patch(`/trips/${id}/complete`),

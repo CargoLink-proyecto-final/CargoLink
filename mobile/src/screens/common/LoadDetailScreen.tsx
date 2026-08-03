@@ -19,6 +19,19 @@ import {
 } from '../../lib/labels';
 import { Load, Postulation } from '../../types';
 
+/**
+ * `undefined` en vez de NaN cuando el campo quedó vacío o mal tipeado.
+ *
+ * Importa porque `NaN` viaja como `null` en JSON y `@IsOptional()` de
+ * class-validator deja pasar `null`: la postulación se crearía en silencio al
+ * precio publicado en vez de rechazar la entrada.
+ */
+function optionalNumber(value: string): number | undefined {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export default function LoadDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
   const user = useAuthStore((s) => s.user);
@@ -67,7 +80,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
       // "acepto el precio publicado".
       await postulationsApi.create(id, {
         message: message.trim() || undefined,
-        proposedPrice: proposedPrice.trim() ? Number(proposedPrice) : undefined,
+        proposedPrice: optionalNumber(proposedPrice),
       });
       Alert.alert('Postulación enviada', 'El publicador va a revisar tu propuesta.');
       setPostulating(false);

@@ -112,10 +112,12 @@ export default function AvailableLoadsScreen({ navigation }: any) {
                 )}
               </View>
             </View>
+            {/* Sin rubro acá: `findAll` no lo trae en el select del shipper
+                (backend/src/loads/loads.service.ts), sólo `findById`. Se muestra
+                en el detalle de la carga. */}
             <Text style={styles.cardShipper}>
               {item.shipper?.firstName} {item.shipper?.lastName}
               {item.shipper?.companyName ? ` - ${item.shipper.companyName}` : ''}
-              {item.shipper?.industry ? ` · ${item.shipper.industry}` : ''}
             </Text>
             {(item.pendingPostulationsCount ?? 0) > 0 && (
               <Text style={styles.cardInterest}>

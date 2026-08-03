@@ -30,7 +30,7 @@ interface LoadForm {
   widthCm?: string;
   lengthCm?: string;
   pickupDate: string;
-  deliveryDate?: string;
+  deliveryDate: string;
   price: string;
   maxBudget?: string;
 }
@@ -115,7 +115,7 @@ export default function CreateLoadScreen({ navigation }: any) {
         widthCm: showPackage ? optionalNumber(data.widthCm) : undefined,
         lengthCm: showPackage ? optionalNumber(data.lengthCm) : undefined,
         pickupDate: new Date(data.pickupDate).toISOString(),
-        deliveryDate: data.deliveryDate ? new Date(data.deliveryDate).toISOString() : undefined,
+        deliveryDate: new Date(data.deliveryDate).toISOString(),
         price: parseFloat(data.price),
         maxBudget: optionalNumber(data.maxBudget),
       });
@@ -245,11 +245,14 @@ export default function CreateLoadScreen({ navigation }: any) {
 
         <View style={styles.section}>
           <Field control={control} name="pickupDate" label="Fecha de Recogida (AAAA-MM-DD)" placeholder="2024-03-01" rules={{ required: true }} />
+          {/* Obligatoria: `CreateLoadDto.deliveryDate` es @IsDateString() sin
+              @IsOptional(), así que mandarla vacía devuelve 400. */}
           <Field
             control={control}
             name="deliveryDate"
-            label="Fecha deseada de entrega (AAAA-MM-DD, opcional)"
+            label="Fecha deseada de entrega (AAAA-MM-DD)"
             placeholder="2024-04-01"
+            rules={{ required: true }}
             helper="Fecha estimativa solicitada; no es la fecha definitiva del viaje."
           />
         </View>

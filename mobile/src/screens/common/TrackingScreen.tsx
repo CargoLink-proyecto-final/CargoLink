@@ -22,9 +22,11 @@ export default function TrackingScreen({ navigation }: any) {
 
   const fetchTrips = async () => {
     try {
+      // `GET /trips/my` es TRANSPORTER-only y `GET /trips/my-loads`
+      // CARGO_GENERATOR-only: usar el que no corresponde al rol devuelve 403.
       const res = user?.role === 'TRANSPORTER'
         ? await tripsApi.getMy({ status: 'IN_PROGRESS' })
-        : await tripsApi.getMy();
+        : await tripsApi.getMyLoads();
       setTrips(res.data.trips || []);
     } catch (err) {
       console.error(err);

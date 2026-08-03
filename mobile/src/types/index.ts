@@ -54,7 +54,6 @@ export interface Load {
   maxBudget?: number;
   status: LoadStatus;
   trip?: Trip;
-  // Lo devuelve el listado (findAll), no el detalle (findById).
   pendingPostulationsCount?: number;
   createdAt: string;
 }

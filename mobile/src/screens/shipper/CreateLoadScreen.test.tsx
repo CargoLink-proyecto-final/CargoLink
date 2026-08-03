@@ -46,8 +46,10 @@ describe('CreateLoadScreen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('Dirección de destino'), 'Rosario');
     fireEvent.changeText(screen.getByPlaceholderText('-31.4201'), '-32.9442');
     fireEvent.changeText(screen.getByPlaceholderText('-64.1888'), '-60.6505');
-    // Fechas
+    // Fechas — ambas obligatorias: el DTO del backend no marca deliveryDate
+    // como @IsOptional(), así que mandarla vacía devuelve 400.
     fireEvent.changeText(screen.getByPlaceholderText('2024-03-01'), '2024-05-01');
+    fireEvent.changeText(screen.getByPlaceholderText('2024-04-01'), '2024-06-01');
   };
 
   it('renders the form title and submit button', () => {
@@ -79,11 +81,21 @@ describe('CreateLoadScreen', () => {
       destLat: -32.9442,
       destLng: -60.6505,
     });
-    // pickupDate converted to ISO
+    // fechas convertidas a ISO
     expect(payload.pickupDate).toBe(new Date('2024-05-01').toISOString());
+    expect(payload.deliveryDate).toBe(new Date('2024-06-01').toISOString());
     // optional fields left undefined
     expect(payload.volume).toBeUndefined();
-    expect(payload.deliveryDate).toBeUndefined();
+  });
+
+  it('does not submit without a delivery date', async () => {
+    render(<CreateLoadScreen navigation={navigation} />);
+    fillAllRequired();
+    fireEvent.changeText(screen.getByPlaceholderText('2024-04-01'), '');
+
+    fireEvent.press(screen.getByText('Crear Carga'));
+
+    await waitFor(() => expect(mockedLoadsApi.create).not.toHaveBeenCalled());
   });
 
   it('alerts success, resets and navigates to Dashboard after a successful create', async () => {
@@ -138,20 +150,17 @@ describe('CreateLoadScreen', () => {
     );
   });
 
-  it('passes optional volume and deliveryDate when provided', async () => {
+  it('passes the optional volume when provided', async () => {
     mockedLoadsApi.create.mockResolvedValue({ data: {} } as any);
 
     render(<CreateLoadScreen navigation={navigation} />);
     fillAllRequired();
     fireEvent.changeText(screen.getByPlaceholderText('12.5'), '20');
-    fireEvent.changeText(screen.getByPlaceholderText('2024-04-01'), '2024-06-01');
 
     fireEvent.press(screen.getByText('Crear Carga'));
 
     await waitFor(() => expect(mockedLoadsApi.create).toHaveBeenCalled());
-    const payload = mockedLoadsApi.create.mock.calls[0][0];
-    expect(payload.volume).toBe(20);
-    expect(payload.deliveryDate).toBe(new Date('2024-06-01').toISOString());
+    expect(mockedLoadsApi.create.mock.calls[0][0].volume).toBe(20);
   });
 
   it('sends the optional max budget', async () => {

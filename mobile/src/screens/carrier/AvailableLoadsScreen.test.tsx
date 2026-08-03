@@ -132,7 +132,7 @@ describe('AvailableLoadsScreen', () => {
     });
   });
 
-  it('shows the max budget, package count, industry and interest on a card', async () => {
+  it('shows the max budget, package count and interest on a card', async () => {
     (loadsApi.getAvailable as jest.Mock).mockResolvedValue({
       data: {
         loads: [
@@ -141,7 +141,6 @@ describe('AvailableLoadsScreen', () => {
             maxBudget: 180000,
             packageCount: 30,
             pendingPostulationsCount: 2,
-            shipper: { ...mockLoads[0].shipper, industry: 'Agroindustria' },
           },
         ],
       },
@@ -152,7 +151,22 @@ describe('AvailableLoadsScreen', () => {
     await waitFor(() => expect(screen.getByText('Granos a Rosario')).toBeTruthy());
     expect(screen.getByText(`hasta ${formatCurrency(180000)}`)).toBeTruthy();
     expect(screen.getByText('30 bultos')).toBeTruthy();
-    expect(screen.getByText('Ana Diaz - AgroSur · Agroindustria')).toBeTruthy();
+    expect(screen.getByText('Ana Diaz - AgroSur')).toBeTruthy();
     expect(screen.getByText('2 transportistas ya se postularon')).toBeTruthy();
+  });
+
+  it('does not promise the shipper industry, which this endpoint never returns', async () => {
+    // `findAll` no incluye `industry` en el select del shipper: renderizarlo acá
+    // sería UI muerta y un test que lo mockee daría falsa confianza.
+    (loadsApi.getAvailable as jest.Mock).mockResolvedValue({
+      data: {
+        loads: [{ ...mockLoads[0], shipper: { ...mockLoads[0].shipper, industry: 'Agroindustria' } }],
+      },
+    });
+
+    render(<AvailableLoadsScreen navigation={makeNav()} />);
+
+    await waitFor(() => expect(screen.getByText('Granos a Rosario')).toBeTruthy());
+    expect(screen.queryByText(/Agroindustria/)).toBeNull();
   });
 });

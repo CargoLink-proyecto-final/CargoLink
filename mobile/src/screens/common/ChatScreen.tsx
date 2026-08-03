@@ -44,7 +44,14 @@ export default function ChatScreen({ route }: any) {
   const fetchMessages = useCallback(async () => {
     try {
       const res = await messagesApi.getTripMessages(tripId);
-      setMessages(res.data.messages || []);
+      const fetched: Message[] = res.data.messages || [];
+      // Merge en vez de reemplazo: si llega un `newMessage` por socket mientras
+      // este request está en vuelo, un setMessages(fetched) lo pisaría y con el
+      // socket vivo el polling está apagado, así que no se recuperaría.
+      setMessages((prev) => {
+        const seen = new Set(fetched.map((m) => m.id));
+        return [...fetched, ...prev.filter((m) => !seen.has(m.id))];
+      });
     } catch (err) {
       console.error(err);
     }
