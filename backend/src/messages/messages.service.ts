@@ -1,9 +1,13 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 
 @Injectable()
 export class MessagesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private push: PushService,
+  ) {}
 
   private async validateTripParticipant(tripId: string, userId: string) {
     const trip = await this.prisma.trip.findUnique({
@@ -24,12 +28,33 @@ export class MessagesService {
     const receiverId =
       trip.carrierId === senderId ? trip.load.shipperId : trip.carrierId;
 
-    return this.prisma.message.create({
+    const message = await this.prisma.message.create({
       data: { senderId, receiverId, tripId, content },
       include: {
         sender: { select: { id: true, firstName: true, lastName: true } },
       },
     });
+
+    // Acá y no en el gateway porque los mensajes también entran por REST, que no
+    // pasa por el socket. `notify` se saltea solo a quien tiene la app abierta.
+    // No se espera: el mensaje ya está guardado y avisar es best-effort.
+    // El nombre sale del include, pero se degrada en vez de romper: notificar no
+    // puede tumbar el envío de un mensaje que ya está persistido.
+    const senderName = message.sender
+      ? `${message.sender.firstName} ${message.sender.lastName}`.trim()
+      : 'Nuevo mensaje';
+
+    // El `.catch` va acá aunque `notify` ya maneje sus errores: sin él, una
+    // rejection inesperada queda sin handler y en Node tumba el proceso.
+    void this.push
+      .notify(receiverId, {
+        title: senderName || 'Nuevo mensaje',
+        body: content,
+        data: { tripId },
+      })
+      .catch(() => undefined);
+
+    return message;
   }
 
   async getTripMessages(

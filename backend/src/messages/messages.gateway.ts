@@ -8,6 +8,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PresenceService } from '../push/presence.service';
 
 @WebSocketGateway({
   cors: { origin: '*' },
@@ -19,14 +20,23 @@ export class MessagesGateway
   @WebSocketServer()
   server: Server;
 
+  /** Dueño de cada socket, para descontarle la presencia al desconectarse. */
+  private readonly userIdBySocket = new Map<string, string>();
+
   constructor(
     private messagesService: MessagesService,
     private prisma: PrismaService,
+    private presence: PresenceService,
   ) {}
 
   async handleConnection(client: Socket) {
     const userId = client.handshake.query.userId as string;
     if (!userId) return;
+
+    // `handleDisconnect` ya no tiene el handshake a mano, así que hay que
+    // recordar de quién era el socket para descontarle la presencia.
+    this.userIdBySocket.set(client.id, userId);
+    this.presence.connect(userId);
 
     client.join(`user_${userId}`);
 
@@ -47,8 +57,13 @@ export class MessagesGateway
     }
   }
 
-  handleDisconnect(_client: Socket) {
-    // Socket.IO handles room cleanup automatically
+  handleDisconnect(client: Socket) {
+    // Socket.IO limpia las rooms solo; lo que hay que descontar es la presencia,
+    // que decide si al usuario le mandamos push o no.
+    const userId = this.userIdBySocket.get(client.id);
+    if (!userId) return;
+    this.userIdBySocket.delete(client.id);
+    this.presence.disconnect(userId);
   }
 
   @SubscribeMessage('sendMessage')

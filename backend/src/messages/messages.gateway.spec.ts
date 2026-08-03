@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesGateway } from './messages.gateway';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PresenceService } from '../push/presence.service';
 
 describe('MessagesGateway', () => {
   let gateway: MessagesGateway;
@@ -26,6 +27,9 @@ describe('MessagesGateway', () => {
         MessagesGateway,
         { provide: MessagesService, useValue: messagesService },
         { provide: PrismaService, useValue: prisma },
+        // Real y no mock: es un contador en memoria sin dependencias, y así los
+        // tests verifican de verdad el conteo de conexiones.
+        PresenceService,
       ],
     }).compile();
 
