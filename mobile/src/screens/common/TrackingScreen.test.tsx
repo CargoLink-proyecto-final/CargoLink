@@ -128,4 +128,14 @@ describe('TrackingScreen', () => {
     await waitFor(() => expect(tripsApi.getMyLoads).toHaveBeenCalled());
     expect(tripsApi.getMy).not.toHaveBeenCalled();
   });
+
+  it('filters by IN_PROGRESS for the shipper too', async () => {
+    // Sin el filtro entrarían viajes COMPLETED/CANCELLED, que la pantalla
+    // contaría como activos y dibujaría con la última posición del conductor.
+    render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() =>
+      expect(tripsApi.getMyLoads).toHaveBeenCalledWith({ status: 'IN_PROGRESS' }),
+    );
+  });
 });

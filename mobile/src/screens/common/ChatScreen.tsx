@@ -19,6 +19,14 @@ import { Message } from '../../types';
 /** Cada cuánto reconsultamos por REST mientras el socket esté caído. */
 const POLL_INTERVAL_MS = 3000;
 
+/** Cronológico ascendente, con el id como desempate para que sea estable. */
+function sortByCreatedAt(messages: Message[]): Message[] {
+  return [...messages].sort((a, b) => {
+    const delta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return delta !== 0 ? delta : a.id.localeCompare(b.id);
+  });
+}
+
 /**
  * Conversación de un viaje. En condiciones normales es realtime por el gateway
  * `/chat`; si el socket no conecta (backend caído, red del celular sin WS) cae a
@@ -48,9 +56,13 @@ export default function ChatScreen({ route }: any) {
       // Merge en vez de reemplazo: si llega un `newMessage` por socket mientras
       // este request está en vuelo, un setMessages(fetched) lo pisaría y con el
       // socket vivo el polling está apagado, así que no se recuperaría.
+      //
+      // Se reordena por fecha porque el endpoint devuelve sólo la última página
+      // (50 por defecto) y el cliente no pagina: concatenar sin ordenar mandaría
+      // los mensajes viejos que quedaron fuera de esa página al final de la lista.
       setMessages((prev) => {
         const seen = new Set(fetched.map((m) => m.id));
-        return [...fetched, ...prev.filter((m) => !seen.has(m.id))];
+        return sortByCreatedAt([...fetched, ...prev.filter((m) => !seen.has(m.id))]);
       });
     } catch (err) {
       console.error(err);

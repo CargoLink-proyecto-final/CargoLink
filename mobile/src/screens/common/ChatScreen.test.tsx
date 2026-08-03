@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
+import { FlatList, TouchableOpacity } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ChatScreen from './ChatScreen';
 import { messagesApi } from '../../services/api';
@@ -198,6 +198,59 @@ describe('ChatScreen', () => {
 
     expect(messagesApi.send).not.toHaveBeenCalled();
     expect(mockEmit).not.toHaveBeenCalled();
+  });
+
+  it('keeps a socket message that arrives while a refetch is in flight', async () => {
+    const { getByText, queryByText } = render(<ChatScreen route={makeRoute()} />);
+    await waitFor(() => expect(getByText('Hi from me')).toBeTruthy());
+
+    // Llega por socket y no está en lo que devolverá el próximo refetch.
+    listener('newMessage')({
+      id: 'pushed',
+      senderId: 'other',
+      tripId: 'trip-1',
+      content: 'Mensaje en vuelo',
+      isRead: false,
+      createdAt: '2026-01-01T10:02:00Z',
+    });
+    await waitFor(() => expect(getByText('Mensaje en vuelo')).toBeTruthy());
+
+    // El refetch de la reconexión trae sólo la página del server.
+    listener('connect')();
+
+    await waitFor(() => expect(messagesApi.getTripMessages).toHaveBeenCalledTimes(2));
+    // Un reemplazo lo habría borrado; el merge lo conserva.
+    expect(queryByText('Mensaje en vuelo')).toBeTruthy();
+  });
+
+  it('keeps the merged conversation in chronological order', async () => {
+    // El endpoint devuelve sólo la última página, así que un mensaje viejo que
+    // quedó fuera puede seguir en memoria: concatenar sin ordenar lo mandaría al
+    // final y `scrollToEnd` llevaría ahí.
+    const { UNSAFE_getAllByType, getByText } = render(<ChatScreen route={makeRoute()} />);
+    await waitFor(() => expect(getByText('Hi from me')).toBeTruthy());
+
+    listener('newMessage')({
+      id: 'old',
+      senderId: 'other',
+      tripId: 'trip-1',
+      content: 'El mas viejo',
+      isRead: true,
+      createdAt: '2026-01-01T09:00:00Z',
+    });
+    await waitFor(() => expect(getByText('El mas viejo')).toBeTruthy());
+
+    listener('connect')();
+    await waitFor(() => expect(messagesApi.getTripMessages).toHaveBeenCalledTimes(2));
+
+    const list = UNSAFE_getAllByType(FlatList)[0];
+    await waitFor(() =>
+      expect((list.props.data as any[]).map((m) => m.id)).toEqual([
+        'old',
+        'mine',
+        'theirs',
+      ]),
+    );
   });
 
   it('wires the socket for the logged-in user', async () => {
