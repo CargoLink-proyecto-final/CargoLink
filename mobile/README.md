@@ -130,10 +130,14 @@ Google Maps en Android, que **sí** necesita `GOOGLE_MAPS_API_KEY_ANDROID` en el
 
 - **Push remotas incompletas.** Falta el `EAS_PROJECT_ID` y, sobre todo, el
   soporte del backend (persistir el token + emitir). Ver § "Notificaciones push".
-- **Sin flujo de postulaciones.** El transportista todavía toma la carga directo
-  con `POST /trips/accept/:loadId`; el web usa el ciclo de postulación con
-  negociación de precio (`postulationsApi` ya está en `src/services/api.ts`, sin
-  pantalla que lo consuma).
+- **El publicador no puede resolver postulaciones.** El transportista se postula,
+  contra-oferta y se retira desde `LoadDetailScreen`, pero del otro lado
+  `postulationsApi.accept` y `counterOffer` no los llama ninguna pantalla: aceptar
+  una postulación sólo se puede desde el web.
+- **Calificación unidireccional.** Sólo el publicador califica al transportista;
+  el backend lo restringe a propósito (`@Roles('CARGO_GENERATOR')` + chequeo de
+  ownership en `ratings.service.ts`). El sentido inverso requiere cambiar el
+  contrato de la API y afecta también al web.
 - **Direcciones a mano.** `CreateLoadScreen` pide lat/lng tipeadas; el web
   geocodifica con Nominatim y tiene un picker sobre el mapa.
 - **Testing Library pineada en v13.** La v14 volvió `render()` asíncrono; migrar

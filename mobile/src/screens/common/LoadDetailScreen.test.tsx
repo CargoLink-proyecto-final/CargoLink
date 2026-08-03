@@ -55,7 +55,13 @@ const baseLoad = {
 };
 
 const makeRoute = () => ({ params: { id: 'l1' } });
-const makeNav = () => ({ goBack: jest.fn(), navigate: jest.fn() });
+const makeNav = () => ({
+  goBack: jest.fn(),
+  navigate: jest.fn(),
+  // Tipado explícito: sin los parámetros, TS infiere una tupla vacía para
+  // `mock.calls` y no deja leer el evento ni el callback.
+  addListener: jest.fn((_event: string, _callback: () => void) => jest.fn()),
+});
 
 describe('LoadDetailScreen', () => {
   beforeEach(() => {
@@ -195,6 +201,185 @@ describe('LoadDetailScreen', () => {
     expect(queryByText('Postularme')).toBeNull();
     // Owner of a PUBLISHED load sees the cancel button instead.
     expect(getByText('Cancelar Carga')).toBeTruthy();
+  });
+
+  // La calificación es unidireccional: sólo el publicador califica al
+  // transportista, una vez, con el viaje completado. El backend rechaza todo lo
+  // demás, así que la UI no debe ofrecer un botón que va a dar 403/400/409.
+  describe('calificar al transportista', () => {
+    const completedTrip = {
+      id: 'trip-1',
+      status: 'COMPLETED',
+      carrierId: 'carrier1',
+      carrier: { id: 'carrier1', firstName: 'Carl', lastName: 'Driver' },
+      ratings: [],
+    };
+    const asShipper = () => {
+      mockUser = { id: 'shipper1', role: 'CARGO_GENERATOR' };
+    };
+
+    it('offers the entry point to the shipper of a completed trip', async () => {
+      asShipper();
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, status: 'DELIVERED', trip: completedTrip },
+      });
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Calificar al transportista')).toBeTruthy());
+    });
+
+    it('navigates to Rating with the trip and the carrier name', async () => {
+      asShipper();
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, status: 'DELIVERED', trip: completedTrip },
+      });
+      const nav = makeNav();
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={nav} />,
+      );
+
+      await waitFor(() => expect(getByText('Calificar al transportista')).toBeTruthy());
+      fireEvent.press(getByText('Calificar al transportista'));
+
+      expect(nav.navigate).toHaveBeenCalledWith('Rating', {
+        tripId: 'trip-1',
+        carrierName: 'Carl Driver',
+      });
+    });
+
+    it('hides it once the shipper already rated the trip', async () => {
+      asShipper();
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: {
+          ...baseLoad,
+          status: 'DELIVERED',
+          trip: { ...completedTrip, ratings: [{ id: 'r1', fromUserId: 'shipper1' }] },
+        },
+      });
+
+      const { getByText, queryByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+      expect(queryByText('Calificar al transportista')).toBeNull();
+    });
+
+    it('still offers it when only somebody else rated the trip', async () => {
+      asShipper();
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: {
+          ...baseLoad,
+          status: 'DELIVERED',
+          trip: { ...completedTrip, ratings: [{ id: 'r1', fromUserId: 'someone-else' }] },
+        },
+      });
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Calificar al transportista')).toBeTruthy());
+    });
+
+    it('hides it while the trip is not completed yet', async () => {
+      asShipper();
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: {
+          ...baseLoad,
+          status: 'IN_TRANSIT',
+          trip: { ...completedTrip, status: 'IN_PROGRESS' },
+        },
+      });
+
+      const { getByText, queryByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+      expect(queryByText('Calificar al transportista')).toBeNull();
+    });
+
+    it('hides it from the carrier, who the backend forbids from rating', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, status: 'DELIVERED', trip: completedTrip },
+      });
+
+      const { getByText, queryByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+      expect(queryByText('Calificar al transportista')).toBeNull();
+    });
+
+    it('hides it from a shipper who does not own the load', async () => {
+      mockUser = { id: 'another-shipper', role: 'CARGO_GENERATOR' };
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, status: 'DELIVERED', trip: completedTrip },
+      });
+
+      const { getByText, queryByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+      expect(queryByText('Calificar al transportista')).toBeNull();
+    });
+
+    it('hides it when the load has no trip at all', async () => {
+      asShipper();
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, status: 'DELIVERED', trip: undefined },
+      });
+
+      const { getByText, queryByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+      expect(queryByText('Calificar al transportista')).toBeNull();
+    });
+
+    it('still offers it when the payload omits ratings entirely', async () => {
+      // El gate falla "abierto" si `ratings` no viniera: se muestra el botón y el
+      // backend contestaría 409 si ya había calificado. Hoy `GET /loads/:id`
+      // siempre incluye `trip.ratings`, y este test fija esa dependencia — si
+      // alguien saca el include del backend, el comportamiento queda documentado.
+      asShipper();
+      const { ratings, ...tripWithoutRatings } = completedTrip;
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, status: 'DELIVERED', trip: tripWithoutRatings },
+      });
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('Calificar al transportista')).toBeTruthy());
+    });
+
+    it('refetches the load on focus so the button clears after rating', async () => {
+      asShipper();
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, status: 'DELIVERED', trip: completedTrip },
+      });
+      const nav = makeNav();
+
+      render(<LoadDetailScreen route={makeRoute()} navigation={nav} />);
+      await waitFor(() => expect(loadsApi.getById).toHaveBeenCalledTimes(1));
+
+      // RatingScreen sólo hace goBack, así que el refresco depende del focus.
+      const onFocus = nav.addListener.mock.calls.find(([e]) => e === 'focus')?.[1];
+      if (!onFocus) throw new Error('LoadDetailScreen no registró un listener de focus');
+      onFocus();
+
+      await waitFor(() => expect(loadsApi.getById).toHaveBeenCalledTimes(2));
+    });
   });
 
   describe('postulación del transportista', () => {

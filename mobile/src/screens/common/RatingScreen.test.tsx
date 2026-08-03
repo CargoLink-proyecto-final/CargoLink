@@ -24,6 +24,25 @@ describe('RatingScreen', () => {
     (ratingsApi.create as jest.Mock).mockResolvedValue({});
   });
 
+  it('names the carrier being rated when the caller passes it', () => {
+    const { getByText } = render(
+      <RatingScreen
+        route={{ params: { tripId: 't1', carrierName: 'Carl Driver' } }}
+        navigation={makeNav()}
+      />,
+    );
+
+    expect(getByText('¿Cómo fue tu experiencia con Carl Driver?')).toBeTruthy();
+  });
+
+  it('falls back to a generic prompt without a carrier name', () => {
+    const { getByText } = render(
+      <RatingScreen route={makeRoute()} navigation={makeNav()} />,
+    );
+
+    expect(getByText('¿Cómo fue tu experiencia?')).toBeTruthy();
+  });
+
   it('defaults to a 5-star score ("Excelente")', () => {
     const { getByText } = render(
       <RatingScreen route={makeRoute()} navigation={makeNav()} />,
