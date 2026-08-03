@@ -63,6 +63,10 @@ model User {
   zoneLat                   Float?    @map("zone_lat")
   zoneLng                   Float?    @map("zone_lng")
   zoneRadiusKm              Float?    @map("zone_radius_km")
+  // Token de Expo del dispositivo, para push con la app cerrada. Uno solo por
+  // usuario: el último dispositivo que se registró gana. Soportar varios
+  // dispositivos a la vez requeriría una tabla aparte.
+  expoPushToken             String?   @map("expo_push_token")
   isActive                  Boolean   @default(true) @map("is_active")
   resetToken                String?   @map("reset_token")
   resetTokenExp             DateTime? @map("reset_token_exp")
