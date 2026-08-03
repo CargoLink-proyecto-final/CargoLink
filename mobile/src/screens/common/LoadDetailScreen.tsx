@@ -17,6 +17,7 @@ import {
   getSolicitudStageLabel,
   getStatusLabel,
 } from '../../lib/labels';
+import PostulationsPanel from '../../components/PostulationsPanel';
 import { Load, Postulation } from '../../types';
 
 /**
@@ -301,6 +302,16 @@ export default function LoadDetailScreen({ route, navigation }: any) {
           <Text style={styles.infoLabel}>Rubro: {load.shipper.industry}</Text>
         )}
       </View>
+
+      {/* Sólo el dueño ve las postulaciones: el endpoint es shipper-owner/ADMIN. */}
+      {user?.role === 'CARGO_GENERATOR' && load.shipperId === user.id && (
+        <PostulationsPanel
+          loadId={id}
+          listedPrice={load.price}
+          isOpen={load.status === 'PUBLISHED'}
+          onChanged={fetchLoad}
+        />
+      )}
 
       <View style={styles.actions}>
         {/* El transportista no toma la carga directo: se postula y el publicador
