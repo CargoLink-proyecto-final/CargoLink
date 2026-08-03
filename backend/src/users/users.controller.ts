@@ -1,5 +1,6 @@
 import {
   Controller,
+  ForbiddenException,
   Get,
   Patch,
   Param,
@@ -49,8 +50,16 @@ export class UsersController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get user by ID' })
-  findOne(@Param('id') id: string) {
+  @ApiOperation({ summary: 'Get user by ID (self or Admin)' })
+  findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: string },
+  ) {
+    // Sin este chequeo cualquier usuario autenticado podía leer la ficha de
+    // cualquier otro con solo tener su id.
+    if (user.role !== 'ADMIN' && user.id !== id) {
+      throw new ForbiddenException('No podés ver el perfil de otro usuario');
+    }
     return this.usersService.findById(id);
   }
 
