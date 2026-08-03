@@ -90,6 +90,7 @@ describe('UsersService', () => {
 
       expect(prisma.user.create).toHaveBeenCalledWith({
         data: { ...data, firstName: 'New', lastName: 'User' },
+        select: PUBLIC_USER_SELECT,
       });
       expect(result.email).toBe('new@example.com');
     });
@@ -108,6 +109,7 @@ describe('UsersService', () => {
 
       expect(prisma.user.create).toHaveBeenCalledWith({
         data: { ...data, firstName: '', lastName: '' },
+        select: PUBLIC_USER_SELECT,
       });
     });
   });
