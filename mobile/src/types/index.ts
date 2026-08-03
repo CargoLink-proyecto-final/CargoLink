@@ -69,6 +69,19 @@ export interface Trip {
   currentLng?: number;
   startedAt?: string;
   completedAt?: string;
+  // Sólo viene en el detalle de la carga (`GET /loads/:id`), que incluye
+  // `trip.ratings`. Sirve para saber si el publicador ya calificó el viaje.
+  ratings?: Rating[];
+  createdAt: string;
+}
+
+export interface Rating {
+  id: string;
+  tripId: string;
+  fromUserId: string;
+  toUserId: string;
+  score: number;
+  comment?: string;
   createdAt: string;
 }
 

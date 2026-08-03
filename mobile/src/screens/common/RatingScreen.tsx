@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ratingsApi } from '../../services/api';
 
 export default function RatingScreen({ route, navigation }: any) {
-  const { tripId } = route.params;
+  const { tripId, carrierName } = route.params;
   const [score, setScore] = useState(5);
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,7 +32,9 @@ export default function RatingScreen({ route, navigation }: any) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Calificar este viaje</Text>
-      <Text style={styles.subtitle}>¿Cómo fue tu experiencia?</Text>
+      <Text style={styles.subtitle}>
+        {carrierName ? `¿Cómo fue tu experiencia con ${carrierName}?` : '¿Cómo fue tu experiencia?'}
+      </Text>
 
       <View style={styles.starsRow}>
         {[1, 2, 3, 4, 5].map((s) => (

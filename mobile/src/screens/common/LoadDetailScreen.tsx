@@ -43,7 +43,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const fetchLoad = async () => {
+  const fetchLoad = useCallback(async () => {
     try {
       const res = await loadsApi.getById(id);
       setLoad(res.data);
@@ -52,7 +52,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   // Sólo el transportista tiene postulaciones propias; el endpoint es TRANSPORTER-only.
   const fetchMyPostulation = useCallback(async () => {
@@ -70,8 +70,15 @@ export default function LoadDetailScreen({ route, navigation }: any) {
     }
   }, [id, user?.role]);
 
-  useEffect(() => { fetchLoad(); }, [id]);
+  useEffect(() => { fetchLoad(); }, [fetchLoad]);
   useEffect(() => { fetchMyPostulation(); }, [fetchMyPostulation]);
+
+  // Al volver de calificar, la carga ya tiene el rating nuevo y el botón tiene
+  // que desaparecer; RatingScreen sólo hace goBack, no avisa nada.
+  useEffect(() => {
+    const unsubscribe = navigation?.addListener?.('focus', fetchLoad);
+    return unsubscribe;
+  }, [navigation, fetchLoad]);
 
   const handlePostulate = async () => {
     setActionLoading(true);
@@ -189,6 +196,16 @@ export default function LoadDetailScreen({ route, navigation }: any) {
 
   const stageColor = getSolicitudStageColor(load.status);
   const interestedCount = load.pendingPostulationsCount ?? 0;
+
+  // Mismo criterio que el web: la calificación es unidireccional — sólo el
+  // publicador califica al transportista, con el viaje completado y una sola
+  // vez. El backend rechaza cualquier otro caso (@Roles CARGO_GENERATOR +
+  // chequeo de ownership + unique por viaje/autor).
+  const canRateCarrier =
+    user?.role === 'CARGO_GENERATOR' &&
+    load.shipperId === user.id &&
+    load.trip?.status === 'COMPLETED' &&
+    !load.trip.ratings?.some((r) => r.fromUserId === user.id);
   const hasDimensions =
     load.heightCm != null || load.widthCm != null || load.lengthCm != null;
 
@@ -399,6 +416,23 @@ export default function LoadDetailScreen({ route, navigation }: any) {
             disabled={actionLoading}
           >
             <Text style={styles.actionBtnText}>Cancelar Carga</Text>
+          </TouchableOpacity>
+        )}
+
+        {canRateCarrier && load.trip && (
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: '#f59e0b' }]}
+            onPress={() =>
+              navigation.navigate('Rating', {
+                tripId: load.trip!.id,
+                carrierName: load.trip!.carrier
+                  ? `${load.trip!.carrier.firstName} ${load.trip!.carrier.lastName}`
+                  : undefined,
+              })
+            }
+            disabled={actionLoading}
+          >
+            <Text style={styles.actionBtnText}>Calificar al transportista</Text>
           </TouchableOpacity>
         )}
       </View>
