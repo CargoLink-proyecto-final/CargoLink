@@ -5,6 +5,7 @@ import {
   registerForPushNotifications,
   scheduleLocalNotification,
 } from '../services/notifications';
+import { usersApi } from '../services/api';
 import { Message } from '../types';
 
 /**
@@ -24,12 +25,17 @@ import { Message } from '../types';
 export function useMessageNotifications(userId: string | undefined): void {
   useEffect(() => {
     if (!userId) return;
-    registerForPushNotifications().then((token) => {
-      if (token) {
-        // TODO: mandarlo al backend cuando exista el endpoint para persistirlo.
-        console.log('Expo push token', token);
-      }
-    });
+    registerForPushNotifications()
+      .then((token) => {
+        // Devuelve null sin projectId de EAS y en el simulador: en esos casos no
+        // hay nada que registrar y no es un error.
+        if (!token) return;
+        return usersApi.registerPushToken(token);
+      })
+      .catch((err) => {
+        // Sin push remotas la app funciona igual: las locales salen del socket.
+        console.warn('No se pudo registrar el push token', err);
+      });
   }, [userId]);
 
   useEffect(() => {

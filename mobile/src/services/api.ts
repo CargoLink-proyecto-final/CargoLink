@@ -65,6 +65,8 @@ export const messagesApi = {
 
 export const usersApi = {
   getMe: () => api.get('/users/me'),
+  registerPushToken: (token: string) => api.put('/users/me/push-token', { token }),
+  clearPushToken: () => api.delete('/users/me/push-token'),
   updateMe: (data: {
     firstName?: string;
     lastName?: string;

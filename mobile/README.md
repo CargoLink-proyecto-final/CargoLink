@@ -38,7 +38,7 @@ No hay que hardcodear ninguna IP. `src/config/env.ts` resuelve la URL en este or
 ## Comandos
 
 ```bash
-npm test           # jest (20 suites, 129 tests)
+npm test           # jest (24 suites, 274 tests)
 npm run typecheck  # tsc --noEmit
 npm run doctor     # expo-doctor: chequeos de config y peer deps nativas
 npm run prebuild   # genera ios/ y android/ (ambos gitignoreados)
@@ -76,23 +76,22 @@ Para cambiar el logo, editar `drawTruck()` y volver a correrlo.
 Las **locales** funcionan hoy sin configuración: las emite el propio dispositivo
 cuando llega un mensaje por el socket.
 
-Las **remotas** (app cerrada) necesitan dos cosas que todavía no existen:
+Las **remotas** (app cerrada) ya están implementadas de punta a punta — el hook
+registra el token en `PUT /users/me/push-token` y el backend emite contra la
+Expo Push API cuando llega un mensaje. Sólo emite si el destinatario **no** tiene
+el socket de chat conectado, para no duplicar la notificación local.
 
-1. **Un projectId de EAS.** `eas init` no puede escribir en un `app.config.js`
-   dinámico, así que el id entra por env:
+Falta una sola cosa para que funcionen: **el projectId de EAS**. `eas init` no
+puede escribir en un `app.config.js` dinámico, así que el id entra por env:
 
-   ```bash
-   npx eas-cli login
-   npx eas-cli init          # imprime el projectId
-   echo "EAS_PROJECT_ID=<el-id>" >> .env
-   ```
+```bash
+npx eas-cli login
+npx eas-cli init          # imprime el projectId
+echo "EAS_PROJECT_ID=<el-id>" >> .env
+```
 
-   Sin esa variable `registerForPushNotifications()` devuelve `null` y loguea un
-   warning, en vez de romper.
-
-2. **Soporte en el backend.** Hoy no hay dónde guardar el token (no existe
-   columna en `User`) ni desde dónde emitir pushes. El hook ya pide el token y lo
-   loguea; falta el endpoint que lo persista y el sender contra la Expo Push API.
+Sin esa variable `registerForPushNotifications()` devuelve `null`, no se registra
+ningún token y la app sigue andando con las notificaciones locales.
 
 ## Correr en un iPhone físico
 
@@ -112,9 +111,11 @@ Requiere un Apple ID cargado en Xcode (Settings → Accounts). Con cuenta gratui
 prebuild deja `aps-environment` en `ios/CargoLink/CargoLink.entitlements` porque
 lo agrega el plugin `expo-notifications`. Con eso puesto, Xcode falla con
 "Personal development teams … do not support the Push Notifications capability".
-Hay que vaciar el `<dict>` de ese archivo. No se pierde nada verificable: las
-push remotas ya están bloqueadas por lo de arriba. **Ojo: `ios/` está
-gitignoreado y `expo prebuild` regenera el entitlements — hay que repetirlo.**
+Hay que vaciar el `<dict>` de ese archivo. El costo es real desde que las push
+remotas están implementadas: un build firmado con cuenta gratuita no las va a
+recibir, sólo las locales. Para probarlas hace falta una cuenta de Apple
+Developer paga. **Ojo: `ios/` está gitignoreado y `expo prebuild` regenera el
+entitlements — hay que repetirlo.**
 
 La primera instalación también pide activar **Settings → Privacy & Security →
 Developer Mode** en el iPhone. Esa opción **no aparece** hasta que la Mac intenta
@@ -128,12 +129,11 @@ Google Maps en Android, que **sí** necesita `GOOGLE_MAPS_API_KEY_ANDROID` en el
 
 ## Pendientes conocidos
 
-- **Push remotas incompletas.** Falta el `EAS_PROJECT_ID` y, sobre todo, el
-  soporte del backend (persistir el token + emitir). Ver § "Notificaciones push".
-- **El publicador no puede resolver postulaciones.** El transportista se postula,
-  contra-oferta y se retira desde `LoadDetailScreen`, pero del otro lado
-  `postulationsApi.accept` y `counterOffer` no los llama ninguna pantalla: aceptar
-  una postulación sólo se puede desde el web.
+- **Push remotas sin `EAS_PROJECT_ID`.** El código está completo de punta a
+  punta; falta correr `eas init`. Ver § "Notificaciones push".
+- **Un solo dispositivo por cuenta.** El token de Expo se guarda en una columna
+  de `User`: el último teléfono que se registra desplaza al anterior. Varios
+  dispositivos a la vez necesitarían una tabla aparte.
 - **Calificación unidireccional.** Sólo el publicador califica al transportista;
   el backend lo restringe a propósito (`@Roles('CARGO_GENERATOR')` + chequeo de
   ownership en `ratings.service.ts`). El sentido inverso requiere cambiar el
