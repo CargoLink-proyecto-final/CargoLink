@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
-import { CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, AlertTriangle, Check } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { loadsApi } from '@/lib/api';
 import { geocodeStructured, reverseGeocode, type NominatimAddressDetail } from '@/lib/routing';
@@ -186,6 +186,8 @@ function toLocalDatetimeString(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+const WIZARD_STEPS = ['Detalles', 'Origen', 'Destino', 'Fechas'] as const;
+
 export default function NewLoadPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -207,7 +209,9 @@ export default function NewLoadPage() {
 
   const minPickup = useMemo(() => toLocalDatetimeString(new Date()), []);
 
-  const { register, handleSubmit, watch, getValues, formState: { errors } } = useForm<LoadForm>();
+  const [step, setStep] = useState(0);
+
+  const { register, handleSubmit, watch, getValues, trigger, formState: { errors } } = useForm<LoadForm>();
 
   const pickupDateValue = watch('pickupDate');
   const cargoTypeValue = watch('cargoType');
@@ -291,6 +295,30 @@ export default function NewLoadPage() {
     return { address: formatAddress(parts), lat: coords.lat, lng: coords.lng, mismatches };
   };
 
+  const stepFields = (s: number): (keyof LoadForm)[] => {
+    switch (s) {
+      case 0:
+        return ['title', 'cargoType', 'weight', 'price', 'maxBudget', 'volume', 'packageCount', 'heightCm', 'widthCm', 'lengthCm'];
+      case 1:
+        return originMode === 'address'
+          ? ['originStreet', 'originStreetNumber', 'originCity', 'originState', 'originCountry', 'originPostalCode']
+          : ['originLat', 'originLng', 'originCoordsLabel'];
+      case 2:
+        return destMode === 'address'
+          ? ['destStreet', 'destStreetNumber', 'destCity', 'destState', 'destCountry', 'destPostalCode']
+          : ['destLat', 'destLng', 'destCoordsLabel'];
+      default:
+        return ['pickupDate', 'deliveryDate'];
+    }
+  };
+
+  const goNext = async () => {
+    const valid = await trigger(stepFields(step));
+    if (valid) setStep((s) => Math.min(s + 1, WIZARD_STEPS.length - 1));
+  };
+
+  const goBack = () => setStep((s) => Math.max(s - 1, 0));
+
   const onSubmit = async (data: LoadForm) => {
     setLoading(true);
     setError('');
@@ -300,14 +328,14 @@ export default function NewLoadPage() {
         { street: data.originStreet, streetNumber: data.originStreetNumber, city: data.originCity, state: data.originState, country: data.originCountry, postalCode: data.originPostalCode },
         data.originLat, data.originLng, data.originCoordsLabel, originPin,
       );
-      if ('error' in origin) { setError(`Origen: ${origin.error}`); return; }
+      if ('error' in origin) { setError(`Origen: ${origin.error}`); setStep(1); return; }
 
       const dest = await resolveLocation(
         destMode,
         { street: data.destStreet, streetNumber: data.destStreetNumber, city: data.destCity, state: data.destState, country: data.destCountry, postalCode: data.destPostalCode },
         data.destLat, data.destLng, data.destCoordsLabel, destPin,
       );
-      if ('error' in dest) { setError(`Destino: ${dest.error}`); return; }
+      if ('error' in dest) { setError(`Destino: ${dest.error}`); setStep(2); return; }
 
       if (
         Math.abs(origin.lat - dest.lat) < 0.0001 &&
@@ -326,6 +354,7 @@ export default function NewLoadPage() {
       if (allMismatches.length > 0) {
         setSubmitMismatches(allMismatches);
         setShowMismatchModal(true);
+        setStep(origin.mismatches.length > 0 ? 1 : 2);
         return;
       }
 
@@ -369,6 +398,38 @@ export default function NewLoadPage() {
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Crear Nueva Carga</h1>
 
+        <ol className="flex items-center gap-2 mb-6" aria-label="Progreso del formulario">
+          {WIZARD_STEPS.map((label, i) => {
+            const isCurrent = i === step;
+            const isDone = i < step;
+            return (
+              <li key={label} className="flex-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStep(i)}
+                  className="flex items-center gap-2 min-w-0"
+                >
+                  <span
+                    className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition ${
+                      isCurrent
+                        ? 'bg-primary-600 text-white'
+                        : isDone
+                        ? 'bg-primary-100 text-primary-700'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}
+                  >
+                    {isDone ? <Check size={14} /> : i + 1}
+                  </span>
+                  <span className={`text-sm truncate ${isCurrent ? 'font-medium text-gray-800' : 'text-gray-400'}`}>
+                    {label}
+                  </span>
+                </button>
+                {i < WIZARD_STEPS.length - 1 && <span className="flex-1 h-px bg-gray-200" />}
+              </li>
+            );
+          })}
+        </ol>
+
         {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">{error}</div>}
 
         {submitMismatches.length > 0 && (
@@ -386,9 +447,19 @@ export default function NewLoadPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          onKeyDown={(e) => {
+            const target = e.target as HTMLElement;
+            if (e.key === 'Enter' && target.tagName !== 'TEXTAREA' && step < WIZARD_STEPS.length - 1) {
+              e.preventDefault();
+              goNext();
+            }
+          }}
+          className="space-y-6"
+        >
           {/* Detalles */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4" style={{ display: step === 0 ? 'block' : 'none' }}>
             <h2 className="font-semibold text-gray-700">Detalles de la Carga</h2>
 
             <div>
@@ -471,6 +542,7 @@ export default function NewLoadPage() {
           </div>
 
           {/* Origen */}
+          <div style={{ display: step === 1 ? 'block' : 'none' }}>
           <LocationCard
             title="Origen"
             mode={originMode}
@@ -497,8 +569,10 @@ export default function NewLoadPage() {
             lngInput={<input type="number" step="any" {...register('originLng')} className={inputClass} placeholder="-58.3816" />}
             coordsLabelInput={<input {...register('originCoordsLabel')} className={inputClass} placeholder="Ej., Depósito central, Planta industrial..." />}
           />
+          </div>
 
           {/* Destino */}
+          <div style={{ display: step === 2 ? 'block' : 'none' }}>
           <LocationCard
             title="Destino"
             mode={destMode}
@@ -525,9 +599,10 @@ export default function NewLoadPage() {
             lngInput={<input type="number" step="any" {...register('destLng')} className={inputClass} placeholder="-64.1888" />}
             coordsLabelInput={<input {...register('destCoordsLabel')} className={inputClass} placeholder="Ej., Centro de distribución, Cliente final..." />}
           />
+          </div>
 
           {/* Fechas */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4" style={{ display: step === 3 ? 'block' : 'none' }}>
             <h2 className="font-semibold text-gray-700">Fechas</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -563,13 +638,34 @@ export default function NewLoadPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 rounded-lg transition disabled:opacity-50"
-          >
-            {loading ? 'Creando...' : 'Crear Carga'}
-          </button>
+          <div className="flex gap-3">
+            {step > 0 && (
+              <button
+                type="button"
+                onClick={goBack}
+                className="px-6 py-3 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition"
+              >
+                Atrás
+              </button>
+            )}
+            {step < WIZARD_STEPS.length - 1 ? (
+              <button
+                type="button"
+                onClick={goNext}
+                className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 rounded-lg transition"
+              >
+                Siguiente
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 rounded-lg transition disabled:opacity-50"
+              >
+                {loading ? 'Creando...' : 'Crear Carga'}
+              </button>
+            )}
+          </div>
         </form>
       </div>
 

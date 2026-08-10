@@ -42,29 +42,90 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-// Fill the required "Detalles" + date fields. Address fields are filled per-test.
-async function fillBaseFields(user: ReturnType<typeof userEvent.setup>) {
+const next = () => screen.getByRole('button', { name: 'Siguiente' });
+
+// Fill the "Detalles" step (step 0) and advance to "Origen".
+async function fillDetailsAndAdvance(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByPlaceholderText('Ej., Electrónica a Córdoba'), 'Carga test');
   await user.selectOptions(screen.getByDisplayValue('Seleccioná un tipo'), 'Mercadería general');
-  // Peso, Precio are the two number inputs in the details card with no placeholder.
   const weight = document.querySelector('input[name="weight"]') as HTMLInputElement;
   const price = document.querySelector('input[name="price"]') as HTMLInputElement;
   await user.type(weight, '100');
   await user.type(price, '5000');
-  const pickup = document.querySelector('input[name="pickupDate"]') as HTMLInputElement;
-  // Far-future date clears the "not before today" validator.
-  await user.type(pickup, '2030-01-01T10:00');
+  await user.click(next());
 }
 
-describe('NewLoadPage — validation', () => {
-  it('blocks submission and shows required errors when fields are empty', async () => {
+// Fill the "Origen" step (step 1) and advance to "Destino".
+async function fillOriginAndAdvance(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByPlaceholderText('Ej., Av. Corrientes'), 'Av. Corrientes');
+  await user.type(screen.getByPlaceholderText('Ej., Buenos Aires'), 'Buenos Aires');
+  await user.type(screen.getByPlaceholderText('Ej., CABA'), 'Buenos Aires');
+  // "Ej., Argentina" is shared by origin + dest country inputs — both are
+  // always mounted (steps are hidden via CSS, not unmounted), so index [0] = origin.
+  await user.type(screen.getAllByPlaceholderText('Ej., Argentina')[0], 'Argentina');
+  await user.type(screen.getByPlaceholderText(/Ej\., 1043/), '1043');
+  await user.click(next());
+}
+
+// Fill the "Destino" step (step 2) and advance to "Fechas".
+async function fillDestAndAdvance(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByPlaceholderText('Ej., Av. San Martín'), 'Av. San Martín');
+  await user.type(document.querySelector('input[name="destCity"]') as HTMLInputElement, 'Córdoba');
+  await user.type(document.querySelector('input[name="destState"]') as HTMLInputElement, 'Córdoba');
+  await user.type(screen.getAllByPlaceholderText('Ej., Argentina')[1], 'Argentina');
+  await user.type(screen.getByPlaceholderText(/Ej\., 5000/), '5000');
+  await user.click(next());
+}
+
+// Fill the "Fechas" step (step 3). Does not submit.
+async function fillDates(user: ReturnType<typeof userEvent.setup>) {
+  const pickup = document.querySelector('input[name="pickupDate"]') as HTMLInputElement;
+  await user.type(pickup, '2030-01-01T10:00');
+  const delivery = document.querySelector('input[name="deliveryDate"]') as HTMLInputElement;
+  await user.type(delivery, '2030-01-02T10:00');
+}
+
+describe('NewLoadPage — wizard navigation', () => {
+  it('blocks advancing past the "Detalles" step when required fields are empty', async () => {
     const user = userEvent.setup();
     render(<NewLoadPage />);
 
-    await user.click(screen.getByRole('button', { name: 'Crear Carga' }));
+    await user.click(next());
 
     expect(await screen.findAllByText('Requerido')).not.toHaveLength(0);
+    // Still on step 0 — the "Origen" step content stays hidden.
+    expect(screen.getByText('Detalles de la Carga')).toBeVisible();
     expect(loadsApi.create).not.toHaveBeenCalled();
+  });
+
+  it('walks Detalles -> Origen -> Destino -> Fechas, showing one step at a time', async () => {
+    const user = userEvent.setup();
+    render(<NewLoadPage />);
+
+    expect(screen.getByText('Detalles de la Carga')).toBeVisible();
+    await fillDetailsAndAdvance(user);
+
+    expect(screen.getByText('Detalles de la Carga')).not.toBeVisible();
+    expect(screen.getByPlaceholderText('Ej., Av. Corrientes')).toBeVisible();
+    await fillOriginAndAdvance(user);
+
+    expect(screen.getByPlaceholderText('Ej., Av. Corrientes')).not.toBeVisible();
+    expect(screen.getByPlaceholderText('Ej., Av. San Martín')).toBeVisible();
+    await fillDestAndAdvance(user);
+
+    expect(screen.getByPlaceholderText('Ej., Av. San Martín')).not.toBeVisible();
+    expect(screen.getByRole('button', { name: 'Crear Carga' })).toBeVisible();
+  });
+
+  it('goes back to the previous step with "Atrás" without losing already-typed data', async () => {
+    const user = userEvent.setup();
+    render(<NewLoadPage />);
+
+    await fillDetailsAndAdvance(user);
+    await user.click(screen.getByRole('button', { name: 'Atrás' }));
+
+    expect(screen.getByText('Detalles de la Carga')).toBeVisible();
+    expect(screen.getByPlaceholderText('Ej., Electrónica a Córdoba')).toHaveValue('Carga test');
   });
 });
 
@@ -78,26 +139,10 @@ describe('NewLoadPage — successful create', () => {
 
     render(<NewLoadPage />);
 
-    await fillBaseFields(user);
-
-    // Origin address fields
-    await user.type(screen.getByPlaceholderText('Ej., Av. Corrientes'), 'Av. Corrientes');
-    await user.type(screen.getByPlaceholderText('Ej., Buenos Aires'), 'Buenos Aires');
-    await user.type(screen.getByPlaceholderText('Ej., CABA'), 'Buenos Aires');
-    // País inputs share a placeholder ("Ej., Argentina"); first = origin.
-    const countries = screen.getAllByPlaceholderText('Ej., Argentina');
-    await user.type(countries[0], 'Argentina');
-    const cps = screen.getAllByPlaceholderText(/Ej\., 1043/);
-    await user.type(cps[0], '1043');
-
-    // Destination address fields. Dest city + state share the "Ej., Córdoba"
-    // placeholder, so target them by their registered name.
-    await user.type(screen.getByPlaceholderText('Ej., Av. San Martín'), 'Av. San Martín');
-    await user.type(document.querySelector('input[name="destCity"]') as HTMLInputElement, 'Córdoba');
-    await user.type(document.querySelector('input[name="destState"]') as HTMLInputElement, 'Córdoba');
-    await user.type(countries[1], 'Argentina');
-    const destCp = screen.getByPlaceholderText(/Ej\., 5000/);
-    await user.type(destCp, '5000');
+    await fillDetailsAndAdvance(user);
+    await fillOriginAndAdvance(user);
+    await fillDestAndAdvance(user);
+    await fillDates(user);
 
     await user.click(screen.getByRole('button', { name: 'Crear Carga' }));
 
@@ -118,7 +163,7 @@ describe('NewLoadPage — successful create', () => {
 });
 
 describe('NewLoadPage — mismatch hard block', () => {
-  it('shows the mismatch modal and does NOT create when geocode disagrees', async () => {
+  it('shows the mismatch modal, jumps back to the offending step, and does NOT create when geocode disagrees', async () => {
     const user = userEvent.setup();
     // Resolved city differs from typed city -> mismatch.
     geocodeStructured
@@ -126,26 +171,18 @@ describe('NewLoadPage — mismatch hard block', () => {
       .mockResolvedValueOnce({ lat: -31.42, lng: -64.18, displayName: 'Córdoba, Argentina', address: { city: 'Córdoba', state: 'Córdoba', country: 'Argentina', postcode: '5000' } });
 
     render(<NewLoadPage />);
-    await fillBaseFields(user);
 
-    await user.type(screen.getByPlaceholderText('Ej., Av. Corrientes'), 'Av. Corrientes');
-    await user.type(screen.getByPlaceholderText('Ej., Buenos Aires'), 'Buenos Aires');
-    await user.type(screen.getByPlaceholderText('Ej., CABA'), 'Buenos Aires');
-    const countries = screen.getAllByPlaceholderText('Ej., Argentina');
-    await user.type(countries[0], 'Argentina');
-    const cps = screen.getAllByPlaceholderText(/Ej\., 1043/);
-    await user.type(cps[0], '1043');
-
-    await user.type(screen.getByPlaceholderText('Ej., Av. San Martín'), 'Av. San Martín');
-    await user.type(document.querySelector('input[name="destCity"]') as HTMLInputElement, 'Córdoba');
-    await user.type(document.querySelector('input[name="destState"]') as HTMLInputElement, 'Córdoba');
-    await user.type(countries[1], 'Argentina');
-    await user.type(screen.getByPlaceholderText(/Ej\., 5000/), '5000');
+    await fillDetailsAndAdvance(user);
+    await fillOriginAndAdvance(user);
+    await fillDestAndAdvance(user);
+    await fillDates(user);
 
     await user.click(screen.getByRole('button', { name: 'Crear Carga' }));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Corregí la dirección')).toBeInTheDocument();
     expect(loadsApi.create).not.toHaveBeenCalled();
+    // Jumped back to the "Origen" step, where the mismatch originated.
+    expect(screen.getByPlaceholderText('Ej., Av. Corrientes')).toBeVisible();
   });
 });
