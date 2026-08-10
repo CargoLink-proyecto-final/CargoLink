@@ -166,8 +166,8 @@ export default function CarrierDashboard() {
                 <p className="eyebrow">Tu agenda</p>
                 <h2 className="font-display text-[20px] mt-1">Mis viajes activos</h2>
               </div>
-              <Link href="/tracking" className="text-[12px] uppercase tracking-[0.16em] text-ink-500 hover:text-primary-700 inline-flex items-center gap-1">
-                Seguimiento <ArrowRight size={12} />
+              <Link href="/trips" className="text-[12px] uppercase tracking-[0.16em] text-ink-500 hover:text-primary-700 inline-flex items-center gap-1">
+                Ver todos <ArrowRight size={12} />
               </Link>
             </div>
             {tripsLoading ? (

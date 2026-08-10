@@ -1,13 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import TrackingPage from './page';
+import TripsMapView from './TripsMapView';
 
-jest.mock('@/components/layout/DashboardLayout', () => ({
-  __esModule: true,
-  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-
-// Leaflet map is mocked out — exercises the dynamic() import target.
 jest.mock('@/components/maps/MapView', () => ({
   __esModule: true,
   default: () => <div data-testid="map" />,
@@ -33,11 +27,11 @@ jest.mock('@/lib/api', () => ({
   },
 }));
 
-function renderPage() {
+function renderView() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <TrackingPage />
+      <TripsMapView />
     </QueryClientProvider>,
   );
 }
@@ -61,10 +55,10 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('TrackingPage', () => {
+describe('TripsMapView', () => {
   it('queries trips by role (TRANSPORTER -> getMy with IN_PROGRESS filter)', async () => {
     api.getMy.mockResolvedValue({ data: { trips } });
-    renderPage();
+    renderView();
     await waitFor(() =>
       expect(api.getMy).toHaveBeenCalledWith({ status: 'IN_PROGRESS' }),
     );
@@ -72,29 +66,29 @@ describe('TrackingPage', () => {
     expect(api.getAll).not.toHaveBeenCalled();
   });
 
-  it('renders the map and lists trackable trips with the active count', async () => {
+  it('renders the map and lists in-progress trips with the active count', async () => {
     api.getMy.mockResolvedValue({ data: { trips } });
-    renderPage();
+    renderView();
 
     expect(await screen.findByText('Granos a Rosario')).toBeInTheDocument();
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    expect(screen.getByText('Viajes Activos (1)')).toBeInTheDocument();
+    expect(screen.getByText('Viajes en curso (1)')).toBeInTheDocument();
     expect(screen.getByTestId('map')).toBeInTheDocument();
   });
 
-  it('links each trip to its live tracking detail', async () => {
+  it('links each trip to its full trip detail page', async () => {
     api.getMy.mockResolvedValue({ data: { trips } });
-    renderPage();
+    renderView();
     const link = (await screen.findByText('Granos a Rosario')).closest('a');
-    expect(link).toHaveAttribute('href', '/tracking/trip-1');
+    expect(link).toHaveAttribute('href', '/trips/trip-1');
   });
 
-  it('shows the empty state when there are no active trips', async () => {
+  it('shows the empty state when there are no in-progress trips', async () => {
     api.getMy.mockResolvedValue({ data: { trips: [] } });
-    renderPage();
+    renderView();
     expect(
-      await screen.findByText('Sin viajes activos para seguir'),
+      await screen.findByText('Sin viajes en curso ahora mismo.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Viajes Activos (0)')).toBeInTheDocument();
+    expect(screen.getByText('Viajes en curso (0)')).toBeInTheDocument();
   });
 });
