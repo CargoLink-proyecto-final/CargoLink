@@ -67,7 +67,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('Panel')).toBeInTheDocument();
     expect(screen.getByText('Mis Cargas')).toBeInTheDocument();
     expect(screen.getByText('Nueva Carga')).toBeInTheDocument();
-    expect(screen.getByText('Seguimiento')).toBeInTheDocument();
+    expect(screen.getByText('Viajes')).toBeInTheDocument();
     expect(screen.getByText('Mensajes')).toBeInTheDocument();
   });
 

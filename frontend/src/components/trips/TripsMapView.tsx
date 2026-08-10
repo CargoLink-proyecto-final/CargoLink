@@ -1,17 +1,16 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useQuery, useQueries } from '@tanstack/react-query';
-import DashboardLayout from '@/components/layout/DashboardLayout';
 import { tripsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import { fetchRoute } from '@/lib/routing';
-import Link from 'next/link';
 
 const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
 
-export default function TrackingPage() {
+export default function TripsMapView() {
   const user = useAuthStore((s) => s.user);
 
   const { data: tripsData } = useQuery({
@@ -69,39 +68,41 @@ export default function TrackingPage() {
     }));
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        <h1 className="text-xl sm:text-2xl font-bold">Seguimiento en Tiempo Real</h1>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ height: 'clamp(280px, 55vh, 500px)', zIndex: 1 }}>
-          <MapView markers={markers} routes={routes} />
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-5 border-b border-gray-100">
-            <h2 className="font-semibold">Viajes Activos ({trips.length})</h2>
-          </div>
-          {trips.length === 0 ? (
-            <div className="p-10 text-center text-gray-400">Sin viajes activos para seguir</div>
-          ) : (
-            <div className="divide-y divide-gray-50">
-              {trips.map((trip: any) => (
-                <Link key={trip.id} href={`/tracking/${trip.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50 transition block">
-                  <div>
-                    <p className="font-medium">{trip.load?.title}</p>
-                    <p className="text-sm text-gray-500">
-                      {trip.carrier?.firstName} {trip.carrier?.lastName}
-                    </p>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>
-                    {getSolicitudStageLabel(trip.status)}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
+    <div className="space-y-6">
+      <div className="card overflow-hidden relative" style={{ height: 'clamp(280px, 55vh, 500px)', zIndex: 1 }}>
+        <MapView markers={markers} routes={routes} />
       </div>
-    </DashboardLayout>
+
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b border-ink-200/70">
+          <h2 className="font-display text-[18px]">Viajes en curso ({trips.length})</h2>
+        </div>
+        {trips.length === 0 ? (
+          <div className="px-10 py-16 text-center text-ink-400 text-sm">
+            Sin viajes en curso ahora mismo.
+          </div>
+        ) : (
+          <div>
+            {trips.map((trip: any, i: number) => (
+              <Link
+                key={trip.id}
+                href={`/trips/${trip.id}`}
+                className={`flex items-center justify-between gap-3 px-5 py-4 transition hover:bg-surface-sunk/60 ${i !== 0 ? 'border-t border-ink-200/60' : ''}`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-ink-900 truncate">{trip.load?.title}</p>
+                  <p className="text-[12.5px] text-ink-500 truncate mt-0.5">
+                    {trip.carrier?.firstName} {trip.carrier?.lastName}
+                  </p>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>
+                  {getSolicitudStageLabel(trip.status)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
