@@ -87,7 +87,7 @@ describe('CarrierDashboard', () => {
     expect(stat1s.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows the active trip as a full-width hero with route and cargo details', async () => {
+  it('shows the active trip as a full-width hero with route and a status-aware CTA', async () => {
     tripsApi.getMy.mockResolvedValue({
       data: {
         trips: [
@@ -98,9 +98,6 @@ describe('CarrierDashboard', () => {
               title: 'Trip A',
               originAddress: 'Rosario',
               destAddress: 'Cordoba',
-              cargoType: 'Paletizada',
-              weight: 800,
-              price: 5000,
             },
           },
         ],
@@ -112,10 +109,11 @@ describe('CarrierDashboard', () => {
 
     renderWithClient(<CarrierDashboard />);
 
+    // Kept deliberately minimal — just enough to identify the trip and act on
+    // it. Cargo type, weight and price stay one click away in the trip detail.
     expect(await screen.findByText('Trip A')).toBeInTheDocument();
     expect(screen.getByText(/Rosario/)).toBeInTheDocument();
     expect(screen.getByText(/Cordoba/)).toBeInTheDocument();
-    expect(screen.getByText(/Paletizada/)).toBeInTheDocument();
     // A trip that hasn't started yet gets a "start it" CTA, not a tracking link.
     expect(screen.getByRole('link', { name: /Iniciar viaje/ })).toHaveAttribute('href', '/trips/t1');
   });

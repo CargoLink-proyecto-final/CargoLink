@@ -97,15 +97,6 @@ export default function CarrierDashboard() {
                   <p className="text-[13px] text-ink-500 mt-1 truncate">
                     {activeTrip.load?.originAddress} <span className="text-ink-400">→</span> {activeTrip.load?.destAddress}
                   </p>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[12.5px] text-ink-600">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Package size={13} className="text-ink-400" />
-                      {activeTrip.load?.cargoType} · {activeTrip.load?.weight} kg
-                    </span>
-                    <span className="font-mono text-primary-700 tabular-nums">
-                      {formatCurrency(activeTrip.load?.price || 0)}
-                    </span>
-                  </div>
                 </div>
                 <Link
                   href={`/trips/${activeTrip.id}`}
