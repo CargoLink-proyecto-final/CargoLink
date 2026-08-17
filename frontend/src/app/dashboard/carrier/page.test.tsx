@@ -80,6 +80,8 @@ describe('CarrierDashboard', () => {
     // The accepted trip is folded into the "ver todos" link, not repeated by name.
     expect(screen.getByText(/1 viaje más en curso/)).toBeInTheDocument();
     expect(screen.queryByText('Trip B')).not.toBeInTheDocument();
+    // A trip already IN_PROGRESS gets a tracking CTA, not a "start it" one.
+    expect(screen.getByRole('link', { name: /Ver seguimiento/ })).toHaveAttribute('href', '/trips/t1');
     // Total = 4 trips.
     expect(screen.getByText('4')).toBeInTheDocument();
     // One IN_PROGRESS + one ACCEPTED + two COMPLETED → "1" appears for active.
