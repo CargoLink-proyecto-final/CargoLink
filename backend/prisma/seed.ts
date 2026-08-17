@@ -150,7 +150,7 @@ async function main() {
           destAddress: 'Av. Colón 567, Córdoba',
           destLat: -31.4201,
           destLng: -64.1888,
-          cargoType: 'Electrónica',
+          cargoType: 'Electrónica y tecnología',
           weight: 2500,
           volume: 8.5,
           pickupDate: pickup,

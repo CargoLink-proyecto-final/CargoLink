@@ -1,5 +1,6 @@
-import { IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { CARGO_TYPES } from '../cargo-types.constant';
 
 export class CreateLoadDto {
   @ApiProperty({ example: 'Electronics shipment to Buenos Aires' })
@@ -38,9 +39,10 @@ export class CreateLoadDto {
   @IsNumber({}, { message: 'La longitud de destino debe ser un número' })
   destLng: number;
 
-  @ApiProperty({ example: 'Electronics' })
+  @ApiProperty({ example: 'Mercadería general', enum: CARGO_TYPES })
   @IsString({ message: 'El tipo de carga debe ser texto' })
   @IsNotEmpty({ message: 'El tipo de carga es obligatorio' })
+  @IsIn(CARGO_TYPES, { message: `El tipo de carga debe ser uno de: ${CARGO_TYPES.join(', ')}` })
   cargoType: string;
 
   @ApiProperty({ example: 5000 })
