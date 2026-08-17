@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import CarrierDashboard from './page';
@@ -75,14 +75,49 @@ describe('CarrierDashboard', () => {
 
     renderWithClient(<CarrierDashboard />);
 
-    // Active trip appears in the "Mis viajes activos" list once trips resolve.
+    // The in-progress trip wins the hero slot (it's the most urgent one).
     expect(await screen.findByText('Trip A')).toBeInTheDocument();
-    expect(screen.getByText('Trip B')).toBeInTheDocument();
+    // The accepted trip is folded into the "ver todos" link, not repeated by name.
+    expect(screen.getByText(/1 viaje más en curso/)).toBeInTheDocument();
+    expect(screen.queryByText('Trip B')).not.toBeInTheDocument();
     // Total = 4 trips.
     expect(screen.getByText('4')).toBeInTheDocument();
     // One IN_PROGRESS + one ACCEPTED + two COMPLETED → "1" appears for active.
     const stat1s = screen.getAllByText('1');
     expect(stat1s.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows the active trip as a full-width hero with route and cargo details', async () => {
+    tripsApi.getMy.mockResolvedValue({
+      data: {
+        trips: [
+          {
+            id: 't1',
+            status: 'ACCEPTED',
+            load: {
+              title: 'Trip A',
+              originAddress: 'Rosario',
+              destAddress: 'Cordoba',
+              cargoType: 'Paletizada',
+              weight: 800,
+              price: 5000,
+            },
+          },
+        ],
+      },
+    });
+    loadsApi.getAvailable.mockResolvedValue({ data: { loads: [] } });
+    postulationsApi.getMy.mockResolvedValue({ data: [] });
+    tripsApi.getMetrics.mockResolvedValue({ data: null });
+
+    renderWithClient(<CarrierDashboard />);
+
+    expect(await screen.findByText('Trip A')).toBeInTheDocument();
+    expect(screen.getByText(/Rosario/)).toBeInTheDocument();
+    expect(screen.getByText(/Cordoba/)).toBeInTheDocument();
+    expect(screen.getByText(/Paletizada/)).toBeInTheDocument();
+    // A trip that hasn't started yet gets a "start it" CTA, not a tracking link.
+    expect(screen.getByRole('link', { name: /Iniciar viaje/ })).toHaveAttribute('href', '/trips/t1');
   });
 
   it('renders performance metrics', async () => {
@@ -92,6 +127,9 @@ describe('CarrierDashboard', () => {
     tripsApi.getMetrics.mockResolvedValue({ data: metrics });
 
     renderWithClient(<CarrierDashboard />);
+
+    // Performance stats are collapsed behind a toggle by default to declutter the panel.
+    fireEvent.click(await screen.findByRole('button', { name: /Ver métricas/ }));
 
     expect(await screen.findByText('3.5 km/L')).toBeInTheDocument();
     expect(screen.getByText('200 L')).toBeInTheDocument();
@@ -150,8 +188,10 @@ describe('CarrierDashboard', () => {
     expect(
       await screen.findByText('Sin cargas disponibles ahora mismo.'),
     ).toBeInTheDocument();
+    // No active trips → the hero collapses to a lightweight prompt instead of an empty list.
+    expect(await screen.findByText('Sin viajes activos')).toBeInTheDocument();
     expect(
-      await screen.findByText('Sin viajes aún. Postulate a una carga para empezar.'),
+      screen.getByText('Postulate a una carga disponible para arrancar un viaje.'),
     ).toBeInTheDocument();
     expect(
       await screen.findByText('No te postulaste a ninguna carga todavía.'),
