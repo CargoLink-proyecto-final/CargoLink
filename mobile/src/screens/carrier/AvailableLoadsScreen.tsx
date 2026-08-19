@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadsApi, usersApi } from '../../services/api';
-import { formatCurrency } from '../../lib/labels';
+import { formatPrice } from '../../lib/labels';
 import { Load } from '../../types';
 
 export default function AvailableLoadsScreen({ navigation }: any) {
@@ -96,14 +96,7 @@ export default function AvailableLoadsScreen({ navigation }: any) {
               {item.originAddress} → {item.destAddress}
             </Text>
             <View style={styles.cardFooter}>
-              <View>
-                <Text style={styles.cardPrice}>{formatCurrency(item.price)}</Text>
-                {item.maxBudget != null && (
-                  <Text style={styles.cardBudget}>
-                    hasta {formatCurrency(item.maxBudget)}
-                  </Text>
-                )}
-              </View>
+              <Text style={styles.cardPrice}>{formatPrice(item.price)}</Text>
               <View style={styles.cardMeta}>
                 <Text style={styles.cardMetaText}>{item.weight} kg</Text>
                 <Text style={styles.cardMetaText}>{item.cargoType}</Text>
@@ -163,7 +156,6 @@ const styles = StyleSheet.create({
   cardPrice: { fontSize: 18, fontWeight: '700', color: '#2563eb' },
   cardMeta: { flexDirection: 'row', gap: 8 },
   cardMetaText: { fontSize: 12, color: '#9ca3af', backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  cardBudget: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   cardShipper: { fontSize: 12, color: '#9ca3af', marginTop: 8 },
   cardInterest: { fontSize: 12, color: '#1e40af', fontWeight: '600', marginTop: 6 },
   zoneHint: {

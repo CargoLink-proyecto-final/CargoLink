@@ -42,8 +42,7 @@ interface LoadForm {
   lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
-  price: number;
-  maxBudget?: number;
+  price?: number;
 }
 
 function toDatetimeLocal(iso: string | undefined | null): string {
@@ -87,14 +86,16 @@ export default function EditLoadPage() {
         lengthCm: load.lengthCm ?? undefined,
         pickupDate: toDatetimeLocal(load.pickupDate),
         deliveryDate: toDatetimeLocal(load.deliveryDate),
-        price: load.price,
-        maxBudget: load.maxBudget ?? undefined,
+        price: load.price ?? undefined,
       });
     }
   }, [load, reset]);
 
   const updateMutation = useMutation({
-    mutationFn: (payload: Partial<LoadForm>) => loadsApi.update(id, payload),
+    // `price: null` es un valor válido del payload: vacía el precio y devuelve
+    // la carga a "a convenir".
+    mutationFn: (payload: Partial<Omit<LoadForm, 'price'>> & { price?: number | null }) =>
+      loadsApi.update(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['load', id] });
       router.push(`/loads/${id}`);
@@ -130,8 +131,8 @@ export default function EditLoadPage() {
       heightCm: data.heightCm ? Number(data.heightCm) : undefined,
       widthCm: data.widthCm ? Number(data.widthCm) : undefined,
       lengthCm: data.lengthCm ? Number(data.lengthCm) : undefined,
-      price: Number(data.price),
-      maxBudget: data.maxBudget ? Number(data.maxBudget) : undefined,
+      // Vaciar el campo devuelve la carga a "a convenir".
+      price: data.price ? Number(data.price) : null,
     });
   };
 
@@ -241,8 +242,9 @@ export default function EditLoadPage() {
                 <input type="number" step="0.1" {...register('volume')} disabled={isLocked} className={inputClass} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS) <span className="text-red-500">*</span></label>
-                <input type="number" {...register('price', { required: 'Requerido' })} disabled={isLocked} className={inputClass} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS, opcional)</label>
+                <input type="number" {...register('price')} disabled={isLocked} className={inputClass} />
+                <p className="text-gray-500 text-xs mt-1">Vacío = &quot;a convenir&quot;.</p>
               </div>
             </div>
 
@@ -250,10 +252,6 @@ export default function EditLoadPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad de bultos (opcional)</label>
                 <input type="number" step="1" {...register('packageCount')} disabled={isLocked} className={inputClass} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Presupuesto máximo (ARS, opcional)</label>
-                <input type="number" step="0.01" {...register('maxBudget')} disabled={isLocked} className={inputClass} />
               </div>
             </div>
 

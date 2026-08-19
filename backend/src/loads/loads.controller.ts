@@ -223,7 +223,7 @@ function buildLoadsCsv(loads: any[]): string {
   const rows = loads.map((l) => {
     const trip = l.trip;
     return csvRow([
-      l.id, l.title, l.status, l.cargoType, l.weight, l.volume ?? '', l.price,
+      l.id, l.title, l.status, l.cargoType, l.weight, l.volume ?? '', l.price ?? '',
       l.originAddress, l.originLat, l.originLng,
       l.destAddress, l.destLat, l.destLng,
       l.pickupDate, l.deliveryDate ?? '',

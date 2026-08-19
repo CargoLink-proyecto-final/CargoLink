@@ -86,13 +86,13 @@ export class CreateLoadDto {
   @IsDateString({}, { message: 'La fecha de entrega debe ser una fecha válida' })
   deliveryDate: string;
 
-  @ApiProperty({ example: 150000 })
-  @IsNumber({}, { message: 'El precio debe ser un número' })
-  price: number;
-
-  @ApiProperty({ example: 180000, required: false, description: 'Presupuesto máximo opcional que el publicador está dispuesto a pagar' })
+  @ApiProperty({
+    example: 150000,
+    required: false,
+    description: 'Opcional. Si no se envía, la carga sale "a convenir" y el precio lo fija la postulación del transportista.',
+  })
   @IsOptional()
-  @IsNumber({}, { message: 'El presupuesto máximo debe ser un número' })
-  @Min(0, { message: 'El presupuesto máximo no puede ser negativo' })
-  maxBudget?: number;
+  @IsNumber({}, { message: 'El precio debe ser un número' })
+  @Min(0, { message: 'El precio no puede ser negativo' })
+  price?: number;
 }

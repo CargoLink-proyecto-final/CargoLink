@@ -10,7 +10,7 @@ import RatingModal from '@/components/ratings/RatingModal';
 import { tripsApi, ratingsApi } from '@/lib/api';
 import type { Trip, Rating } from '@/types';
 import { useAuthStore } from '@/store/auth';
-import { formatCurrency, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
+import { formatCurrency, formatPrice, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import { useRoute } from '@/lib/useRoute';
 import { MapPin, Truck, Calendar, Star, MessageSquare, Fuel, Route, Gauge } from 'lucide-react';
 import Link from 'next/link';
@@ -282,7 +282,7 @@ export default function TripDetailPage() {
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-gray-500">Tipo:</span> <span className="font-medium">{trip.load?.cargoType}</span></div>
               <div><span className="text-gray-500">Peso:</span> <span className="font-medium">{trip.load?.weight} kg</span></div>
-              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatCurrency(trip.load?.price || 0)}</span></div>
+              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatPrice(trip.load?.price)}</span></div>
             </div>
           </div>
         </div>

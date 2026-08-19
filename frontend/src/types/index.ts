@@ -44,8 +44,8 @@ export interface Load {
   lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
-  price: number;
-  maxBudget?: number;
+  // Opcional: sin precio, la carga sale "a convenir" y lo fija la postulación.
+  price?: number | null;
   status: LoadStatus;
   trip?: Trip;
   pendingPostulationsCount?: number;

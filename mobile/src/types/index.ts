@@ -48,10 +48,8 @@ export interface Load {
   lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
-  price: number;
-  // Techo opcional que el publicador está dispuesto a pagar. Sólo tiene sentido
-  // junto a `price`: acota el rango de negociación de las postulaciones.
-  maxBudget?: number;
+  // Opcional: sin precio, la carga sale "a convenir" y lo fija la postulación.
+  price?: number | null;
   status: LoadStatus;
   trip?: Trip;
   pendingPostulationsCount?: number;

@@ -35,3 +35,21 @@ describe('CreateLoadDto — cargoType whitelist', () => {
     expect(cargoTypeError?.constraints).toHaveProperty('isIn');
   });
 });
+
+describe('CreateLoadDto — price', () => {
+  it('accepts a load published without a price ("a convenir")', async () => {
+    const errors = await validate(baseLoad({ price: undefined }));
+    expect(errors.filter((e) => e.property === 'price')).toHaveLength(0);
+  });
+
+  it('still rejects a negative price when one is sent', async () => {
+    const errors = await validate(baseLoad({ price: -1 }));
+    const priceError = errors.find((e) => e.property === 'price');
+    expect(priceError?.constraints).toHaveProperty('min');
+  });
+
+  it('still rejects a non-numeric price', async () => {
+    const errors = await validate(baseLoad({ price: 'gratis' as unknown as number }));
+    expect(errors.find((e) => e.property === 'price')).toBeDefined();
+  });
+});

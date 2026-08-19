@@ -1,6 +1,7 @@
 import {
   cn,
   formatCurrency,
+  formatPrice,
   formatDate,
   getStatusColor,
   getStatusLabel,
@@ -32,6 +33,22 @@ describe('formatCurrency', () => {
 
   it('handles zero', () => {
     expect(formatCurrency(0)).toMatch(/0/);
+  });
+});
+
+describe('formatPrice', () => {
+  it('falls back to "A convenir" when the load has no price', () => {
+    expect(formatPrice(null)).toBe('A convenir');
+    expect(formatPrice(undefined)).toBe('A convenir');
+  });
+
+  it('formats a real price like formatCurrency', () => {
+    expect(formatPrice(1000)).toBe(formatCurrency(1000));
+  });
+
+  it('does not treat a zero price as missing', () => {
+    // 0 es un precio declarado (raro, pero explícito): no es "a convenir".
+    expect(formatPrice(0)).toBe(formatCurrency(0));
   });
 });
 

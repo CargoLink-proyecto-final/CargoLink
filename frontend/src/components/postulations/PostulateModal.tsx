@@ -4,7 +4,8 @@ import { useState, FormEvent } from 'react';
 import { formatCurrency } from '@/lib/utils';
 
 interface Props {
-  listedPrice: number;
+  /** `null` = carga "a convenir": el precio lo pone el transportista y es obligatorio. */
+  listedPrice: number | null;
   submitting: boolean;
   onSubmit: (data: { message?: string; proposedPrice?: number }) => void;
   onClose: () => void;
@@ -19,22 +20,32 @@ export default function PostulateModal({
   const [message, setMessage] = useState('');
   const [proposedPrice, setProposedPrice] = useState('');
 
+  // Sin precio listado no hay nada que aceptar en silencio: proponer uno pasa a
+  // ser obligatorio, y no hay piso contra el cual compararlo.
+  const priceRequired = listedPrice == null;
+
   const parsedPrice = proposedPrice ? Number(proposedPrice) : undefined;
   const priceError =
-    proposedPrice !== '' && parsedPrice != null && (
-      parsedPrice <= 0
-        ? 'El precio debe ser mayor a 0'
-        : parsedPrice <= listedPrice
-        ? `Debe ser mayor al precio listado (${formatCurrency(listedPrice)}). Si aceptás ese precio, dejá el campo vacío.`
+    proposedPrice === ''
+      ? priceRequired
+        ? 'Esta carga no tiene precio publicado: proponé el tuyo.'
         : null
-    );
+      : parsedPrice != null && (
+          parsedPrice <= 0
+            ? 'El precio debe ser mayor a 0'
+            : listedPrice != null && parsedPrice <= listedPrice
+            ? `Debe ser mayor al precio listado (${formatCurrency(listedPrice)}). Si aceptás ese precio, dejá el campo vacío.`
+            : null
+        );
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (priceError) return;
     const trimmedMessage = message.trim();
     const validPrice =
-      parsedPrice != null && !Number.isNaN(parsedPrice) && parsedPrice > listedPrice
+      parsedPrice != null &&
+      !Number.isNaN(parsedPrice) &&
+      (listedPrice == null ? parsedPrice > 0 : parsedPrice > listedPrice)
         ? parsedPrice
         : undefined;
     onSubmit({
@@ -59,7 +70,11 @@ export default function PostulateModal({
             Enviar postulación
           </h2>
           <p className="text-sm text-ink-500 mt-1">
-            Precio listado: <span className="font-medium">{formatCurrency(listedPrice)}</span>
+            {listedPrice == null ? (
+              <>Esta carga sale <span className="font-medium">a convenir</span>: el precio lo ponés vos.</>
+            ) : (
+              <>Precio listado: <span className="font-medium">{formatCurrency(listedPrice)}</span></>
+            )}
           </p>
         </div>
 
@@ -81,7 +96,7 @@ export default function PostulateModal({
 
         <div className="space-y-1">
           <label htmlFor="postulation-price" className="text-sm font-medium text-ink-700">
-            Precio propuesto (opcional)
+            {priceRequired ? 'Precio propuesto' : 'Precio propuesto (opcional)'}
           </label>
           <input
             id="postulation-price"
@@ -90,14 +105,16 @@ export default function PostulateModal({
             step="any"
             value={proposedPrice}
             onChange={(e) => setProposedPrice(e.target.value)}
-            placeholder={`Mayor a ${formatCurrency(listedPrice)}`}
+            placeholder={listedPrice == null ? 'Tu precio' : `Mayor a ${formatCurrency(listedPrice)}`}
             className={`w-full rounded-card border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 ${priceError ? 'border-danger-400 focus:border-danger-400' : 'border-ink-200 focus:border-primary-500'}`}
           />
           {priceError ? (
             <p className="text-xs text-danger-600">{priceError}</p>
           ) : (
             <p className="text-xs text-ink-400">
-              Dejá vacío para aceptar el precio listado. Si querés negociar, ingresá un precio estrictamente mayor.
+              {priceRequired
+                ? 'El publicador no fijó precio, así que tu propuesta es la que define el valor del viaje.'
+                : 'Dejá vacío para aceptar el precio listado. Si querés negociar, ingresá un precio estrictamente mayor.'}
             </p>
           )}
         </div>

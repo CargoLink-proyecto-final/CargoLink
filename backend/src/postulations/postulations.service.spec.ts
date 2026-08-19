@@ -128,6 +128,28 @@ describe('PostulationsService', () => {
       expect(prisma.postulation.create).toHaveBeenCalled();
     });
 
+    it('requires a proposed price on a load published without one', async () => {
+      // Carga "a convenir": no hay precio listado que aceptar en silencio.
+      prisma.load.findUnique.mockResolvedValue({ ...baseLoad, price: null });
+      prisma.postulation.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create('load-1', TRANSPORTER_ID, { message: 'hola' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.postulation.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts any proposed price on a load published without one', async () => {
+      // Sin precio listado no hay piso: el transportista pone el primer número.
+      prisma.load.findUnique.mockResolvedValue({ ...baseLoad, price: null });
+      prisma.postulation.findUnique.mockResolvedValue(null);
+      prisma.postulation.create.mockResolvedValue({ id: 'new-post' });
+
+      await service.create('load-1', TRANSPORTER_ID, { proposedPrice: 1 });
+
+      expect(prisma.postulation.create).toHaveBeenCalled();
+    });
+
     it('throws NotFoundException when the load does not exist', async () => {
       prisma.load.findUnique.mockResolvedValue(null);
       await expect(
@@ -716,6 +738,24 @@ describe('PostulationsService', () => {
         await expect(
           service.counterOffer('post-1', TRANSPORTER_ID, 'TRANSPORTER', { price: 100000 }),
         ).rejects.toThrow(BadRequestException);
+      });
+
+      it('has no floor when the load was published without a price', async () => {
+        // Carga "a convenir" y sin contra-oferta del dador: no hay número
+        // contra el cual comparar, así que cualquier precio positivo entra.
+        prisma.postulation.findUnique.mockResolvedValue({
+          ...basePostulation,
+          status: PostulationStatus.NEGOTIATING,
+          lastOfferBy: 'SHIPPER',
+          proposedPrice: 120000,
+          counterOfferPrice: null,
+          load: { ...baseLoad, price: null },
+        });
+        prisma.postulation.update.mockResolvedValue({ id: 'post-1' });
+
+        await service.counterOffer('post-1', TRANSPORTER_ID, 'TRANSPORTER', { price: 1 });
+
+        expect(prisma.postulation.update).toHaveBeenCalled();
       });
     });
   });

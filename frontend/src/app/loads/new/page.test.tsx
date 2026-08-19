@@ -66,6 +66,23 @@ describe('NewLoadPage — validation', () => {
     expect(await screen.findAllByText('Requerido')).not.toHaveLength(0);
     expect(loadsApi.create).not.toHaveBeenCalled();
   });
+
+  it('does not require a price — an empty one means "a convenir"', async () => {
+    const user = userEvent.setup();
+    render(<NewLoadPage />);
+
+    expect(screen.getByText('Precio (ARS, opcional)')).toBeInTheDocument();
+    expect(
+      screen.getByText(/la carga sale "a convenir" y el precio lo proponen los transportistas/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Crear Carga' }));
+
+    // Otros campos siguen marcando "Requerido", pero el precio no.
+    const priceField = (document.querySelector('input[name="price"]') as HTMLInputElement)
+      .parentElement;
+    expect(priceField?.textContent).not.toContain('Requerido');
+  });
 });
 
 describe('NewLoadPage — successful create', () => {
