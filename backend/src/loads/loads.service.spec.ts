@@ -17,9 +17,13 @@ describe('LoadsService', () => {
       count: jest.Mock;
       findUnique: jest.Mock;
       update: jest.Mock;
+      groupBy: jest.Mock;
     };
     user: {
       findUnique: jest.Mock;
+    };
+    city: {
+      findMany: jest.Mock;
     };
   };
 
@@ -47,9 +51,13 @@ describe('LoadsService', () => {
         count: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        groupBy: jest.fn().mockResolvedValue([]),
       },
       user: {
         findUnique: jest.fn(),
+      },
+      city: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
 
@@ -131,6 +139,12 @@ describe('LoadsService', () => {
       expect(result.loads[0].pendingPostulationsCount).toBe(3);
     });
 
+    it('hides the postulation count when the caller asks to', async () => {
+      prisma.load.findMany.mockResolvedValue([{ ...baseLoad, _count: { postulations: 3 } }]);
+      const result = await service.findAll({ hidePostulationCount: true });
+      expect(result.loads[0].pendingPostulationsCount).toBeUndefined();
+    });
+
     it('defaults pendingPostulationsCount to 0 when _count missing', async () => {
       prisma.load.findMany.mockResolvedValue([{ ...baseLoad }]);
       const result = await service.findAll();
@@ -203,6 +217,21 @@ describe('LoadsService', () => {
       expect(where.createdAt.lte).toEqual(expectedEnd);
     });
 
+    it('filters by the city foreign keys, not by address text', async () => {
+      await service.findAll({ originCityId: 'city-1', destCityId: 'city-2' });
+      const where = prisma.load.findMany.mock.calls[0][0].where;
+      expect(where.originCityId).toBe('city-1');
+      expect(where.destCityId).toBe('city-2');
+      expect(where.originAddress).toBeUndefined();
+    });
+
+    it('does not constrain cities when none is provided', async () => {
+      await service.findAll({});
+      const where = prisma.load.findMany.mock.calls[0][0].where;
+      expect(where.originCityId).toBeUndefined();
+      expect(where.destCityId).toBeUndefined();
+    });
+
     it('applies pickupDate and deliveryDate ranges', async () => {
       await service.findAll({ pickupFrom: '2026-02-01', deliveryTo: '2026-03-01' });
       const where = prisma.load.findMany.mock.calls[0][0].where;
@@ -228,6 +257,18 @@ describe('LoadsService', () => {
     });
   });
 
+  describe('findAvailable — visibilidad del conteo', () => {
+    it('no le expone a un transportista cuántos se postularon', async () => {
+      prisma.user.findUnique.mockResolvedValue({ zoneLat: null, zoneLng: null });
+      prisma.load.findMany.mockResolvedValue([{ ...baseLoad, _count: { postulations: 4 } }]);
+      prisma.load.count.mockResolvedValue(1);
+
+      const result = await service.findAvailable('carrier-1');
+
+      expect(result.loads[0].pendingPostulationsCount).toBeUndefined();
+    });
+  });
+
   describe('findAvailable', () => {
     it('delegates to findAll forcing PUBLISHED status (no zone → no prioritization)', async () => {
       prisma.user.findUnique.mockResolvedValue({ zoneLat: null, zoneLng: null });
@@ -238,6 +279,7 @@ describe('LoadsService', () => {
         limit: 5,
         status: LoadStatus.PUBLISHED,
         prioritizeZone: undefined,
+        hidePostulationCount: true,
       });
     });
 
@@ -250,7 +292,57 @@ describe('LoadsService', () => {
         limit: 5,
         status: LoadStatus.PUBLISHED,
         prioritizeZone: { lat: -31.42, lng: -64.18 },
+        hidePostulationCount: true,
       });
+    });
+  });
+
+  describe('findFilterCities', () => {
+    const cityRows = [
+      { id: 'city-1', code: '06638040', name: 'Pilar', department: 'Pilar', lat: -34.4, lng: -58.9, province: { id: 'prov-1', name: 'Buenos Aires' } },
+      { id: 'city-2', code: '14014010', name: 'Córdoba', department: 'Capital', lat: -31.4, lng: -64.1, province: { id: 'prov-2', name: 'Córdoba' } },
+    ];
+
+    beforeEach(() => {
+      prisma.load.groupBy
+        .mockResolvedValueOnce([{ originCityId: 'city-1' }])
+        .mockResolvedValueOnce([{ destCityId: 'city-2' }]);
+      prisma.city.findMany.mockResolvedValue(cityRows);
+    });
+
+    it('scopes a shipper to their own loads', async () => {
+      await service.findFilterCities({ id: 'shipper-1', role: 'CARGO_GENERATOR' });
+      expect(prisma.load.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { shipperId: 'shipper-1', originCityId: { not: null } },
+        }),
+      );
+    });
+
+    it('scopes a carrier to published loads', async () => {
+      await service.findFilterCities({ id: 'carrier-1', role: 'TRANSPORTER' });
+      expect(prisma.load.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: LoadStatus.PUBLISHED, originCityId: { not: null } },
+        }),
+      );
+    });
+
+    it('does not scope an admin', async () => {
+      await service.findFilterCities({ id: 'admin-1', role: 'ADMIN' });
+      expect(prisma.load.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { originCityId: { not: null } } }),
+      );
+    });
+
+    it('returns each leg separately with the province flattened in', async () => {
+      const result = await service.findFilterCities({ id: 'admin-1', role: 'ADMIN' });
+      expect(result.origin).toEqual([
+        expect.objectContaining({ id: 'city-1', name: 'Pilar', provinceName: 'Buenos Aires' }),
+      ]);
+      expect(result.dest).toEqual([
+        expect.objectContaining({ id: 'city-2', name: 'Córdoba', provinceName: 'Córdoba' }),
+      ]);
     });
   });
 

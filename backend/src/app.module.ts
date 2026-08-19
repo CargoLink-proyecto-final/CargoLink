@@ -8,6 +8,7 @@ import { TripsModule } from './trips/trips.module';
 import { PostulationsModule } from './postulations/postulations.module';
 import { MessagesModule } from './messages/messages.module';
 import { RatingsModule } from './ratings/ratings.module';
+import { GeoModule } from './geo/geo.module';
 import { CompaniesModule } from './companies/companies.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { CompaniesModule } from './companies/companies.module';
     MessagesModule,
     RatingsModule,
     CompaniesModule,
+    GeoModule,
   ],
 })
 export class AppModule {}

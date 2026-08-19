@@ -44,6 +44,8 @@ export class LoadsController {
     @Query('status') status?: LoadStatus,
     @Query('cargoType') cargoType?: string,
     @Query('q') q?: string,
+    @Query('originCityId') originCityId?: string,
+    @Query('destCityId') destCityId?: string,
     @Query('minWeight') minWeight?: number,
     @Query('maxWeight') maxWeight?: number,
     @Query('minPrice') minPrice?: number,
@@ -58,7 +60,7 @@ export class LoadsController {
     @Query('limit') limit?: number,
   ) {
     return this.loadsService.findAll({
-      status, cargoType, q,
+      status, cargoType, q, originCityId, destCityId,
       minWeight: minWeight ? Number(minWeight) : undefined,
       maxWeight: maxWeight ? Number(maxWeight) : undefined,
       minPrice: minPrice ? Number(minPrice) : undefined,
@@ -68,12 +70,22 @@ export class LoadsController {
     });
   }
 
+  @Get('filter-cities')
+  @ApiOperation({
+    summary: 'Cities present in the loads the caller can see — feeds the filter dropdown',
+  })
+  getFilterCities(@CurrentUser() user: { id: string; role: string }) {
+    return this.loadsService.findFilterCities(user);
+  }
+
   @Get('available')
   @ApiOperation({ summary: 'List available loads for carriers with filters' })
   findAvailable(
     @CurrentUser('id') userId: string,
     @Query('cargoType') cargoType?: string,
     @Query('q') q?: string,
+    @Query('originCityId') originCityId?: string,
+    @Query('destCityId') destCityId?: string,
     @Query('minWeight') minWeight?: number,
     @Query('maxWeight') maxWeight?: number,
     @Query('minPrice') minPrice?: number,
@@ -90,7 +102,7 @@ export class LoadsController {
     // Las cargas se priorizan por la zona de influencia del transportista (P12)
     // dentro del service, según el userId.
     return this.loadsService.findAvailable(userId, {
-      cargoType, q,
+      cargoType, q, originCityId, destCityId,
       minWeight: minWeight ? Number(minWeight) : undefined,
       maxWeight: maxWeight ? Number(maxWeight) : undefined,
       minPrice: minPrice ? Number(minPrice) : undefined,
@@ -109,6 +121,8 @@ export class LoadsController {
     @Query('status') status?: LoadStatus,
     @Query('cargoType') cargoType?: string,
     @Query('q') q?: string,
+    @Query('originCityId') originCityId?: string,
+    @Query('destCityId') destCityId?: string,
     @Query('createdFrom') createdFrom?: string,
     @Query('createdTo') createdTo?: string,
     @Query('pickupFrom') pickupFrom?: string,
@@ -120,7 +134,7 @@ export class LoadsController {
   ) {
     return this.loadsService.findAll({
       shipperId: userId,
-      status, cargoType, q,
+      status, cargoType, q, originCityId, destCityId,
       createdFrom, createdTo, pickupFrom, pickupTo, deliveryFrom, deliveryTo,
       page, limit,
     });
@@ -166,8 +180,8 @@ export class LoadsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get load details' })
-  findOne(@Param('id') id: string) {
-    return this.loadsService.findById(id);
+  findOne(@Param('id') id: string, @CurrentUser('role') role?: string) {
+    return this.loadsService.findById(id, role);
   }
 
   @Patch(':id')

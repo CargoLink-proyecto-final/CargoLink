@@ -3,9 +3,11 @@
 import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import ProvinceCombobox from '@/components/geo/ProvinceCombobox';
+import CityCombobox, { City } from '@/components/geo/CityCombobox';
 import { loadsApi } from '@/lib/api';
 import { geocodeStructured, reverseGeocode, type NominatimAddressDetail } from '@/lib/routing';
 
@@ -203,11 +205,33 @@ export default function NewLoadPage() {
   // Mismatches surfaced at submit time. They hard-block creation: pressing
   // "Crear" with any mismatch opens a modal asking the user to fix the address.
   const [submitMismatches, setSubmitMismatches] = useState<string[]>([]);
+
+  // Cualquier cambio de dirección invalida la verificación previa contra
+  // Nominatim. Elegir del desplegable no dispara onInput, así que los combos
+  // llaman a esto explícitamente.
+  const resetOriginVerification = () => {
+    setOriginVerification({ status: 'idle' });
+    setOriginPin(null);
+    setSubmitMismatches([]);
+  };
+  const resetDestVerification = () => {
+    setDestVerification({ status: 'idle' });
+    setDestPin(null);
+    setSubmitMismatches([]);
+  };
   const [showMismatchModal, setShowMismatchModal] = useState(false);
 
   const minPickup = useMemo(() => toLocalDatetimeString(new Date()), []);
 
-  const { register, handleSubmit, watch, getValues, formState: { errors } } = useForm<LoadForm>();
+  const { register, handleSubmit, watch, setValue, getValues, control, formState: { errors } } = useForm<LoadForm>();
+  // La provincia elegida acota el combo de ciudades. El formulario sigue
+  // guardando el nombre (contrato intacto); el id vive solo acá, para la búsqueda.
+  const [originProvinceId, setOriginProvinceId] = useState<string | undefined>();
+  const [destProvinceId, setDestProvinceId] = useState<string | undefined>();
+  // La ciudad elegida se manda como FK: es lo que después permite filtrar por
+  // ciudad sin adivinar sobre el texto de la dirección.
+  const [originCity, setOriginCity] = useState<City | undefined>();
+  const [destCity, setDestCity] = useState<City | undefined>();
 
   const pickupDateValue = watch('pickupDate');
   const cargoTypeValue = watch('cargoType');
@@ -349,9 +373,13 @@ export default function NewLoadPage() {
         originAddress: origin.address,
         originLat: origin.lat,
         originLng: origin.lng,
+        // Solo en modo Dirección hay ciudad elegida del padrón; en modo
+        // Coordenadas la resuelve el backfill a partir del punto.
+        originCityId: originMode === 'address' ? originCity?.id : undefined,
         destAddress: dest.address,
         destLat: dest.lat,
         destLng: dest.lng,
+        destCityId: destMode === 'address' ? destCity?.id : undefined,
       });
       router.push('/dashboard/shipper');
     } catch (err) {
@@ -474,10 +502,10 @@ export default function NewLoadPage() {
           <LocationCard
             title="Origen"
             mode={originMode}
-            onModeChange={(m) => { setOriginMode(m); setOriginVerification({ status: 'idle' }); setOriginPin(null); setSubmitMismatches([]); }}
+            onModeChange={(m) => { setOriginMode(m); resetOriginVerification(); }}
             verification={originVerification}
             onVerify={() => verifyAddress('origin', setOriginVerification, setOriginPin)}
-            onFieldChange={() => { setOriginVerification({ status: 'idle' }); setOriginPin(null); setSubmitMismatches([]); }}
+            onFieldChange={resetOriginVerification}
             pin={originPin}
             pinColor="#22c55e"
             onPinChange={(lat, lng) => setOriginPin({ lat, lng })}
@@ -485,9 +513,66 @@ export default function NewLoadPage() {
             streetError={errors.originStreet?.message}
             streetNumberInput={<input {...register('originStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 1234" />}
             streetNumberError={errors.originStreetNumber?.message}
-            cityInput={<input {...register('originCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Buenos Aires" />}
+            cityInput={
+              <Controller
+                name="originCity"
+                control={control}
+                rules={{ required: 'Requerido', pattern: { value: PLACE_PATTERN, message: PLACE_MSG } }}
+                render={({ field }) => (
+                  <CityCombobox
+                    aria-label="Ciudad"
+                    value={field.value ?? ''}
+                    selectedId={originCity?.id}
+                    provinceId={originProvinceId}
+                    onChange={(name, city) => {
+                      field.onChange(name);
+                      setOriginCity(city);
+                      // La ciudad del padrón arrastra provincia, país y CP:
+                      // completarlos evita combinaciones que no existen.
+                      if (city) {
+                        setValue('originState', city.provinceName, { shouldValidate: true });
+                        setValue('originCountry', city.country, { shouldValidate: true });
+                        setOriginProvinceId(city.provinceId);
+                        // El CP es orientativo y no todas las ciudades tienen:
+                        // se completa solo si el padrón trae uno.
+                        if (city.postalCode) {
+                          setValue('originPostalCode', city.postalCode, { shouldValidate: true });
+                        }
+                      }
+                      resetOriginVerification();
+                    }}
+                    inputClassName={inputClass}
+                    placeholder="Ej., Pilar"
+                  />
+                )}
+              />
+            }
             cityError={errors.originCity?.message}
-            stateInput={<input {...register('originState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., CABA" />}
+            stateInput={
+              <Controller
+                name="originState"
+                control={control}
+                rules={{ required: 'Requerido', pattern: { value: PLACE_PATTERN, message: PLACE_MSG } }}
+                render={({ field }) => (
+                  <ProvinceCombobox
+                    aria-label="Provincia"
+                    value={field.value ?? ''}
+                    onChange={(name, province) => {
+                      field.onChange(name);
+                      setOriginProvinceId(province?.id);
+                      if (province) {
+                        setValue('originCountry', province.country, { shouldValidate: true });
+                      }
+                      // Cambiar de provincia invalida la ciudad elegida antes.
+                      if (getValues('originCity')) setValue('originCity', '');
+                      setOriginCity(undefined);
+                      resetOriginVerification();
+                    }}
+                    inputClassName={inputClass}
+                  />
+                )}
+              />
+            }
             stateError={errors.originState?.message}
             countryInput={<input {...register('originCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
             countryError={errors.originCountry?.message}
@@ -502,10 +587,10 @@ export default function NewLoadPage() {
           <LocationCard
             title="Destino"
             mode={destMode}
-            onModeChange={(m) => { setDestMode(m); setDestVerification({ status: 'idle' }); setDestPin(null); setSubmitMismatches([]); }}
+            onModeChange={(m) => { setDestMode(m); resetDestVerification(); }}
             verification={destVerification}
             onVerify={() => verifyAddress('dest', setDestVerification, setDestPin)}
-            onFieldChange={() => { setDestVerification({ status: 'idle' }); setDestPin(null); setSubmitMismatches([]); }}
+            onFieldChange={resetDestVerification}
             pin={destPin}
             pinColor="#ef4444"
             onPinChange={(lat, lng) => setDestPin({ lat, lng })}
@@ -513,9 +598,66 @@ export default function NewLoadPage() {
             streetError={errors.destStreet?.message}
             streetNumberInput={<input {...register('destStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 567" />}
             streetNumberError={errors.destStreetNumber?.message}
-            cityInput={<input {...register('destCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Córdoba" />}
+            cityInput={
+              <Controller
+                name="destCity"
+                control={control}
+                rules={{ required: 'Requerido', pattern: { value: PLACE_PATTERN, message: PLACE_MSG } }}
+                render={({ field }) => (
+                  <CityCombobox
+                    aria-label="Ciudad"
+                    value={field.value ?? ''}
+                    selectedId={destCity?.id}
+                    provinceId={destProvinceId}
+                    onChange={(name, city) => {
+                      field.onChange(name);
+                      setDestCity(city);
+                      // La ciudad del padrón arrastra provincia, país y CP:
+                      // completarlos evita combinaciones que no existen.
+                      if (city) {
+                        setValue('destState', city.provinceName, { shouldValidate: true });
+                        setValue('destCountry', city.country, { shouldValidate: true });
+                        setDestProvinceId(city.provinceId);
+                        // El CP es orientativo y no todas las ciudades tienen:
+                        // se completa solo si el padrón trae uno.
+                        if (city.postalCode) {
+                          setValue('destPostalCode', city.postalCode, { shouldValidate: true });
+                        }
+                      }
+                      resetDestVerification();
+                    }}
+                    inputClassName={inputClass}
+                    placeholder="Ej., Córdoba"
+                  />
+                )}
+              />
+            }
             cityError={errors.destCity?.message}
-            stateInput={<input {...register('destState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Córdoba" />}
+            stateInput={
+              <Controller
+                name="destState"
+                control={control}
+                rules={{ required: 'Requerido', pattern: { value: PLACE_PATTERN, message: PLACE_MSG } }}
+                render={({ field }) => (
+                  <ProvinceCombobox
+                    aria-label="Provincia"
+                    value={field.value ?? ''}
+                    onChange={(name, province) => {
+                      field.onChange(name);
+                      setDestProvinceId(province?.id);
+                      if (province) {
+                        setValue('destCountry', province.country, { shouldValidate: true });
+                      }
+                      // Cambiar de provincia invalida la ciudad elegida antes.
+                      if (getValues('destCity')) setValue('destCity', '');
+                      setDestCity(undefined);
+                      resetDestVerification();
+                    }}
+                    inputClassName={inputClass}
+                  />
+                )}
+              />
+            }
             stateError={errors.destState?.message}
             countryInput={<input {...register('destCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
             countryError={errors.destCountry?.message}

@@ -74,6 +74,17 @@ describe('LoadsPage — data fetching by role', () => {
     expect(screen.getByRole('link', { name: /Nueva carga/ })).toBeInTheDocument();
   });
 
+  it('keeps the creation column for a CARGO_GENERATOR', async () => {
+    mockUser({ id: 'u1', role: 'CARGO_GENERATOR' });
+    loadsApi.getMy.mockResolvedValue({ data: { loads: [makeLoad({ title: 'Mi carga' })], total: 1, page: 1, totalPages: 1 } });
+
+    renderPage();
+
+    expect(await screen.findByText('Mi carga')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Creación' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Estado' })).toBeInTheDocument();
+  });
+
   it('calls getAvailable for a TRANSPORTER and hides the status filter + CTA', async () => {
     mockUser({ id: 'u2', role: 'TRANSPORTER' });
     loadsApi.getAvailable.mockResolvedValue({ data: { loads: [makeLoad({ title: 'Carga libre' })], total: 1, page: 1, totalPages: 1 } });
@@ -85,7 +96,11 @@ describe('LoadsPage — data fetching by role', () => {
     expect(loadsApi.getMy).not.toHaveBeenCalled();
     expect(screen.queryByRole('link', { name: /Nueva carga/ })).not.toBeInTheDocument();
     // Status filter is hidden for transporters.
-    expect(screen.queryByDisplayValue('Todos los estados')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Estado' })).not.toBeInTheDocument();
+    // Ni la fecha de publicación ni el estado: no le aportan para decidir.
+    expect(screen.queryByRole('columnheader', { name: 'Creación' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Estado' })).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Recogida' })).toBeInTheDocument();
   });
 
   it('calls getAll for an ADMIN', async () => {
@@ -116,7 +131,7 @@ describe('LoadsPage — filters', () => {
     await screen.findByText('Electrónica a Córdoba');
 
     const user = userEvent.setup();
-    await user.selectOptions(screen.getByDisplayValue('Todos los tipos'), 'Alimentos y bebidas');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Tipo de carga' }), 'Alimentos y bebidas');
 
     await waitFor(() =>
       expect(loadsApi.getMy).toHaveBeenCalledWith(
