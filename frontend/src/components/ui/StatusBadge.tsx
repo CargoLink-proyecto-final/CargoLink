@@ -44,7 +44,7 @@ interface Props {
   className?: string;
   /**
    * `kind="solicitud"` muestra el ciclo unificado de la solicitud
-   * (Creado/Asignado/Iniciado/Completado) derivando el stage desde un
+   * (Pendiente/Asignado/En tránsito/Completado) derivando el stage desde un
    * `LoadStatus` o `TripStatus`. NO usar sobre estados de postulación.
    */
   kind?: 'raw' | 'solicitud';
