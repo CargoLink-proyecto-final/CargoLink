@@ -9,6 +9,21 @@ import { loadsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import Link from 'next/link';
 
+// Debe reflejar exactamente la taxonomía fija que valida el backend
+// (@IsIn en CreateLoadDto) y que usan loads/new y loads (filtro) — un
+// cargoType fuera de esta lista queda invisible para cualquier filtro
+// de categoría y el backend lo rechaza al guardar.
+const CARGO_TYPES = [
+  'Electrónica y tecnología',
+  'Alimentos y bebidas',
+  'Materiales de construcción',
+  'Muebles y artículos del hogar',
+  'Ropa y textiles',
+  'Maquinaria e industria',
+  'Mercadería general',
+  'Otro',
+] as const;
+
 interface LoadForm {
   title: string;
   description?: string;
@@ -90,6 +105,12 @@ export default function EditLoadPage() {
   // bloquean (solo título/descripción editables). En estados finales no se edita nada.
   const isLocked = load?.status === 'ASSIGNED' || load?.status === 'IN_TRANSIT';
   const isTerminal = load?.status === 'DELIVERED' || load?.status === 'CANCELLED';
+  // Cargas viejas pueden tener un cargoType fuera de la taxonomía actual (el
+  // backend antes aceptaba texto libre). Lo mostramos tal cual en vez de
+  // forzarlo silenciosamente a la primera opción del <select> — guardar sigue
+  // requiriendo elegir una categoría real, porque el backend la exige.
+  const isLegacyCargoType =
+    !!load?.cargoType && !(CARGO_TYPES as readonly string[]).includes(load.cargoType);
 
   const onSubmit = (data: LoadForm) => {
     if (isLocked) {
@@ -198,7 +219,15 @@ export default function EditLoadPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Carga <span className="text-red-500">*</span></label>
-                <input {...register('cargoType', { required: 'Requerido' })} disabled={isLocked} className={inputClass} placeholder="Ej., Electrónica" />
+                <select {...register('cargoType', { required: 'Requerido' })} disabled={isLocked} className={inputClass}>
+                  {isLegacyCargoType && <option value={load.cargoType}>{load.cargoType} (categoría antigua)</option>}
+                  {CARGO_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                {isLegacyCargoType && (
+                  <p className="text-amber-600 text-xs mt-1">
+                    Esta carga tiene un tipo fuera de las categorías actuales. Elegí una de la lista para poder guardar otros cambios.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg) <span className="text-red-500">*</span></label>

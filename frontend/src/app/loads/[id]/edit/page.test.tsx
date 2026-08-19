@@ -39,7 +39,7 @@ function makeLoad(overrides: Record<string, unknown> = {}) {
     id: 'l1',
     title: 'Electrónica a Córdoba',
     description: 'Frágil',
-    cargoType: 'Electrónica',
+    cargoType: 'Electrónica y tecnología',
     weight: 100,
     volume: 2,
     price: 5000,
@@ -107,6 +107,21 @@ describe('EditLoadPage — prefill', () => {
     expect(screen.getByText(/postulación aceptada/i)).toBeInTheDocument();
     // A critical field (weight) is disabled.
     expect(screen.getByDisplayValue('100')).toBeDisabled();
+  });
+
+  it('preserves an out-of-taxonomy cargoType instead of silently swapping it', async () => {
+    // Loads created before the backend enforced the fixed category list (or
+    // via a direct API call) can carry a cargoType outside the <select>'s
+    // options. The form must show it as-is, not silently fall back to the
+    // first option in the list.
+    loadsApi.getById.mockResolvedValue({ data: makeLoad({ cargoType: 'BEBIDAS' }) });
+
+    renderPage();
+
+    expect(await screen.findByDisplayValue('BEBIDAS (categoría antigua)')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Elegí una de la lista para poder guardar otros cambios/),
+    ).toBeInTheDocument();
   });
 });
 
