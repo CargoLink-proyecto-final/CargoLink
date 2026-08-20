@@ -8,8 +8,12 @@ import PostulationCard from './PostulationCard';
 
 // Oferta vigente del transportista en una postulación: su contra-oferta si fue
 // el último en ofertar, sino el precio propuesto; si no propuso nada, acepta el
-// precio listado.
-function transporterCurrentOffer(p: PostulationWithTransporter, listedPrice: number): number {
+// precio listado. En una carga "a convenir" siempre hay proposedPrice (el
+// backend lo exige), así que el fallback no aplica.
+function transporterCurrentOffer(
+  p: PostulationWithTransporter,
+  listedPrice: number | null,
+): number | null {
   if (p.status === 'NEGOTIATING' && p.lastOfferBy === 'TRANSPORTER' && p.counterOfferPrice != null) {
     return p.counterOfferPrice;
   }
@@ -18,7 +22,8 @@ function transporterCurrentOffer(p: PostulationWithTransporter, listedPrice: num
 
 interface Props {
   loadId: string;
-  listedPrice: number;
+  /** `null` = carga "a convenir": no hay precio de referencia publicado. */
+  listedPrice: number | null;
   canAccept: boolean;
 }
 
@@ -50,10 +55,12 @@ export default function PostulationsPanel({ loadId, listedPrice, canAccept }: Pr
   });
 
   const total = data?.length ?? 0;
+  // Promediamos solo las postulaciones que tienen un número: en una carga sin
+  // precio listado, una postulación sin oferta no aporta al promedio.
+  const offers =
+    data?.map((p) => transporterCurrentOffer(p, listedPrice)).filter((o): o is number => o != null) ?? [];
   const averageOffer =
-    total > 0
-      ? data!.reduce((sum, p) => sum + transporterCurrentOffer(p, listedPrice), 0) / total
-      : 0;
+    offers.length > 0 ? offers.reduce((sum, o) => sum + o, 0) / offers.length : null;
 
   return (
     <div className="card p-6 space-y-4">
@@ -79,7 +86,9 @@ export default function PostulationsPanel({ loadId, listedPrice, canAccept }: Pr
           </div>
           <div className="rounded-card border border-ink-200/60 bg-surface-sunk p-3">
             <p className="text-[11px] uppercase tracking-[0.12em] text-ink-500">Precio promedio ofertado</p>
-            <p className="font-display text-xl font-semibold text-ink-900">{formatCurrency(averageOffer)}</p>
+            <p className="font-display text-xl font-semibold text-ink-900">
+              {averageOffer != null ? formatCurrency(averageOffer) : '—'}
+            </p>
           </div>
         </div>
       )}

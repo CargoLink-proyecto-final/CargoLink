@@ -158,8 +158,7 @@ interface LoadForm {
   lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
-  price: number;
-  maxBudget?: number;
+  price?: number;
 }
 
 type LocationMode = 'address' | 'coords';
@@ -368,8 +367,8 @@ export default function NewLoadPage() {
         lengthCm: pkg && data.lengthCm ? Number(data.lengthCm) : undefined,
         pickupDate: data.pickupDate,
         deliveryDate: data.deliveryDate,
-        price: Number(data.price),
-        maxBudget: data.maxBudget ? Number(data.maxBudget) : undefined,
+        // Vacío = "a convenir": no mandamos el campo en vez de un 0 engañoso.
+        price: data.price ? Number(data.price) : undefined,
         originAddress: origin.address,
         originLat: origin.lat,
         originLng: origin.lng,
@@ -453,17 +452,11 @@ export default function NewLoadPage() {
                 {errors.volume && <p className="text-red-500 text-xs mt-1">{errors.volume.message}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS) <span className="text-red-500">*</span></label>
-                <input type="number" step="0.01" {...register('price', { required: 'Requerido', min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS, opcional)</label>
+                <input type="number" step="0.01" {...register('price', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                <p className="text-gray-500 text-xs mt-1">Si lo dejás vacío, la carga sale &quot;a convenir&quot; y el precio lo proponen los transportistas al postularse.</p>
                 {errors.price && <p className="text-red-500 text-xs mt-1">{errors.price.message}</p>}
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Presupuesto máximo (ARS, opcional)</label>
-              <input type="number" step="0.01" {...register('maxBudget', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
-              <p className="text-gray-500 text-xs mt-1">Monto máximo que estás dispuesto a pagar; visible para los transportistas.</p>
-              {errors.maxBudget && <p className="text-red-500 text-xs mt-1">{errors.maxBudget.message}</p>}
             </div>
 
             {/* Form dinámico (P6): la info del bulto solo se pide para cargas en

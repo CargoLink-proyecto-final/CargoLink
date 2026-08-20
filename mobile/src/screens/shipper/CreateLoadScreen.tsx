@@ -31,8 +31,7 @@ interface LoadForm {
   lengthCm?: string;
   pickupDate: string;
   deliveryDate: string;
-  price: string;
-  maxBudget?: string;
+  price?: string;
 }
 
 /** `undefined` en vez de NaN cuando el campo opcional quedó vacío. */
@@ -116,8 +115,8 @@ export default function CreateLoadScreen({ navigation }: any) {
         lengthCm: showPackage ? optionalNumber(data.lengthCm) : undefined,
         pickupDate: new Date(data.pickupDate).toISOString(),
         deliveryDate: new Date(data.deliveryDate).toISOString(),
-        price: parseFloat(data.price),
-        maxBudget: optionalNumber(data.maxBudget),
+        // Vacío = "a convenir": no mandamos el campo en vez de un 0 engañoso.
+        price: optionalNumber(data.price),
       });
       Alert.alert('Éxito', 'Carga creada exitosamente');
       reset();
@@ -178,21 +177,14 @@ export default function CreateLoadScreen({ navigation }: any) {
               <Field control={control} name="volume" label="Volumen (m3)" placeholder="12.5" keyboardType="numeric" />
             </View>
           </View>
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Field control={control} name="price" label="Precio (ARS)" placeholder="150000" keyboardType="numeric" rules={{ required: true }} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field
-                control={control}
-                name="maxBudget"
-                label="Presupuesto máx. (ARS)"
-                placeholder="180000"
-                keyboardType="numeric"
-                helper="Visible para los transportistas."
-              />
-            </View>
-          </View>
+          <Field
+            control={control}
+            name="price"
+            label="Precio (ARS)"
+            placeholder="150000"
+            keyboardType="numeric"
+            helper="Opcional: vacío = a convenir, lo proponen los transportistas."
+          />
 
           {showPackage && (
             <View style={styles.subSection}>

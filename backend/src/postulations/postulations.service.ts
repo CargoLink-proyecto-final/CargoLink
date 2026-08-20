@@ -38,7 +38,14 @@ export class PostulationsService {
     if (load.shipperId === transporterId) {
       throw new ForbiddenException('No podés postularte a tu propia carga');
     }
-    if (dto.proposedPrice != null && dto.proposedPrice <= load.price) {
+    // Carga "a convenir": sin precio publicado no hay nada que aceptar en
+    // silencio, así que el transportista tiene que poner el suyo.
+    if (load.price == null && dto.proposedPrice == null) {
+      throw new BadRequestException(
+        'Esta carga no tiene precio publicado: proponé el tuyo para postularte.',
+      );
+    }
+    if (load.price != null && dto.proposedPrice != null && dto.proposedPrice <= load.price) {
       throw new BadRequestException(
         `El precio propuesto debe ser mayor al precio listado ($${load.price}). Si aceptás ese precio, dejá el campo vacío.`,
       );
@@ -273,12 +280,14 @@ export class PostulationsService {
 
     if (isTransporter) {
       // The floor for the transporter is the shipper's latest counter-offer (if any),
-      // or the listed price when no counter-offer exists yet.
+      // or the listed price when no counter-offer exists yet. En una carga "a
+      // convenir" sin contra-oferta todavía no hay piso: el transportista es
+      // quien pone el primer número.
       const shipperFloor =
         postulation.counterOfferPrice != null
           ? postulation.counterOfferPrice
           : postulation.load.price;
-      if (dto.price <= shipperFloor) {
+      if (shipperFloor != null && dto.price <= shipperFloor) {
         const floorLabel =
           postulation.counterOfferPrice != null
             ? `la contra-oferta del dador ($${postulation.counterOfferPrice})`

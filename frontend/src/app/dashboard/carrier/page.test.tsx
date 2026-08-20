@@ -18,15 +18,11 @@ jest.mock('@/components/layout/Sidebar', () => ({
 
 jest.mock('@/lib/api', () => ({
   tripsApi: { getMy: jest.fn(), getMetrics: jest.fn() },
-  loadsApi: { getAvailable: jest.fn() },
-  postulationsApi: { getMy: jest.fn() },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { tripsApi, loadsApi, postulationsApi } = require('@/lib/api') as {
+const { tripsApi } = require('@/lib/api') as {
   tripsApi: Record<string, jest.Mock>;
-  loadsApi: Record<string, jest.Mock>;
-  postulationsApi: Record<string, jest.Mock>;
 };
 
 function mockAuth(state: Record<string, unknown>) {
@@ -68,8 +64,6 @@ describe('CarrierDashboard', () => {
         ],
       },
     });
-    loadsApi.getAvailable.mockResolvedValue({ data: { loads: [] } });
-    postulationsApi.getMy.mockResolvedValue({ data: [] });
     // null metrics to avoid colliding numeric text with the trip stat cards.
     tripsApi.getMetrics.mockResolvedValue({ data: null });
 
@@ -105,8 +99,6 @@ describe('CarrierDashboard', () => {
         ],
       },
     });
-    loadsApi.getAvailable.mockResolvedValue({ data: { loads: [] } });
-    postulationsApi.getMy.mockResolvedValue({ data: [] });
     tripsApi.getMetrics.mockResolvedValue({ data: null });
 
     renderWithClient(<CarrierDashboard />);
@@ -122,8 +114,6 @@ describe('CarrierDashboard', () => {
 
   it('renders performance metrics', async () => {
     tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
-    loadsApi.getAvailable.mockResolvedValue({ data: { loads: [] } });
-    postulationsApi.getMy.mockResolvedValue({ data: [] });
     tripsApi.getMetrics.mockResolvedValue({ data: metrics });
 
     renderWithClient(<CarrierDashboard />);
@@ -137,64 +127,35 @@ describe('CarrierDashboard', () => {
     expect(screen.getByText('700 km recorridos')).toBeInTheDocument();
   });
 
-  it('renders available loads and my postulations', async () => {
-    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
-    loadsApi.getAvailable.mockResolvedValue({
-      data: {
-        loads: [
-          {
-            id: 'l1',
-            title: 'Available cargo',
-            originAddress: 'Rosario',
-            destAddress: 'Cordoba',
-            price: 1500,
-            weight: 1200,
-          },
-        ],
-      },
-    });
-    postulationsApi.getMy.mockResolvedValue({
-      data: [
-        {
-          id: 'p1',
-          loadId: 'l9',
-          status: 'PENDING',
-          proposedPrice: 900,
-          load: {
-            title: 'My postulated load',
-            originAddress: 'Salta',
-            destAddress: 'Jujuy',
-          },
-        },
-      ],
-    });
-    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
-
-    renderWithClient(<CarrierDashboard />);
-
-    expect(await screen.findByText('Available cargo')).toBeInTheDocument();
-    expect(screen.getByText('My postulated load')).toBeInTheDocument();
-    expect(screen.getByText(/Propusiste/)).toBeInTheDocument();
-  });
-
   it('shows empty states when nothing is available', async () => {
     tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
-    loadsApi.getAvailable.mockResolvedValue({ data: { loads: [] } });
-    postulationsApi.getMy.mockResolvedValue({ data: [] });
     tripsApi.getMetrics.mockResolvedValue({ data: metrics });
 
     renderWithClient(<CarrierDashboard />);
 
-    expect(
-      await screen.findByText('Sin cargas disponibles ahora mismo.'),
-    ).toBeInTheDocument();
     // No active trips → the hero collapses to a lightweight prompt instead of an empty list.
     expect(await screen.findByText('Sin viajes activos')).toBeInTheDocument();
     expect(
       screen.getByText('Postulate a una carga disponible para arrancar un viaje.'),
     ).toBeInTheDocument();
+  });
+
+  it('keeps available loads and postulations off the panel', async () => {
+    // Ambos listados tienen su propio ítem en el sidebar (/loads y /postulations);
+    // repetirlos acá duplicaba la misma lista a un scroll de distancia.
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+
+    renderWithClient(<CarrierDashboard />);
+
+    await screen.findByText('Sin viajes activos');
+    expect(screen.queryByText('Para tomar')).not.toBeInTheDocument();
     expect(
-      await screen.findByText('No te postulaste a ninguna carga todavía.'),
-    ).toBeInTheDocument();
+      screen.queryByRole('heading', { name: 'Cargas disponibles' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Tus postulaciones')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: /Mis postulaciones/ }),
+    ).not.toBeInTheDocument();
   });
 });

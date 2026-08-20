@@ -10,7 +10,7 @@ import { loadsApi, postulationsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useRoute } from '@/lib/useRoute';
 import Link from 'next/link';
-import { formatCurrency, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
+import { formatCurrency, formatPrice, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import {
   MapPin,
   Package,
@@ -427,8 +427,7 @@ export default function LoadDetailPage() {
               {(load.heightCm != null || load.widthCm != null || load.lengthCm != null) && (
                 <div><span className="text-gray-500">Dimensiones:</span> <span className="font-medium">{[load.heightCm, load.widthCm, load.lengthCm].map((d) => (d != null ? d : '—')).join(' × ')} cm</span></div>
               )}
-              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatCurrency(load.price)}</span></div>
-              {load.maxBudget != null && <div><span className="text-gray-500">Presupuesto máx.:</span> <span className="font-medium">{formatCurrency(load.maxBudget)}</span></div>}
+              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatPrice(load.price)}</span></div>
             </div>
           </div>
 

@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { loadsApi } from '../../services/api';
 import {
-  formatCurrency,
+  formatPrice,
   getSolicitudStageColor,
   getSolicitudStageLabel,
 } from '../../lib/labels';
@@ -87,7 +87,7 @@ export default function MyLoadsScreen({ navigation }: any) {
               )}
 
               <View style={styles.cardFooter}>
-                <Text style={styles.cardPrice}>{formatCurrency(item.price)}</Text>
+                <Text style={styles.cardPrice}>{formatPrice(item.price)}</Text>
                 <View style={styles.cardMeta}>
                   <Text style={styles.cardMetaText}>{item.weight} kg</Text>
                   <Text style={styles.cardMetaText}>{item.cargoType}</Text>

@@ -4,12 +4,13 @@ import { useState, FormEvent } from 'react';
 import { Mail, Phone } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import RatingStars from '@/components/ratings/RatingStars';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatPrice } from '@/lib/utils';
 import type { PostulationWithTransporter } from '@/types';
 
 interface Props {
   postulation: PostulationWithTransporter;
-  listedPrice: number;
+  /** `null` = carga "a convenir": no hay precio de referencia contra el cual comparar. */
+  listedPrice: number | null;
   canAccept: boolean;
   onAccept: () => void;
   accepting: boolean;
@@ -36,9 +37,6 @@ export default function PostulationCard({
   const [counterPriceInput, setCounterPriceInput] = useState('');
 
   const isNegotiating = status === 'NEGOTIATING';
-  const currentOffer = isNegotiating && counterOfferPrice != null ? counterOfferPrice : proposedPrice;
-  const priceDelta = currentOffer != null ? currentOffer - listedPrice : null;
-
   // The transporter's current asking price — shipper's counter must not exceed it
   const transporterCurrentOffer =
     isNegotiating && lastOfferBy === 'TRANSPORTER' && counterOfferPrice != null
@@ -122,14 +120,14 @@ export default function PostulationCard({
         <div className="rounded-card border border-ink-200/60 bg-surface-sunk p-3 space-y-1.5 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-ink-500">Precio listado</span>
-            <span className="font-medium">{formatCurrency(listedPrice)}</span>
+            <span className="font-medium">{formatPrice(listedPrice)}</span>
           </div>
           {proposedPrice != null && (
             <div className="flex items-center justify-between">
               <span className="text-ink-500">Oferta del transportista</span>
               <span className="font-medium">
                 {formatCurrency(proposedPrice)}
-                {proposedPrice !== listedPrice && (
+                {listedPrice != null && proposedPrice !== listedPrice && (
                   <span className={`ml-2 text-xs ${proposedPrice < listedPrice ? 'text-success-700' : 'text-warning-700'}`}>
                     {proposedPrice < listedPrice ? '↓' : '↑'} {formatCurrency(Math.abs(proposedPrice - listedPrice))}
                   </span>
@@ -144,7 +142,7 @@ export default function PostulationCard({
               </span>
               <span className="font-semibold text-primary-700">
                 {formatCurrency(counterOfferPrice)}
-                {counterOfferPrice !== listedPrice && (
+                {listedPrice != null && counterOfferPrice !== listedPrice && (
                   <span className={`ml-2 text-xs ${counterOfferPrice < listedPrice ? 'text-success-700' : 'text-warning-700'}`}>
                     {counterOfferPrice < listedPrice ? '↓' : '↑'} {formatCurrency(Math.abs(counterOfferPrice - listedPrice))}
                   </span>
@@ -168,7 +166,7 @@ export default function PostulationCard({
               step="any"
               value={counterPriceInput}
               onChange={(e) => setCounterPriceInput(e.target.value)}
-              placeholder={`Menos de $${transporterCurrentOffer ?? listedPrice}`}
+              placeholder={`Menos de $${transporterCurrentOffer ?? listedPrice ?? ''}`}
               className={`flex-1 rounded-card border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 ${counterError ? 'border-danger-400 focus:border-danger-400' : 'border-ink-200 focus:border-primary-500'}`}
               autoFocus
             />

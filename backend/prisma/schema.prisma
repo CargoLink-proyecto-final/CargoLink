@@ -170,9 +170,12 @@ model Load {
   lengthCm      Float?     @map("length_cm")
   pickupDate    DateTime   @map("pickup_date")
   deliveryDate  DateTime?  @map("delivery_date")
-  price         Float
-  // Monto máximo opcional que el publicador está dispuesto a pagar;
-  // visible para los transportistas al postularse.
+  // Opcional: si el publicador no fija precio, la carga sale "a convenir" y el
+  // precio lo define la postulación del transportista (proposedPrice, que en ese
+  // caso pasa a ser obligatorio).
+  price         Float?
+  // Columna retirada del producto: ya no se lee ni se escribe desde ninguna capa.
+  // Se deja para no correr una migración destructiva sobre datos existentes.
   maxBudget     Float?     @map("max_budget")
   status        LoadStatus @default(PUBLISHED)
   createdAt     DateTime   @default(now()) @map("created_at")
