@@ -36,14 +36,22 @@ Endpoints:
 - Swagger: http://localhost:3001/api/docs
 - PostgreSQL: localhost:5432
 
-Cuentas demo (password `password123`):
+Cuentas demo (password `password123`, salvo el admin):
 
 | Email | Rol |
 |---|---|
-| `admin@cargolink.com` | ADMIN |
+| `admin@cargolink.com` | ADMIN — password aparte, ver abajo |
 | `shipper@example.com` | CARGO_GENERATOR |
 | `carrier@example.com` | TRANSPORTER |
 | `empresa@example.com` | COMPANY_ADMIN |
+| `profe1@cargolink.com` … `profe3@cargolink.com` | TRANSPORTER |
+| `transportista1@cargolink.com`, `transportista2@cargolink.com` | TRANSPORTER |
+
+La password del admin sale de la env var `ADMIN_PASSWORD`; si no la seteás, el
+seed usa un fallback (ver `.env.example`). Con la variable seteada, el seed la
+reescribe en cada arranque — es la fuente de verdad de esa credencial. Sin la
+variable, solo se aplica al crear la cuenta y el seed no pisa una password ya
+cambiada.
 
 Para dev local sin Docker, mobile, o cualquier detalle más allá del happy path: [`docs/primeros-pasos.md`](./docs/primeros-pasos.md).
 

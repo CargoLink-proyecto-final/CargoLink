@@ -14,18 +14,23 @@ async function main() {
   // comparte la password genérica de las cuentas demo: sale de ADMIN_PASSWORD
   // para que cada entorno la inyecte por secret. El fallback es para dev local
   // y para que un entorno nuevo levante usable sin config previa.
+  const declaredAdminPassword = process.env.ADMIN_PASSWORD;
   const adminPassword = await bcrypt.hash(
-    process.env.ADMIN_PASSWORD || 'cladmin2026',
+    declaredAdminPassword || 'cladmin2026',
     10,
   );
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@cargolink.com' },
-    // A diferencia del resto de las cuentas, acá la password SÍ se reescribe en
-    // cada arranque: ADMIN_PASSWORD es la fuente de verdad. Rotarla es cambiar
-    // el secret y reiniciar el servicio — cambiarla desde la app no sirve,
-    // porque el próximo boot la revierte.
-    update: { emailVerified: true, password: adminPassword },
+    update: {
+      emailVerified: true,
+      // La password solo se reescribe si el entorno la declaró: ahí
+      // ADMIN_PASSWORD es la fuente de verdad y rotarla es cambiar el secret y
+      // reiniciar. Sin la variable no se pisa nada, porque el seed corre en
+      // cada arranque del contenedor y le borraría al admin una password
+      // cambiada por /auth/reset-password.
+      ...(declaredAdminPassword ? { password: adminPassword } : {}),
+    },
     create: {
       email: 'admin@cargolink.com',
       password: adminPassword,
@@ -207,7 +212,7 @@ async function main() {
 
   console.log('Datos de seed listos:', {
     geo: `${geo.provinces} provincias, ${geo.cities} ciudades (${geo.inserted} nuevas, ${geo.postalCodes} CP completados, ${geo.renamed} nombres reconciliados)`,
-    admin: `${admin.email} (password: ${process.env.ADMIN_PASSWORD ? 'ADMIN_PASSWORD' : 'fallback del seed'})`,
+    admin: `${admin.email} (password: ${declaredAdminPassword ? 'ADMIN_PASSWORD, reescrita' : 'fallback del seed, sin pisar la existente'})`,
     shipper: shipper.email,
     carrier: carrier.email,
     companyAdmin: companyAdmin.email,

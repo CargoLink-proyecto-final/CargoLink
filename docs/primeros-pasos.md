@@ -64,17 +64,27 @@ Endpoints a abrir:
 
 ### 4. Cuentas demo
 
-Todas con password `password123`:
+Todas con password `password123`, **salvo el admin** (ver nota abajo):
 
 | Email | Rol | Nombre | Notas |
 |---|---|---|---|
-| `admin@cargolink.com` | `ADMIN` | Admin CargoLink | — |
+| `admin@cargolink.com` | `ADMIN` | Admin CargoLink | password vía `ADMIN_PASSWORD` |
 | `shipper@example.com` | `CARGO_GENERATOR` | Juan García | Logística Sur S.A. |
 | `carrier@example.com` | `TRANSPORTER` | Carlos Martínez | transportista independiente |
 | `empresa@example.com` | `COMPANY_ADMIN` | Laura Fernández | dueña de la empresa "Flota Andina" |
 | `driver1@example.com` | `TRANSPORTER` | Pedro Gómez | chofer de Flota Andina |
 | `driver2@example.com` | `TRANSPORTER` | Sofía Ramírez | chofer de Flota Andina |
 | `driver3@example.com` | `TRANSPORTER` | Diego López | con solicitud `PENDING` a Flota Andina |
+| `profe1@cargolink.com` | `TRANSPORTER` | Profe 1 | independiente |
+| `profe2@cargolink.com` | `TRANSPORTER` | Profe 2 | independiente |
+| `profe3@cargolink.com` | `TRANSPORTER` | Profe 3 | independiente |
+| `transportista1@cargolink.com` | `TRANSPORTER` | Transportista 1 | independiente |
+| `transportista2@cargolink.com` | `TRANSPORTER` | Transportista 2 | independiente |
+
+La password del admin sale de `ADMIN_PASSWORD` (ver `.env.example`). Si la
+seteás, el seed la reescribe en cada arranque y pasa a ser la fuente de verdad:
+cambiarla desde la app no persiste al siguiente restart. Si no la seteás, el seed
+usa su fallback solo al crear la cuenta y respeta cualquier cambio posterior.
 
 El seed también crea la empresa demo "Flota Andina" (con 2 choferes y 1 solicitud pendiente) y un load demo "Electrónica a Córdoba" asociado al shipper. Es idempotente: si se corrió antes, reutiliza lo existente y no duplica. Detalle del seed en [`base-de-datos.md`](./base-de-datos.md); del flujo de empresas en [`empresas.md`](./empresas.md).
 
