@@ -294,7 +294,7 @@ npx prisma studio    # http://localhost:5555
 
 Archivo: [`../backend/prisma/seed.ts`](../backend/prisma/seed.ts).
 
-Crea 7 usuarios, 1 empresa demo (con 2 choferes miembros + 1 solicitud pendiente) y 1 load. Idempotente:
+Crea 12 usuarios, 1 empresa demo (con 2 choferes miembros + 1 solicitud pendiente) y 1 load. Idempotente:
 
 - **Users**: `prisma.user.upsert()` por email — no duplica si ya existen; en update setea `emailVerified: true` (y `companyId` para los choferes de la empresa).
 - **Empresa**: `prisma.company.upsert()` por `ownerId`.
