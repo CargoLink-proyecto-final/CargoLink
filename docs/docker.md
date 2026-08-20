@@ -34,6 +34,7 @@ Variables de entorno inyectadas al contenedor:
 |---|---|---|
 | `DATABASE_URL` | `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public` | construida |
 | `JWT_SECRET` | `${JWT_SECRET}` | **requerido**, falla si vacío |
+| `ADMIN_PASSWORD` | `${ADMIN_PASSWORD:-}` | password de `admin@cargolink.com`; vacío = fallback del seed |
 | `JWT_EXPIRATION` | `${JWT_EXPIRATION:-7d}` | `7d` |
 | `PORT` | `3001` | hardcoded |
 | `CORS_ORIGIN` | `${CORS_ORIGIN:-http://localhost:3000}` | `http://localhost:3000` |
@@ -198,6 +199,7 @@ CMD ["node", "server.js"]
 | `POSTGRES_DB` | postgres + backend | No | `cargolink` | Nombre de la DB |
 | `DATABASE_URL` | backend | Sí (construida) | de las 3 anteriores | Connection string para Prisma |
 | `JWT_SECRET` | backend | **Sí** | — | Secret para firmar JWTs |
+| `ADMIN_PASSWORD` | backend | No | fallback del seed | Password de `admin@cargolink.com`. Si está seteada, el seed la reescribe en cada arranque |
 | `JWT_EXPIRATION` | backend | No | `7d` | Lifetime de los tokens |
 | `PORT` | backend | No | `3001` | Puerto del server |
 | `CORS_ORIGIN` | backend | No | `http://localhost:3000` | Origen permitido por CORS |

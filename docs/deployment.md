@@ -73,7 +73,7 @@ Las mismas vars que dev (ver [`docker.md`](./docker.md)) pero con valores reales
 El deploy real es **Google Cloud Run + Cloud SQL**, provisionado con Terraform y actualizado por CI. El detalle completo (Terraform, dos entornos, Workload Identity Federation, deploy en 2 fases) está en [`../infra/gcp/README.md`](../infra/gcp/README.md); el pipeline en [`ci-cd.md`](./ci-cd.md). Resumen:
 
 - **Imágenes** → Artifact Registry (`cargolink` para prod, `cargolink-dev` para dev), no GHCR.
-- **Backend** → Cloud Run, conecta a Cloud SQL por socket unix; `DATABASE_URL`, `JWT_SECRET` y `SMTP_PASSWORD` desde Secret Manager; el resto de SMTP/CORS/FRONTEND_URL como env vars que setea Terraform.
+- **Backend** → Cloud Run, conecta a Cloud SQL por socket unix; `DATABASE_URL`, `JWT_SECRET`, `SMTP_PASSWORD` y `ADMIN_PASSWORD` desde Secret Manager; el resto de SMTP/CORS/FRONTEND_URL como env vars que setea Terraform.
 - **Frontend** → Cloud Run; `NEXT_PUBLIC_API_URL` se hornea en el build de CI resolviendo en vivo la URL del backend del entorno (resuelve el problema del bake — ya no usa el default `localhost`).
 - **Deploy continuo**: merge a `develop` → dev, merge a `main` → prod. TLS automático en las URLs `*.run.app`.
 
@@ -228,6 +228,8 @@ No incluido en el repo. Para single VPS:
 ## Checklist antes de un release a prod
 
 - [ ] `JWT_SECRET` rotado, distinto a dev.
+- [ ] `admin_password` seteado en las tfvars de prod. Si queda vacío, el seed crea
+      `admin@cargolink.com` con un fallback que está versionado en el repo.
 - [ ] `POSTGRES_PASSWORD` rotado, distinto a dev.
 - [ ] SMTP real configurado y verificado con un email de prueba.
 - [ ] `CORS_ORIGIN` apunta al dominio real del frontend.

@@ -294,14 +294,17 @@ npx prisma studio    # http://localhost:5555
 
 Archivo: [`../backend/prisma/seed.ts`](../backend/prisma/seed.ts).
 
-Crea 7 usuarios, 1 empresa demo (con 2 choferes miembros + 1 solicitud pendiente) y 1 load. Idempotente:
+Crea 12 usuarios, 1 empresa demo (con 2 choferes miembros + 1 solicitud pendiente) y 1 load. Idempotente:
 
 - **Users**: `prisma.user.upsert()` por email — no duplica si ya existen; en update setea `emailVerified: true` (y `companyId` para los choferes de la empresa).
 - **Empresa**: `prisma.company.upsert()` por `ownerId`.
 - **Solicitud de unión**: `companyJoinRequest.upsert()` por `(companyId, transporterId)`, dejada en `PENDING` para probar el inbox de aprobación.
 - **Load demo**: primero `findFirst` por `(shipperId, title='Electrónica a Córdoba')`; si existe, lo reusa; si no, `create`.
 
-Cuentas creadas (password `password123` para todas, hasheado con bcrypt cost 10):
+Cuentas creadas (password `password123` para todas menos el admin, hasheado con
+bcrypt cost 10). La del admin sale de la env var `ADMIN_PASSWORD`: si está seteada
+**se reescribe en cada corrida del seed** (única cuenta cuyo `update` toca la
+password); si está vacía, el fallback se aplica solo al crear la cuenta:
 
 | Email | Rol | Notas |
 |---|---|---|
@@ -312,6 +315,8 @@ Cuentas creadas (password `password123` para todas, hasheado con bcrypt cost 10)
 | `driver1@example.com` | `TRANSPORTER` | miembro de Flota Andina |
 | `driver2@example.com` | `TRANSPORTER` | miembro de Flota Andina |
 | `driver3@example.com` | `TRANSPORTER` | con solicitud `PENDING` a Flota Andina |
+| `profe1@cargolink.com` … `profe3@cargolink.com` | `TRANSPORTER` | independientes, para pruebas de la cátedra |
+| `transportista1@cargolink.com`, `transportista2@cargolink.com` | `TRANSPORTER` | independientes |
 
 Load: "Electrónica a Córdoba", pickup +5 días, delivery +7 días desde el momento del seed.
 

@@ -446,7 +446,7 @@ Casos típicos:
 # 1. Login
 TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@cargolink.com","password":"password123"}' \
+  -d '{"email":"shipper@example.com","password":"password123"}' \
   | jq -r '.access_token')
 
 # 2. Llamar endpoints autenticados

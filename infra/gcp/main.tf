@@ -37,6 +37,7 @@ locals {
   # El frontend solo se despliega una vez que se le pasó su imagen (fase 2).
   frontend_deployed = var.frontend_image != ""
   smtp_enabled      = var.smtp_password != ""
+  admin_pw_enabled  = var.admin_password != ""
 
   # Dominios custom vía Application Load Balancer global + Serverless NEGs.
   # El LB se crea si hay al menos un dominio configurado. lb_domains alimenta
@@ -170,6 +171,21 @@ resource "google_secret_manager_secret_version" "jwt_secret" {
   secret_data = random_password.jwt.result
 }
 
+resource "google_secret_manager_secret" "admin_password" {
+  count     = local.admin_pw_enabled ? 1 : 0
+  secret_id = "cargolink-${local.infix}admin-password"
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_version" "admin_password" {
+  count       = local.admin_pw_enabled ? 1 : 0
+  secret      = google_secret_manager_secret.admin_password[0].id
+  secret_data = var.admin_password
+}
+
 resource "google_secret_manager_secret" "smtp_password" {
   count     = local.smtp_enabled ? 1 : 0
   secret_id = "cargolink-${local.infix}smtp-password"
@@ -207,6 +223,13 @@ resource "google_secret_manager_secret_iam_member" "database_url" {
 
 resource "google_secret_manager_secret_iam_member" "jwt_secret" {
   secret_id = google_secret_manager_secret.jwt_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "admin_password" {
+  count     = local.admin_pw_enabled ? 1 : 0
+  secret_id = google_secret_manager_secret.admin_password[0].secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.run.email}"
 }
@@ -325,6 +348,19 @@ resource "google_cloud_run_v2_service" "backend" {
       }
 
       dynamic "env" {
+        for_each = local.admin_pw_enabled ? [1] : []
+        content {
+          name = "ADMIN_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.admin_password[0].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
         for_each = local.smtp_enabled ? [1] : []
         content {
           name = "SMTP_PASSWORD"
@@ -361,6 +397,11 @@ resource "google_cloud_run_v2_service" "backend" {
     # backend monte el secret (evita "secret version latest not found").
     google_secret_manager_secret_version.smtp_password,
     google_secret_manager_secret_iam_member.smtp_password,
+    # ADMIN_PASSWORD es condicional igual que SMTP, y además la consume el seed
+    # durante el arranque — si el secret no está montado, el admin se crea con
+    # el fallback del seed y hay que reiniciar para corregirlo.
+    google_secret_manager_secret_version.admin_password,
+    google_secret_manager_secret_iam_member.admin_password,
     google_project_iam_member.sql_client,
     google_sql_database.main,
     google_sql_user.main,

@@ -10,12 +10,30 @@ async function main() {
 
   const password = await bcrypt.hash('password123', 10);
 
+  // El ADMIN es la única cuenta con permisos sobre todo el sistema, así que no
+  // comparte la password genérica de las cuentas demo: sale de ADMIN_PASSWORD
+  // para que cada entorno la inyecte por secret. El fallback es para dev local
+  // y para que un entorno nuevo levante usable sin config previa.
+  const declaredAdminPassword = process.env.ADMIN_PASSWORD;
+  const adminPassword = await bcrypt.hash(
+    declaredAdminPassword || 'cladmin2026',
+    10,
+  );
+
   const admin = await prisma.user.upsert({
     where: { email: 'admin@cargolink.com' },
-    update: { emailVerified: true },
+    update: {
+      emailVerified: true,
+      // La password solo se reescribe si el entorno la declaró: ahí
+      // ADMIN_PASSWORD es la fuente de verdad y rotarla es cambiar el secret y
+      // reiniciar. Sin la variable no se pisa nada, porque el seed corre en
+      // cada arranque del contenedor y le borraría al admin una password
+      // cambiada por /auth/reset-password.
+      ...(declaredAdminPassword ? { password: adminPassword } : {}),
+    },
     create: {
       email: 'admin@cargolink.com',
-      password,
+      password: adminPassword,
       firstName: 'Admin',
       lastName: 'CargoLink',
       role: Role.ADMIN,
@@ -132,6 +150,33 @@ async function main() {
     create: { companyId: company.id, transporterId: driverPending.id },
   });
 
+  // ---- Transportistas demo sueltos (sin empresa) ----
+  // Cuentas para las pruebas de la cátedra: una por evaluador, más dos genéricas.
+  // Van sin companyId a propósito — así cada una postula por su cuenta y no
+  // arrastra la lógica de aprobación de Flota Andina.
+  const DEMO_TRANSPORTERS = [
+    { email: 'profe1@cargolink.com', firstName: 'Profe', lastName: '1', phone: '+5491155560001' },
+    { email: 'profe2@cargolink.com', firstName: 'Profe', lastName: '2', phone: '+5491155560002' },
+    { email: 'profe3@cargolink.com', firstName: 'Profe', lastName: '3', phone: '+5491155560003' },
+    { email: 'transportista1@cargolink.com', firstName: 'Transportista', lastName: '1', phone: '+5491155560011' },
+    { email: 'transportista2@cargolink.com', firstName: 'Transportista', lastName: '2', phone: '+5491155560012' },
+  ];
+
+  const demoTransporters: string[] = [];
+  for (const demo of DEMO_TRANSPORTERS) {
+    const user = await prisma.user.upsert({
+      where: { email: demo.email },
+      update: { emailVerified: true },
+      create: {
+        ...demo,
+        password,
+        role: Role.TRANSPORTER,
+        emailVerified: true,
+      },
+    });
+    demoTransporters.push(user.email);
+  }
+
   const SEED_LOAD_TITLE = 'Electrónica a Córdoba';
   const existing = await prisma.load.findFirst({
     where: { shipperId: shipper.id, title: SEED_LOAD_TITLE },
@@ -167,13 +212,14 @@ async function main() {
 
   console.log('Datos de seed listos:', {
     geo: `${geo.provinces} provincias, ${geo.cities} ciudades (${geo.inserted} nuevas, ${geo.postalCodes} CP completados, ${geo.renamed} nombres reconciliados)`,
-    admin: admin.email,
+    admin: `${admin.email} (password: ${declaredAdminPassword ? 'ADMIN_PASSWORD, reescrita' : 'fallback del seed, sin pisar la existente'})`,
     shipper: shipper.email,
     carrier: carrier.email,
     companyAdmin: companyAdmin.email,
     company: company.name,
     members: [driverOne.email, driverTwo.email],
     pendingRequest: `${driverPending.email} -> ${joinRequest.status}`,
+    demoTransporters,
     load: load.id,
     reused: !!existing,
     backfill: `${backfill.origin} orígenes / ${backfill.dest} destinos resueltos sobre ${backfill.pending} cargas`,
