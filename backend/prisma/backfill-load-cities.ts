@@ -43,11 +43,44 @@ type CityRow = {
  */
 const MAX_FALLBACK_KM = 25;
 
+// Tope por corrida: el seed corre en cada arranque del contenedor y las cargas
+// que nunca resuelven (direcciones fuera del padrón) se reintentan siempre. Sin
+// tope, un backlog grande alarga el boot de forma indefinida.
+const MAX_LOADS_PER_RUN = 500;
+
+// Celda de 1° (~111 km): cubre de sobra el radio de MAX_FALLBACK_KM mirando la
+// celda propia y sus ocho vecinas, en vez de recorrer el padrón entero.
+const cellKey = (lat: number, lng: number) => `${Math.round(lat)}:${Math.round(lng)}`;
+
+function buildGrid(cities: CityRow[]) {
+  const grid = new Map<string, CityRow[]>();
+  for (const city of cities) {
+    const key = cellKey(city.lat, city.lng);
+    const bucket = grid.get(key);
+    if (bucket) bucket.push(city);
+    else grid.set(key, [city]);
+  }
+  return grid;
+}
+
+function nearbyCities(grid: Map<string, CityRow[]>, coords: { lat: number; lng: number }) {
+  const lat = Math.round(coords.lat);
+  const lng = Math.round(coords.lng);
+  const found: CityRow[] = [];
+  for (let dLat = -1; dLat <= 1; dLat += 1) {
+    for (let dLng = -1; dLng <= 1; dLng += 1) {
+      const bucket = grid.get(`${lat + dLat}:${lng + dLng}`);
+      if (bucket) found.push(...bucket);
+    }
+  }
+  return found;
+}
+
 export function resolveCity(
   address: string,
   coords: { lat: number; lng: number },
   citiesByName: Map<string, CityRow[]>,
-  allCities: CityRow[],
+  grid: Map<string, CityRow[]>,
 ): CityRow | null {
   const segments = address.split(',').map((segment) => normalize(segment));
 
@@ -65,7 +98,9 @@ export function resolveCity(
     );
   }
 
-  const nearest = allCities.reduce((closest, city) =>
+  const nearby = nearbyCities(grid, coords);
+  if (nearby.length === 0) return null;
+  const nearest = nearby.reduce((closest, city) =>
     distanceKm(coords, city) < distanceKm(coords, closest) ? city : closest,
   );
   return distanceKm(coords, nearest) <= MAX_FALLBACK_KM ? nearest : null;
@@ -79,6 +114,8 @@ export function resolveCity(
 export async function backfillLoadCities(prisma: PrismaClient) {
   const pending = await prisma.load.findMany({
     where: { OR: [{ originCityId: null }, { destCityId: null }] },
+    orderBy: { createdAt: 'desc' },
+    take: MAX_LOADS_PER_RUN,
     select: {
       id: true,
       originAddress: true, originLat: true, originLng: true, originCityId: true,
@@ -99,6 +136,7 @@ export async function backfillLoadCities(prisma: PrismaClient) {
     if (bucket) bucket.push(city);
     else citiesByName.set(key, [city]);
   }
+  const grid = buildGrid(cities);
 
   let origin = 0;
   let dest = 0;
@@ -108,13 +146,13 @@ export async function backfillLoadCities(prisma: PrismaClient) {
 
     if (!load.originCityId) {
       const city = resolveCity(
-        load.originAddress, { lat: load.originLat, lng: load.originLng }, citiesByName, cities,
+        load.originAddress, { lat: load.originLat, lng: load.originLng }, citiesByName, grid,
       );
       if (city) { data.originCityId = city.id; origin += 1; }
     }
     if (!load.destCityId) {
       const city = resolveCity(
-        load.destAddress, { lat: load.destLat, lng: load.destLng }, citiesByName, cities,
+        load.destAddress, { lat: load.destLat, lng: load.destLng }, citiesByName, grid,
       );
       if (city) { data.destCityId = city.id; dest += 1; }
     }

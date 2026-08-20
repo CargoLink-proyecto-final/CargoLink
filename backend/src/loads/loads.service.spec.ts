@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { LoadStatus } from '@prisma/client';
@@ -24,6 +25,7 @@ describe('LoadsService', () => {
     };
     city: {
       findMany: jest.Mock;
+      count: jest.Mock;
     };
   };
 
@@ -58,6 +60,7 @@ describe('LoadsService', () => {
       },
       city: {
         findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(1),
       },
     };
 
@@ -110,6 +113,32 @@ describe('LoadsService', () => {
       await service.create('shipper-1', { ...dto, deliveryDate: '2026-02-16T18:00:00Z' });
       const arg = prisma.load.create.mock.calls[0][0];
       expect(arg.data.deliveryDate).toEqual(new Date('2026-02-16T18:00:00Z'));
+    });
+  });
+
+  describe('validación de las ciudades del padrón', () => {
+    it('rechaza con 400 una ciudad de origen inexistente', async () => {
+      prisma.city.count.mockResolvedValue(0);
+      await expect(
+        service.create('shipper-1', { originCityId: 'no-existe' } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.load.create).not.toHaveBeenCalled();
+    });
+
+    it('deja pasar la creación cuando la ciudad existe', async () => {
+      prisma.city.count.mockResolvedValue(1);
+      prisma.load.create.mockResolvedValue({ id: 'load-1' });
+      await service.create('shipper-1', {
+        originCityId: 'city-1',
+        pickupDate: '2026-01-01',
+      } as any);
+      expect(prisma.load.create).toHaveBeenCalled();
+    });
+
+    it('no consulta el padrón cuando no se manda ninguna ciudad', async () => {
+      prisma.load.create.mockResolvedValue({ id: 'load-1' });
+      await service.create('shipper-1', { pickupDate: '2026-01-01' } as any);
+      expect(prisma.city.count).not.toHaveBeenCalled();
     });
   });
 
@@ -424,6 +453,18 @@ describe('LoadsService', () => {
       });
       await expect(
         service.update('load-1', 'shipper-1', { weight: 999 } as any),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.load.update).not.toHaveBeenCalled();
+    });
+
+    it('locks the city foreign keys too, no solo la dirección', async () => {
+      prisma.load.findUnique.mockResolvedValue({
+        ...baseLoad,
+        status: LoadStatus.IN_TRANSIT,
+        _count: { postulations: 0 },
+      });
+      await expect(
+        service.update('load-1', 'shipper-1', { originCityId: 'city-9' } as any),
       ).rejects.toThrow(ForbiddenException);
       expect(prisma.load.update).not.toHaveBeenCalled();
     });

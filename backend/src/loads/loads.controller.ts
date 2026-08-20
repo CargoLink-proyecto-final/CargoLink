@@ -41,6 +41,7 @@ export class LoadsController {
   @Get()
   @ApiOperation({ summary: 'List all loads with filters' })
   findAll(
+    @CurrentUser('role') role?: string,
     @Query('status') status?: LoadStatus,
     @Query('cargoType') cargoType?: string,
     @Query('q') q?: string,
@@ -67,6 +68,9 @@ export class LoadsController {
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       createdFrom, createdTo, pickupFrom, pickupTo, deliveryFrom, deliveryTo,
       page, limit,
+      // Este endpoint no filtra por rol, así que un transportista podría
+      // listarlo igual que el admin: el conteo se le oculta también acá.
+      hidePostulationCount: role === 'TRANSPORTER',
     });
   }
 

@@ -68,6 +68,7 @@ describe('LoadsController', () => {
   describe('findAll', () => {
     it('forwards all filters and coerces numeric ranges', async () => {
       await controller.findAll(
+        'ADMIN',
         LoadStatus.PUBLISHED,
         'Electronics',
         'foo',
@@ -88,6 +89,7 @@ describe('LoadsController', () => {
       );
       expect(service.findAll).toHaveBeenCalledWith({
         status: LoadStatus.PUBLISHED,
+        hidePostulationCount: false,
         cargoType: 'Electronics',
         q: 'foo',
         originCityId: 'city-origin',
@@ -105,6 +107,11 @@ describe('LoadsController', () => {
         page: 2,
         limit: 10,
       });
+    });
+
+    it('hides the postulation count when a carrier hits the generic listing', async () => {
+      await controller.findAll('TRANSPORTER');
+      expect(service.findAll.mock.calls[0][0].hidePostulationCount).toBe(true);
     });
 
     it('leaves numeric range filters undefined when absent', async () => {

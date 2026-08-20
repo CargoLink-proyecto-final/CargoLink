@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -79,9 +80,11 @@ const CRITICAL_LOAD_FIELDS = [
   'originAddress',
   'originLat',
   'originLng',
+  'originCityId',
   'destAddress',
   'destLat',
   'destLng',
+  'destCityId',
   'cargoType',
   'weight',
   'volume',
@@ -94,7 +97,30 @@ const CRITICAL_LOAD_FIELDS = [
 export class LoadsService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Las FK de ciudad llegan del cliente. `@IsUUID` valida el formato pero no la
+   * existencia: sin este chequeo, un id inventado revienta en Prisma (P2003) y
+   * el filtro global lo devuelve como 500 con el mensaje crudo del ORM.
+   */
+  private async assertCitiesExist(dto: { originCityId?: string; destCityId?: string }) {
+    const pairs = [
+      ['originCityId', dto.originCityId, 'origen'],
+      ['destCityId', dto.destCityId, 'destino'],
+    ] as const;
+
+    for (const [, id, label] of pairs) {
+      if (!id) continue;
+      const exists = await this.prisma.city.count({ where: { id } });
+      if (!exists) {
+        throw new BadRequestException(
+          `La ciudad de ${label} no existe en el padrón geográfico`,
+        );
+      }
+    }
+  }
+
   async create(shipperId: string, dto: CreateLoadDto) {
+    await this.assertCitiesExist(dto);
     return this.prisma.load.create({
       data: {
         ...dto,
@@ -300,6 +326,7 @@ export class LoadsService {
   }
 
   async update(id: string, userId: string, dto: UpdateLoadDto) {
+    await this.assertCitiesExist(dto);
     const load = await this.findById(id);
     if (load.shipperId !== userId) {
       throw new ForbiddenException('Solo puedes editar tus propias cargas');
