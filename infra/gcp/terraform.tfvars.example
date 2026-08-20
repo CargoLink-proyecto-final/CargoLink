@@ -25,6 +25,14 @@ frontend_image = ""
 # frontend_domain = "plataforma.cargolink.com.ar"
 # backend_domain  = "api.cargolink.com.ar"
 
+# ─── Password del admin (recomendado fuerte en prod) ───
+# Va a Secret Manager y el backend la inyecta como ADMIN_PASSWORD. Con esto
+# seteado, el seed reescribe la password de admin@cargolink.com en CADA arranque,
+# así que rotarla es cambiar este valor y re-aplicar. Si la dejás vacía no se crea
+# el secret y el seed cae a un fallback que está versionado en el repo — no dejes
+# prod así.
+# admin_password = "una-password-larga-y-random"
+
 # ─── SMTP (opcional — vacío = fallback Ethereal, no envía mails reales) ───
 # Para Gmail: 2FA + App Password (https://myaccount.google.com/apppasswords)
 # smtp_host     = "smtp.gmail.com"

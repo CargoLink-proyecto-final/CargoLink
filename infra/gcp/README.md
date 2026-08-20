@@ -14,7 +14,7 @@ Terraform automatiza **toda la infraestructura**. Lo que **vos hacés a mano** e
 | **Cloud SQL** (PostgreSQL 15) | Base de datos administrada. Tier `db-f1-micro` (el más barato). |
 | **Cloud Run — backend** | NestJS. Conecta a Cloud SQL por socket unix. Público. |
 | **Cloud Run — frontend** | Next.js standalone. Público. Se despliega en la **fase 2**. |
-| **Secret Manager** | `DATABASE_URL`, `JWT_SECRET` y (opcional) `SMTP_PASSWORD`. Nunca en texto plano en el contenedor. |
+| **Secret Manager** | `DATABASE_URL`, `JWT_SECRET` y (opcionales) `SMTP_PASSWORD`, `ADMIN_PASSWORD`. Nunca en texto plano en el contenedor. |
 | **Service Account + IAM** | Identidad de runtime con permisos mínimos (Cloud SQL client + lectura de secrets). |
 
 ```
@@ -178,7 +178,9 @@ terraform output -raw frontend_url
 ### Paso 6 — 🔧 Smoke test
 
 1. Abrí la `frontend_url` en el browser.
-2. Login con una cuenta demo (`admin@cargolink.com` / `password123` — la crea el seed del backend).
+2. Login con una cuenta demo (`shipper@example.com` / `password123` — la crea el seed del backend).
+   Para entrar como admin usá `admin@cargolink.com` con el valor de `admin_password`
+   de tus tfvars (si lo dejaste vacío, el fallback que tiene el seed).
 3. Verificá que el dashboard cargue datos (eso confirma que el frontend habla con el backend y el backend con la DB).
 
 ✅ **Listo, CargoLink está en producción en GCP.**

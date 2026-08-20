@@ -20,8 +20,14 @@ db_deletion_protection = false
 # explícitamente acá. (Para SMTP propio en dev, poné tus creds en lugar de "".)
 smtp_password = ""
 smtp_user     = ""
+
 # smtp_host     = "smtp.gmail.com"
 # smtp_from     = "CargoLink Dev <tu-cuenta@gmail.com>"
+
+# MISMO ojo que con SMTP: si prod define admin_password en terraform.tfvars, dev
+# heredaría la password del admin de PROD en su propio Secret Manager. Seteá acá
+# la de dev explícitamente (o "" para que dev use el fallback del seed).
+admin_password = ""
 
 # ─── Dominios custom de dev (opcional) ───
 # MISMO ojo que con SMTP: si prod define frontend_domain/backend_domain en

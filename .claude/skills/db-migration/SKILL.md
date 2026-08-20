@@ -135,7 +135,7 @@ Archivo: `backend/prisma/seed.ts`. Es **idempotente**:
 - Users vía `prisma.user.upsert()` por email (no duplica).
 - Load demo vía `findFirst` por `(shipperId, title)` + `create` si no existe.
 
-Crea 3 cuentas (`admin@cargolink.com` ADMIN, `shipper@example.com` CARGO_GENERATOR, `carrier@example.com` TRANSPORTER; password `password123` hasheado bcrypt) y 1 load demo.
+Crea 12 cuentas demo (1 ADMIN, 1 CARGO_GENERATOR, 1 COMPANY_ADMIN y 9 TRANSPORTER — incluidos `profe1-3` y `transportista1-2`), la empresa "Flota Andina" con 2 choferes + 1 solicitud `PENDING`, y 1 load demo. Password `password123` hasheada con bcrypt, salvo la del admin, que sale de `ADMIN_PASSWORD` (si está seteada, se reescribe en cada corrida; si no, el fallback se aplica solo al crear).
 
 ```bash
 cd backend && npm run prisma:seed         # ts-node prisma/seed.ts
