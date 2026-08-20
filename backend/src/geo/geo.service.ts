@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeSearchText } from '../common/text';
 
 // Tope de resultados por búsqueda: el padrón tiene 4.027 localidades y el
 // combo del front las consume con type-ahead, no necesita el listado entero.
@@ -19,7 +20,10 @@ export class GeoService {
 
   async searchCities(params: { provinceId?: string; q?: string; limit?: number }) {
     const take = Math.min(params.limit ?? CITY_SEARCH_LIMIT, CITY_SEARCH_LIMIT);
-    const q = params.q?.trim();
+    // Se compara normalizado contra `searchName`, no contra `name`: el ILIKE que
+    // genera `mode: 'insensitive'` ignora mayúsculas pero no acentos, y quien
+    // escribe "cordoba" espera Córdoba.
+    const q = params.q ? normalizeSearchText(params.q) : undefined;
     const scope = params.provinceId ? { provinceId: params.provinceId } : {};
 
     const query = (where: Prisma.CityWhereInput, limit: number) =>
@@ -46,16 +50,13 @@ export class GeoService {
     // Relevancia para el type-ahead: "pil" tiene que traer Pilar antes que
     // "Barrio El Cepillo". Se resuelve en dos pasadas — prefijo primero, y solo
     // si sobra lugar se completa con coincidencias en el medio del nombre.
-    const prefix = await query(
-      { ...scope, name: { startsWith: q, mode: 'insensitive' } },
-      take,
-    );
+    const prefix = await query({ ...scope, searchName: { startsWith: q } }, take);
     if (prefix.length >= take) return this.shape(prefix);
 
     const rest = await query(
       {
         ...scope,
-        name: { contains: q, mode: 'insensitive' },
+        searchName: { contains: q },
         id: { notIn: prefix.map((city) => city.id) },
       },
       take - prefix.length,

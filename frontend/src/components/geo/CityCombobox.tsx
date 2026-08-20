@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Combobox, { ComboboxOption } from '@/components/ui/Combobox';
 import { geoApi } from '@/lib/api';
+import { normalizeSearchText } from '@/lib/text';
 
 export interface City {
   id: string;
@@ -59,15 +60,12 @@ export default function CityCombobox({
     enabled: !fixedCities,
   });
 
-  const normalize = (text: string) =>
-    text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-
   // Con lista cerrada el filtrado es local: son pocas y ya están en memoria.
   const cities = useMemo(() => {
     if (!fixedCities) return searched;
-    const q = normalize(debouncedQuery.trim());
+    const q = normalizeSearchText(debouncedQuery);
     if (!q) return fixedCities;
-    return fixedCities.filter((city) => normalize(city.name).includes(q));
+    return fixedCities.filter((city) => normalizeSearchText(city.name).includes(q));
   }, [fixedCities, searched, debouncedQuery]);
 
   const options: ComboboxOption[] = useMemo(

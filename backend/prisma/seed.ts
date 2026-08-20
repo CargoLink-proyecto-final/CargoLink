@@ -166,7 +166,7 @@ async function main() {
   const backfill = await backfillLoadCities(prisma);
 
   console.log('Datos de seed listos:', {
-    geo: `${geo.provinces} provincias, ${geo.cities} ciudades (${geo.inserted} nuevas, ${geo.postalCodes} CP completados)`,
+    geo: `${geo.provinces} provincias, ${geo.cities} ciudades (${geo.inserted} nuevas, ${geo.postalCodes} CP completados, ${geo.renamed} nombres reconciliados)`,
     admin: admin.email,
     shipper: shipper.email,
     carrier: carrier.email,
