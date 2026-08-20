@@ -1,14 +1,9 @@
 import { PrismaClient } from '@prisma/client';
-
-// Normaliza para comparar: sin acentos, sin mayúsculas, sin espacios de más.
-// El texto de las direcciones viene de Nominatim y del tipeo del usuario, así
-// que "Cordoba" y "Córdoba" tienen que colapsar al mismo valor.
-const normalize = (text: string) =>
-  text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+// Misma normalización que usa el padrón para `search_name` y que corre el front
+// sobre lo que tipea el usuario: el texto de las direcciones viene de Nominatim
+// y del tipeo libre, así que "Cordoba" y "Córdoba" tienen que colapsar al mismo
+// valor para que el match por segmento funcione.
+import { normalizeSearchText as normalize } from '../src/common/text';
 
 const EARTH_RADIUS_KM = 6371;
 const toRad = (deg: number) => (deg * Math.PI) / 180;

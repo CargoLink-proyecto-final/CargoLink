@@ -63,8 +63,30 @@ describe('GeoService', () => {
       expect(prisma.city.findMany).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({
-          where: { provinceId: 'prov-1', name: { startsWith: 'pil', mode: 'insensitive' } },
+          where: { provinceId: 'prov-1', searchName: { startsWith: 'pil' } },
         }),
+      );
+    });
+
+    // El motivo de existir de `searchName`: ILIKE ignora mayúsculas pero no
+    // acentos, así que "CÓRDOBA", "cordoba" y "Córdoba" tienen que caer todos
+    // en la misma búsqueda.
+    it.each([['cordoba'], ['Córdoba'], ['CÓRDOBA'], ['  córdoba  ']])(
+      'normalizes %p before hitting the database',
+      async (q) => {
+        await service.searchCities({ q });
+        expect(prisma.city.findMany).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({ where: { searchName: { startsWith: 'cordoba' } } }),
+        );
+      },
+    );
+
+    it('treats a query of only whitespace as no query at all', async () => {
+      await service.searchCities({ q: '   ' });
+      expect(prisma.city.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.city.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
       );
     });
 
@@ -79,7 +101,7 @@ describe('GeoService', () => {
         2,
         expect.objectContaining({
           where: {
-            name: { contains: 'pil', mode: 'insensitive' },
+            searchName: { contains: 'pil' },
             id: { notIn: ['city-1'] },
           },
           take: 49,

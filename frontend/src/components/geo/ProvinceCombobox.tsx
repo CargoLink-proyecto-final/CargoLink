@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Combobox, { ComboboxOption } from '@/components/ui/Combobox';
 import { geoApi } from '@/lib/api';
+import { normalizeSearchText } from '@/lib/text';
 
 export interface Province {
   id: string;
@@ -33,9 +34,6 @@ export function useProvinces() {
   });
 }
 
-const normalize = (text: string) =>
-  text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-
 export default function ProvinceCombobox({
   value, onChange, placeholder = 'Elegí una provincia', disabled, inputClassName, id,
   'aria-label': ariaLabel,
@@ -44,9 +42,9 @@ export default function ProvinceCombobox({
   const [query, setQuery] = useState('');
 
   const options: ComboboxOption[] = useMemo(() => {
-    const q = normalize(query.trim());
+    const q = normalizeSearchText(query);
     return provinces
-      .filter((p) => !q || normalize(p.name).includes(q))
+      .filter((p) => !q || normalizeSearchText(p.name).includes(q))
       .map((p) => ({ id: p.id, value: p.name }));
   }, [provinces, query]);
 

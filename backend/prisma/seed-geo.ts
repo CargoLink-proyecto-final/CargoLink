@@ -2,6 +2,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 // `import * as`: el tsconfig del backend no tiene esModuleInterop, así que un
 // default import del JSON llega undefined en runtime.
 import * as geoData from './data/argentina-geo.json';
+import { normalizeSearchText } from '../src/common/text';
 
 interface GeoProvince { code: string; name: string; iso: string | null; country: string }
 interface GeoCity {
@@ -45,6 +46,7 @@ export async function seedGeo(prisma: PrismaClient) {
       data: missing.map((city) => ({
         code: city.code,
         name: city.name,
+        searchName: normalizeSearchText(city.name),
         department: city.department,
         postalCode: city.postalCode,
         lat: city.lat,
@@ -56,13 +58,62 @@ export async function seedGeo(prisma: PrismaClient) {
   }
 
   const postalCodes = await syncPostalCodes(prisma);
+  const renamed = await syncCityNames(prisma);
 
   return {
     provinces: geo.provinces.length,
     cities: geo.cities.length,
     inserted: missing.length,
     postalCodes,
+    renamed,
   };
+}
+
+/**
+ * Reconcilia `name` y `search_name` de las filas ya cargadas contra el padrón.
+ * Hay dos motivos para que difieran:
+ *
+ * - `search_name` es una columna nueva. La migración la backfillea en SQL, pero
+ *   acá manda TypeScript: `normalizeSearchText` es la misma función que corre el
+ *   front sobre lo que tipea el usuario, así que cualquier divergencia (o un
+ *   cambio futuro en la normalización) se corrige sola.
+ * - El snapshot del padrón se corrigió. Traía 53 localidades con un soft-hyphen
+ *   (U+00AD) incrustado por un mal decode de origen: "Junín" se guardaba como
+ *   "Juní" + U+00AD + "n", que se lee igual pero no matchea con nada. Las filas
+ *   insertadas antes de esa corrección siguen con el nombre roto, porque el
+ *   createMany de arriba solo inserta las que faltan y nunca actualiza.
+ *
+ * Después de la primera corrida no encuentra nada que hacer y queda en un SELECT.
+ */
+async function syncCityNames(prisma: PrismaClient) {
+  const expectedByCode = new Map(geo.cities.map((city) => [city.code, city.name]));
+  const cities = await prisma.city.findMany({
+    select: { code: true, name: true, searchName: true },
+  });
+
+  const stale = cities.flatMap((city) => {
+    // Una ciudad que no está en el padrón se deja como está: el nombre que tenga
+    // es el único dato disponible, solo se le recalcula la clave de búsqueda.
+    const name = expectedByCode.get(city.code) ?? city.name;
+    const searchName = normalizeSearchText(name);
+    if (name === city.name && searchName === city.searchName) return [];
+    return [{ code: city.code, name, searchName }];
+  });
+  if (stale.length === 0) return 0;
+
+  const CHUNK = 1000;
+  for (let i = 0; i < stale.length; i += CHUNK) {
+    const chunk = stale.slice(i, i + CHUNK);
+    const values = Prisma.join(
+      chunk.map((city) => Prisma.sql`(${city.code}, ${city.name}, ${city.searchName})`),
+    );
+    await prisma.$executeRaw`
+      UPDATE cities SET name = source.name, search_name = source.search_name
+      FROM (VALUES ${values}) AS source(code, name, search_name)
+      WHERE cities.code = source.code
+    `;
+  }
+  return stale.length;
 }
 
 /**
