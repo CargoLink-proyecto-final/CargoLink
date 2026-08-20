@@ -10,12 +10,25 @@ async function main() {
 
   const password = await bcrypt.hash('password123', 10);
 
+  // El ADMIN es la única cuenta con permisos sobre todo el sistema, así que no
+  // comparte la password genérica de las cuentas demo: sale de ADMIN_PASSWORD
+  // para que cada entorno la inyecte por secret. El fallback es para dev local
+  // y para que un entorno nuevo levante usable sin config previa.
+  const adminPassword = await bcrypt.hash(
+    process.env.ADMIN_PASSWORD || 'cladmin2026',
+    10,
+  );
+
   const admin = await prisma.user.upsert({
     where: { email: 'admin@cargolink.com' },
-    update: { emailVerified: true },
+    // A diferencia del resto de las cuentas, acá la password SÍ se reescribe en
+    // cada arranque: ADMIN_PASSWORD es la fuente de verdad. Rotarla es cambiar
+    // el secret y reiniciar el servicio — cambiarla desde la app no sirve,
+    // porque el próximo boot la revierte.
+    update: { emailVerified: true, password: adminPassword },
     create: {
       email: 'admin@cargolink.com',
-      password,
+      password: adminPassword,
       firstName: 'Admin',
       lastName: 'CargoLink',
       role: Role.ADMIN,
@@ -194,7 +207,7 @@ async function main() {
 
   console.log('Datos de seed listos:', {
     geo: `${geo.provinces} provincias, ${geo.cities} ciudades (${geo.inserted} nuevas, ${geo.postalCodes} CP completados, ${geo.renamed} nombres reconciliados)`,
-    admin: admin.email,
+    admin: `${admin.email} (password: ${process.env.ADMIN_PASSWORD ? 'ADMIN_PASSWORD' : 'fallback del seed'})`,
     shipper: shipper.email,
     carrier: carrier.email,
     companyAdmin: companyAdmin.email,

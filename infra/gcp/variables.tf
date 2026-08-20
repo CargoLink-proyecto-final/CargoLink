@@ -139,6 +139,13 @@ variable "smtp_user" {
   default = ""
 }
 
+variable "admin_password" {
+  description = "Password de la cuenta admin@cargolink.com. Si está vacío no se crea el secret ni se inyecta, y el seed cae a su fallback (no usar en prod). Si lo seteás, se guarda en Secret Manager."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "smtp_password" {
   description = "Password SMTP. Si está vacío no se crea el secret ni se inyecta. Si lo seteás, se guarda en Secret Manager."
   type        = string
