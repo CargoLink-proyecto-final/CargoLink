@@ -107,6 +107,17 @@ export const ratingsApi = {
 };
 
 // Companies (fleet / company admin)
+// Padrón geográfico oficial (provincias y localidades censales) — alimenta los
+// selectores con búsqueda de ciudad/provincia.
+export const geoApi = {
+  // Ciudades presentes en las cargas visibles — alimenta el filtro sin ofrecer
+  // las 4.027 del padrón, que en su mayoría devolverían tabla vacía.
+  getLoadFilterCities: () => api.get('/loads/filter-cities'),
+  getProvinces: () => api.get('/geo/provinces'),
+  searchCities: (params: { provinceId?: string; q?: string; limit?: number }) =>
+    api.get('/geo/cities', { params }),
+};
+
 export const companiesApi = {
   // Directory + driver side
   list: () => api.get('/companies'),

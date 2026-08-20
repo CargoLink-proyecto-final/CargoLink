@@ -20,7 +20,6 @@ import {
   MessageSquare,
   Hand,
   Star,
-  Users,
 } from 'lucide-react';
 import PostulationsPanel from '@/components/postulations/PostulationsPanel';
 import PostulateModal from '@/components/postulations/PostulateModal';
@@ -337,17 +336,6 @@ export default function LoadDetailPage() {
             <a href="#postulaciones" className="text-sm font-medium text-primary-700 hover:text-primary-800">
               Ver abajo ↓
             </a>
-          </div>
-        )}
-
-        {isTransporter && (load.pendingPostulationsCount ?? 0) > 0 && load.status === 'PUBLISHED' && (
-          <div className="card p-4 flex items-center gap-2 bg-info-50 border-info-200 text-info-800">
-            <Users size={18} />
-            <span className="font-medium">
-              {load.pendingPostulationsCount === 1
-                ? 'Hay 1 transportista interesado en esta carga.'
-                : `Hay ${load.pendingPostulationsCount} transportistas interesados en esta carga.`}
-            </span>
           </div>
         )}
 

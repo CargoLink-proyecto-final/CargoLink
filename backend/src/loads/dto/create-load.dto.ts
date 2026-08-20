@@ -1,5 +1,5 @@
-import { IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CARGO_TYPES } from '../cargo-types.constant';
 
 export class CreateLoadDto {
@@ -26,6 +26,13 @@ export class CreateLoadDto {
   @IsNumber({}, { message: 'La longitud de origen debe ser un número' })
   originLng: number;
 
+  @ApiPropertyOptional({
+    description: 'Id de la ciudad del padrón oficial. Si no viene, la carga queda sin ciudad hasta que el backfill la resuelva por dirección y coordenadas.',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'La ciudad de origen debe ser un id válido' })
+  originCityId?: string;
+
   @ApiProperty({ example: 'Av. San Martín 567, Córdoba' })
   @IsString({ message: 'La dirección de destino debe ser texto' })
   @IsNotEmpty({ message: 'La dirección de destino es obligatoria' })
@@ -38,6 +45,11 @@ export class CreateLoadDto {
   @ApiProperty({ example: -64.1888 })
   @IsNumber({}, { message: 'La longitud de destino debe ser un número' })
   destLng: number;
+
+  @ApiPropertyOptional({ description: 'Id de la ciudad de destino en el padrón oficial.' })
+  @IsOptional()
+  @IsUUID('4', { message: 'La ciudad de destino debe ser un id válido' })
+  destCityId?: string;
 
   @ApiProperty({ example: 'Mercadería general', enum: CARGO_TYPES })
   @IsString({ message: 'El tipo de carga debe ser texto' })

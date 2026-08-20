@@ -68,9 +68,12 @@ describe('LoadsController', () => {
   describe('findAll', () => {
     it('forwards all filters and coerces numeric ranges', async () => {
       await controller.findAll(
+        'ADMIN',
         LoadStatus.PUBLISHED,
         'Electronics',
         'foo',
+        'city-origin',
+        'city-dest',
         100 as any,
         9000 as any,
         1000 as any,
@@ -86,8 +89,11 @@ describe('LoadsController', () => {
       );
       expect(service.findAll).toHaveBeenCalledWith({
         status: LoadStatus.PUBLISHED,
+        hidePostulationCount: false,
         cargoType: 'Electronics',
         q: 'foo',
+        originCityId: 'city-origin',
+        destCityId: 'city-dest',
         minWeight: 100,
         maxWeight: 9000,
         minPrice: 1000,
@@ -101,6 +107,11 @@ describe('LoadsController', () => {
         page: 2,
         limit: 10,
       });
+    });
+
+    it('hides the postulation count when a carrier hits the generic listing', async () => {
+      await controller.findAll('TRANSPORTER');
+      expect(service.findAll.mock.calls[0][0].hidePostulationCount).toBe(true);
     });
 
     it('leaves numeric range filters undefined when absent', async () => {
@@ -144,9 +155,9 @@ describe('LoadsController', () => {
   });
 
   describe('findOne', () => {
-    it('delegates to service.findById', async () => {
-      await controller.findOne('load-1');
-      expect(service.findById).toHaveBeenCalledWith('load-1');
+    it('delegates to service.findById passing the viewer role', async () => {
+      await controller.findOne('load-1', 'TRANSPORTER');
+      expect(service.findById).toHaveBeenCalledWith('load-1', 'TRANSPORTER');
     });
   });
 

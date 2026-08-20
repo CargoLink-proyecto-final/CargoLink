@@ -92,9 +92,9 @@ describe('getSolicitudStage', () => {
 
 describe('getSolicitudStageLabel', () => {
   it('labels Load and Trip statuses with the unified vocabulary', () => {
-    expect(getSolicitudStageLabel('PUBLISHED')).toBe('Creado');
+    expect(getSolicitudStageLabel('PUBLISHED')).toBe('Pendiente');
     expect(getSolicitudStageLabel('ACCEPTED')).toBe('Asignado');
-    expect(getSolicitudStageLabel('IN_TRANSIT')).toBe('Iniciado');
+    expect(getSolicitudStageLabel('IN_TRANSIT')).toBe('En tránsito');
     expect(getSolicitudStageLabel('COMPLETED')).toBe('Completado');
     expect(getSolicitudStageLabel('CANCELLED')).toBe('Cancelado');
   });
