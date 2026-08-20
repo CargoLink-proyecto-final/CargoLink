@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,6 +12,48 @@ import { RegisterQueryDto } from './dto/register-query.dto';
 import { LoadStatus, Prisma } from '@prisma/client';
 
 type AuthUser = { id: string; role: string };
+
+// Distancia en línea recta (km) entre dos puntos. Suficiente para ordenar
+// cargas por cercanía a la zona de influencia del transportista (P12); no
+// pretende exactitud de ruta (para eso está OSRM en common/routing).
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+type LoadListParams = {
+  status?: LoadStatus;
+  page?: number;
+  limit?: number;
+  shipperId?: string;
+  cargoType?: string;
+  q?: string;
+  // Ciudad de recogida / entrega del padrón oficial, por id.
+  originCityId?: string;
+  destCityId?: string;
+  minWeight?: number;
+  maxWeight?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  createdFrom?: string;
+  createdTo?: string;
+  pickupFrom?: string;
+  pickupTo?: string;
+  deliveryFrom?: string;
+  deliveryTo?: string;
+  // Si viene, las cargas se ordenan por cercanía del origen a este punto
+  // (zona del transportista, P12) en lugar de por fecha de creación.
+  prioritizeZone?: { lat: number; lng: number };
+  // Cuántos se postularon es información del publicador: al transportista no
+  // se le expone, ni siquiera en el payload, para no filtrar la competencia.
+  hidePostulationCount?: boolean;
+};
 
 function applyDateRange(where: any, field: string, from?: string, to?: string) {
   if (!from && !to) return;
@@ -37,9 +80,11 @@ const CRITICAL_LOAD_FIELDS = [
   'originAddress',
   'originLat',
   'originLng',
+  'originCityId',
   'destAddress',
   'destLat',
   'destLng',
+  'destCityId',
   'cargoType',
   'weight',
   'volume',
@@ -52,7 +97,30 @@ const CRITICAL_LOAD_FIELDS = [
 export class LoadsService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Las FK de ciudad llegan del cliente. `@IsUUID` valida el formato pero no la
+   * existencia: sin este chequeo, un id inventado revienta en Prisma (P2003) y
+   * el filtro global lo devuelve como 500 con el mensaje crudo del ORM.
+   */
+  private async assertCitiesExist(dto: { originCityId?: string; destCityId?: string }) {
+    const pairs = [
+      ['originCityId', dto.originCityId, 'origen'],
+      ['destCityId', dto.destCityId, 'destino'],
+    ] as const;
+
+    for (const [, id, label] of pairs) {
+      if (!id) continue;
+      const exists = await this.prisma.city.count({ where: { id } });
+      if (!exists) {
+        throw new BadRequestException(
+          `La ciudad de ${label} no existe en el padrón geográfico`,
+        );
+      }
+    }
+  }
+
   async create(shipperId: string, dto: CreateLoadDto) {
+    await this.assertCitiesExist(dto);
     return this.prisma.load.create({
       data: {
         ...dto,
@@ -64,24 +132,7 @@ export class LoadsService {
     });
   }
 
-  async findAll(params?: {
-    status?: LoadStatus;
-    page?: number;
-    limit?: number;
-    shipperId?: string;
-    cargoType?: string;
-    q?: string;
-    minWeight?: number;
-    maxWeight?: number;
-    minPrice?: number;
-    maxPrice?: number;
-    createdFrom?: string;
-    createdTo?: string;
-    pickupFrom?: string;
-    pickupTo?: string;
-    deliveryFrom?: string;
-    deliveryTo?: string;
-  }) {
+  async findAll(params?: LoadListParams) {
     const page = params?.page || 1;
     const limit = params?.limit || 20;
     const where: any = {};
@@ -102,6 +153,8 @@ export class LoadsService {
         },
       ];
     }
+    if (params?.originCityId) where.originCityId = params.originCityId;
+    if (params?.destCityId) where.destCityId = params.destCityId;
     if (params?.minWeight || params?.maxWeight) {
       where.weight = {};
       if (params?.minWeight) where.weight.gte = params.minWeight;
@@ -116,40 +169,141 @@ export class LoadsService {
     applyDateRange(where, 'pickupDate', params?.pickupFrom, params?.pickupTo);
     applyDateRange(where, 'deliveryDate', params?.deliveryFrom, params?.deliveryTo);
 
+    const include = {
+      shipper: { select: { id: true, firstName: true, lastName: true, companyName: true } },
+      trip: { select: { id: true, status: true, carrierId: true } },
+      _count: {
+        select: { postulations: { where: { status: 'PENDING' as const } } },
+      },
+    };
+    const shape = ({ _count, ...rest }: any) => ({
+      ...rest,
+      // undefined desaparece al serializar: el transportista no recibe la clave.
+      pendingPostulationsCount: params?.hidePostulationCount
+        ? undefined
+        : (_count?.postulations ?? 0),
+    });
+
+    // Priorización por zona de influencia (P12): cuando el transportista definió
+    // una zona, ordenamos las cargas por cercanía del origen a ese punto
+    // (haversine) y paginamos en memoria. Cap defensivo para no traer todo el
+    // universo de cargas en un único query.
+    if (params?.prioritizeZone) {
+      const { lat, lng } = params.prioritizeZone;
+      const all = await this.prisma.load.findMany({
+        where,
+        include,
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      });
+      const sorted = all
+        .map((l) => ({ l, d: haversineKm(lat, lng, l.originLat, l.originLng) }))
+        .sort((a, b) => a.d - b.d)
+        .map(({ l }) => shape(l));
+      const total = sorted.length;
+      const start = (page - 1) * limit;
+      return {
+        loads: sorted.slice(start, start + limit),
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    }
+
     const [loads, total] = await Promise.all([
       this.prisma.load.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
-        include: {
-          shipper: { select: { id: true, firstName: true, lastName: true, companyName: true } },
-          trip: { select: { id: true, status: true, carrierId: true } },
-          _count: {
-            select: { postulations: { where: { status: 'PENDING' } } },
-          },
-        },
+        include,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.load.count({ where }),
     ]);
 
-    const shaped = loads.map(({ _count, ...rest }) => ({
-      ...rest,
-      pendingPostulationsCount: _count?.postulations ?? 0,
-    }));
-
-    return { loads: shaped, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { loads: loads.map(shape), total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findAvailable(params?: { page?: number; limit?: number }) {
-    return this.findAll({ ...params, status: LoadStatus.PUBLISHED });
+  /**
+   * Ciudades que efectivamente aparecen en las cargas que el usuario puede ver.
+   * Alimenta el desplegable del filtro: ofrecer las 4.027 del padrón haría que
+   * casi cualquier elección devolviera una tabla vacía.
+   */
+  async findFilterCities(user: { id: string; role: string }) {
+    const scope: any =
+      user.role === 'CARGO_GENERATOR'
+        ? { shipperId: user.id }
+        : user.role === 'TRANSPORTER'
+          ? { status: LoadStatus.PUBLISHED }
+          : {};
+
+    const [origins, dests] = await Promise.all([
+      this.prisma.load.groupBy({
+        by: ['originCityId'],
+        where: { ...scope, originCityId: { not: null } },
+      }),
+      this.prisma.load.groupBy({
+        by: ['destCityId'],
+        where: { ...scope, destCityId: { not: null } },
+      }),
+    ]);
+
+    const originIds = origins.map((row) => row.originCityId as string);
+    const destIds = dests.map((row) => row.destCityId as string);
+    const cities = await this.prisma.city.findMany({
+      where: { id: { in: [...new Set([...originIds, ...destIds])] } },
+      select: {
+        id: true, code: true, name: true, department: true, postalCode: true,
+        lat: true, lng: true,
+        province: { select: { id: true, name: true, country: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const shaped = new Map(
+      cities.map(({ province, ...city }) => [
+        city.id,
+        {
+          ...city,
+          provinceId: province.id,
+          provinceName: province.name,
+          country: province.country,
+        },
+      ]),
+    );
+    const pick = (ids: string[]) =>
+      ids.map((id) => shaped.get(id)).filter((city): city is NonNullable<typeof city> => !!city)
+        .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+    return { origin: pick(originIds), dest: pick(destIds) };
   }
 
-  async findById(id: string) {
+  async findAvailable(
+    carrierId: string,
+    params?: Omit<LoadListParams, 'status' | 'prioritizeZone' | 'shipperId'>,
+  ) {
+    const carrier = await this.prisma.user.findUnique({
+      where: { id: carrierId },
+      select: { zoneLat: true, zoneLng: true },
+    });
+    const prioritizeZone =
+      carrier?.zoneLat != null && carrier?.zoneLng != null
+        ? { lat: carrier.zoneLat, lng: carrier.zoneLng }
+        : undefined;
+    return this.findAll({
+      ...params,
+      status: LoadStatus.PUBLISHED,
+      prioritizeZone,
+      hidePostulationCount: true,
+    });
+  }
+
+  async findById(id: string, viewerRole?: string) {
     const load = await this.prisma.load.findUnique({
       where: { id },
       include: {
-        shipper: { select: { id: true, firstName: true, lastName: true, companyName: true, phone: true } },
+        shipper: { select: { id: true, firstName: true, lastName: true, companyName: true, industry: true, phone: true } },
         trip: {
           include: {
             carrier: { select: { id: true, firstName: true, lastName: true, companyName: true, phone: true } },
@@ -165,11 +319,14 @@ export class LoadsService {
     const { _count, ...rest } = load;
     return {
       ...rest,
-      pendingPostulationsCount: _count?.postulations ?? 0,
+      // Mismo criterio que en el listado: al transportista no se le manda.
+      pendingPostulationsCount:
+        viewerRole === 'TRANSPORTER' ? undefined : (_count?.postulations ?? 0),
     };
   }
 
   async update(id: string, userId: string, dto: UpdateLoadDto) {
+    await this.assertCitiesExist(dto);
     const load = await this.findById(id);
     if (load.shipperId !== userId) {
       throw new ForbiddenException('Solo puedes editar tus propias cargas');

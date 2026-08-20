@@ -10,7 +10,7 @@ import RatingModal from '@/components/ratings/RatingModal';
 import { tripsApi, ratingsApi } from '@/lib/api';
 import type { Trip, Rating } from '@/types';
 import { useAuthStore } from '@/store/auth';
-import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
+import { formatCurrency, formatPrice, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import { useRoute } from '@/lib/useRoute';
 import { MapPin, Truck, Calendar, Star, MessageSquare, Fuel, Route, Gauge } from 'lucide-react';
 import Link from 'next/link';
@@ -162,7 +162,7 @@ export default function TripDetailPage() {
     markers.push({ id: 'current', lat: trip.currentLat, lng: trip.currentLng, title: 'Ubicación Actual', status: trip.status });
   }
 
-  // Por ahora la calificación es unidireccional: solo el dador de carga
+  // Por ahora la calificación es unidireccional: solo el publicador de carga
   // (dueño de la carga) califica al transportista.
   const isShipper = trip.load?.shipperId === user?.id;
   const canRate =
@@ -182,7 +182,7 @@ export default function TripDetailPage() {
           <div>
             <h1 className="text-2xl font-bold">{trip.load?.title || 'Detalles del Viaje'}</h1>
             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(trip.status)}`}>
-              {getStatusLabel(trip.status)}
+              {getSolicitudStageLabel(trip.status)}
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -282,7 +282,7 @@ export default function TripDetailPage() {
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-gray-500">Tipo:</span> <span className="font-medium">{trip.load?.cargoType}</span></div>
               <div><span className="text-gray-500">Peso:</span> <span className="font-medium">{trip.load?.weight} kg</span></div>
-              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatCurrency(trip.load?.price || 0)}</span></div>
+              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatPrice(trip.load?.price)}</span></div>
             </div>
           </div>
         </div>

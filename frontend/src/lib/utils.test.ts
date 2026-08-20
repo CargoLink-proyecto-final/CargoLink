@@ -1,4 +1,13 @@
-import { cn, formatCurrency, formatDate, getStatusColor, getStatusLabel } from './utils';
+import {
+  cn,
+  formatCurrency,
+  formatPrice,
+  formatDate,
+  getStatusColor,
+  getStatusLabel,
+  getSolicitudStage,
+  getSolicitudStageLabel,
+} from './utils';
 
 describe('cn', () => {
   it('merges class names', () => {
@@ -24,6 +33,22 @@ describe('formatCurrency', () => {
 
   it('handles zero', () => {
     expect(formatCurrency(0)).toMatch(/0/);
+  });
+});
+
+describe('formatPrice', () => {
+  it('falls back to "A convenir" when the load has no price', () => {
+    expect(formatPrice(null)).toBe('A convenir');
+    expect(formatPrice(undefined)).toBe('A convenir');
+  });
+
+  it('formats a real price like formatCurrency', () => {
+    expect(formatPrice(1000)).toBe(formatCurrency(1000));
+  });
+
+  it('does not treat a zero price as missing', () => {
+    // 0 es un precio declarado (raro, pero explícito): no es "a convenir".
+    expect(formatPrice(0)).toBe(formatCurrency(0));
   });
 });
 
@@ -54,5 +79,44 @@ describe('getStatusLabel', () => {
 
   it('echoes the input for an unknown status', () => {
     expect(getStatusLabel('UNKNOWN')).toBe('UNKNOWN');
+  });
+});
+
+describe('getSolicitudStage', () => {
+  it('derives the unified stage from a LoadStatus', () => {
+    expect(getSolicitudStage('PUBLISHED')).toBe('CREATED');
+    expect(getSolicitudStage('ASSIGNED')).toBe('ASSIGNED');
+    expect(getSolicitudStage('IN_TRANSIT')).toBe('STARTED');
+    expect(getSolicitudStage('DELIVERED')).toBe('COMPLETED');
+  });
+
+  it('derives the unified stage from a TripStatus', () => {
+    expect(getSolicitudStage('PENDING')).toBe('CREATED');
+    expect(getSolicitudStage('ACCEPTED')).toBe('ASSIGNED');
+    expect(getSolicitudStage('IN_PROGRESS')).toBe('STARTED');
+    expect(getSolicitudStage('COMPLETED')).toBe('COMPLETED');
+  });
+
+  it('maps the shared CANCELLED value', () => {
+    expect(getSolicitudStage('CANCELLED')).toBe('CANCELLED');
+  });
+
+  it('returns null for a non-load/trip status', () => {
+    expect(getSolicitudStage('NEGOTIATING')).toBeNull();
+    expect(getSolicitudStage('UNKNOWN')).toBeNull();
+  });
+});
+
+describe('getSolicitudStageLabel', () => {
+  it('labels Load and Trip statuses with the unified vocabulary', () => {
+    expect(getSolicitudStageLabel('PUBLISHED')).toBe('Pendiente');
+    expect(getSolicitudStageLabel('ACCEPTED')).toBe('Asignado');
+    expect(getSolicitudStageLabel('IN_TRANSIT')).toBe('En tránsito');
+    expect(getSolicitudStageLabel('COMPLETED')).toBe('Completado');
+    expect(getSolicitudStageLabel('CANCELLED')).toBe('Cancelado');
+  });
+
+  it('falls back to the raw status label when not part of the solicitud cycle', () => {
+    expect(getSolicitudStageLabel('NEGOTIATING')).toBe('En negociación');
   });
 });

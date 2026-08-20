@@ -9,13 +9,17 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { loadsApi } from '../../services/api';
+import { loadsApi, usersApi } from '../../services/api';
+import { formatPrice } from '../../lib/labels';
 import { Load } from '../../types';
 
 export default function AvailableLoadsScreen({ navigation }: any) {
   const [loads, setLoads] = useState<Load[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // El backend ordena por cercanía a la zona del transportista, pero eso es
+  // invisible en la lista: sin este aviso el orden parece arbitrario.
+  const [hasZone, setHasZone] = useState(false);
 
   const filteredLoads = loads.filter((load) => {
     if (!searchQuery.trim()) return true;
@@ -36,7 +40,13 @@ export default function AvailableLoadsScreen({ navigation }: any) {
     }
   };
 
-  useEffect(() => { fetchLoads(); }, []);
+  useEffect(() => {
+    fetchLoads();
+    usersApi
+      .getMe()
+      .then((res) => setHasZone(res.data?.zoneLat != null && res.data?.zoneLng != null))
+      .catch(() => setHasZone(false));
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -56,7 +66,21 @@ export default function AvailableLoadsScreen({ navigation }: any) {
         onChangeText={setSearchQuery}
       />
 
-      <Text style={styles.subtitle}>{filteredLoads.length} cargas disponibles</Text>
+      <Text style={styles.subtitle}>
+        {filteredLoads.length} cargas disponibles
+        {hasZone ? ' · ordenadas por cercanía a tu zona' : ''}
+      </Text>
+
+      {!hasZone && (
+        <TouchableOpacity
+          style={styles.zoneHint}
+          onPress={() => navigation.navigate('Profile')}
+        >
+          <Text style={styles.zoneHintText}>
+            Definí tu zona de influencia en el perfil para ver primero las cargas cercanas.
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <FlatList
         data={filteredLoads}
@@ -72,16 +96,29 @@ export default function AvailableLoadsScreen({ navigation }: any) {
               {item.originAddress} → {item.destAddress}
             </Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardPrice}>${item.price.toLocaleString()}</Text>
+              <Text style={styles.cardPrice}>{formatPrice(item.price)}</Text>
               <View style={styles.cardMeta}>
                 <Text style={styles.cardMetaText}>{item.weight} kg</Text>
                 <Text style={styles.cardMetaText}>{item.cargoType}</Text>
+                {item.packageCount != null && (
+                  <Text style={styles.cardMetaText}>{item.packageCount} bultos</Text>
+                )}
               </View>
             </View>
+            {/* Sin rubro acá: `findAll` no lo trae en el select del shipper
+                (backend/src/loads/loads.service.ts), sólo `findById`. Se muestra
+                en el detalle de la carga. */}
             <Text style={styles.cardShipper}>
               {item.shipper?.firstName} {item.shipper?.lastName}
               {item.shipper?.companyName ? ` - ${item.shipper.companyName}` : ''}
             </Text>
+            {(item.pendingPostulationsCount ?? 0) > 0 && (
+              <Text style={styles.cardInterest}>
+                {item.pendingPostulationsCount === 1
+                  ? '1 transportista ya se postuló'
+                  : `${item.pendingPostulationsCount} transportistas ya se postularon`}
+              </Text>
+            )}
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -120,5 +157,11 @@ const styles = StyleSheet.create({
   cardMeta: { flexDirection: 'row', gap: 8 },
   cardMetaText: { fontSize: 12, color: '#9ca3af', backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   cardShipper: { fontSize: 12, color: '#9ca3af', marginTop: 8 },
+  cardInterest: { fontSize: 12, color: '#1e40af', fontWeight: '600', marginTop: 6 },
+  zoneHint: {
+    backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a',
+    borderRadius: 10, padding: 10, marginBottom: 12,
+  },
+  zoneHintText: { fontSize: 12, color: '#92400e' },
   empty: { textAlign: 'center', color: '#9ca3af', marginTop: 40, fontSize: 15 },
 });

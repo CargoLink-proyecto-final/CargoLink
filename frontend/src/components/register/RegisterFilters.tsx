@@ -62,7 +62,7 @@ export default function RegisterFiltersBar({ filters, onChange, isAdmin, total }
           <input
             value={filters.participant ?? ''}
             onChange={(e) => onChange({ ...filters, participant: e.target.value || undefined })}
-            placeholder="Generador o transportista…"
+            placeholder="Publicador o transportista…"
             className="w-full md:w-72 px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
           />
         )}

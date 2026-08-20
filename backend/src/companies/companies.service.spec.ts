@@ -645,14 +645,14 @@ describe('CompaniesService', () => {
           completedAt: new Date('2026-01-10'),
           fuelLiters: 100,
           distanceKm: 500,
-          load: { price: 1000, deliveryDate: new Date('2026-01-15') },
+          load: { price: 1000, deliveryDate: new Date('2026-01-15'), postulations: [] },
         },
         {
           status: TripStatus.IN_PROGRESS,
           completedAt: null,
           fuelLiters: null,
           distanceKm: null,
-          load: { price: 200, deliveryDate: null },
+          load: { price: 200, deliveryDate: null, postulations: [] },
         },
       ]);
       prisma.rating.aggregate.mockResolvedValue({
@@ -674,6 +674,77 @@ describe('CompaniesService', () => {
       // companyId must be stripped from driver info
       expect(result.driver).not.toHaveProperty('companyId');
       expect(result.driver.id).toBe('d1');
+    });
+
+    it('bills a load published without a price at the agreed postulation price', async () => {
+      // Carga "a convenir": el precio pactado vive solo en la postulación
+      // aceptada. Tomar load.price la contaría como $0 de ingresos.
+      prisma.company.findUnique.mockResolvedValue(company);
+      prisma.user.findUnique.mockResolvedValue(driver);
+      prisma.trip.findMany.mockResolvedValue([
+        {
+          status: TripStatus.COMPLETED,
+          completedAt: new Date('2026-01-10'),
+          fuelLiters: null,
+          distanceKm: null,
+          load: { price: null, deliveryDate: null, postulations: [{ proposedPrice: 7500 }] },
+        },
+      ]);
+      prisma.rating.aggregate.mockResolvedValue({
+        _avg: { score: null },
+        _count: { score: 0 },
+      });
+
+      const result = await service.getDriverStats('owner-1', 'd1');
+
+      expect(result.totalRevenue).toBe(7500);
+    });
+
+    it('prefers the negotiated price over the listed one', async () => {
+      // El transportista negoció por encima del precio publicado: el ingreso
+      // real es el pactado, no el que se listó al publicar.
+      prisma.company.findUnique.mockResolvedValue(company);
+      prisma.user.findUnique.mockResolvedValue(driver);
+      prisma.trip.findMany.mockResolvedValue([
+        {
+          status: TripStatus.COMPLETED,
+          completedAt: new Date('2026-01-10'),
+          fuelLiters: null,
+          distanceKm: null,
+          load: { price: 1000, deliveryDate: null, postulations: [{ proposedPrice: 1300 }] },
+        },
+      ]);
+      prisma.rating.aggregate.mockResolvedValue({
+        _avg: { score: null },
+        _count: { score: 0 },
+      });
+
+      const result = await service.getDriverStats('owner-1', 'd1');
+
+      expect(result.totalRevenue).toBe(1300);
+    });
+
+    it('falls back to the listed price when the carrier proposed none', async () => {
+      // Postularse sin precio significa "acepto el publicado".
+      prisma.company.findUnique.mockResolvedValue(company);
+      prisma.user.findUnique.mockResolvedValue(driver);
+      prisma.trip.findMany.mockResolvedValue([
+        {
+          status: TripStatus.COMPLETED,
+          completedAt: new Date('2026-01-10'),
+          fuelLiters: null,
+          distanceKm: null,
+          load: { price: 900, deliveryDate: null, postulations: [{ proposedPrice: null }] },
+        },
+      ]);
+      prisma.rating.aggregate.mockResolvedValue({
+        _avg: { score: null },
+        _count: { score: 0 },
+      });
+
+      const result = await service.getDriverStats('owner-1', 'd1');
+
+      expect(result.totalRevenue).toBe(900);
     });
 
     it('handles a driver with no trips (null avg rating, zeroed totals)', async () => {

@@ -12,6 +12,16 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/**
+ * El precio de una carga es opcional: si el publicador no lo fija, sale
+ * "a convenir" y lo define la postulación del transportista.
+ */
+export const PRICE_TO_AGREE_LABEL = 'A convenir';
+
+export function formatPrice(amount?: number | null): string {
+  return amount == null ? PRICE_TO_AGREE_LABEL : formatCurrency(amount);
+}
+
 export function formatDate(date: string): string {
   return new Date(date).toLocaleDateString('es-AR', {
     year: 'numeric',
@@ -53,4 +63,63 @@ export function getStatusLabel(status: string): string {
     APPROVED: 'Aprobada',
   };
   return labels[status] || status;
+}
+
+/**
+ * Estado unificado de la "solicitud" (ciclo Load + Trip combinado).
+ *
+ * Una solicitud nace cuando el publicador crea la carga y se sigue como un
+ * único hilo de 4 estados — Pendiente → Asignado → En tránsito → Completado (+
+ * Cancelado) — aunque internamente ese hilo viva partido entre `LoadStatus` y
+ * `TripStatus`. El backend mantiene ambos enums sincronizados de forma atómica
+ * (aceptar postulación → ASSIGNED, iniciar viaje → IN_TRANSIT, completar →
+ * DELIVERED), así que el stage se deriva indistintamente del status de Load o
+ * de Trip.
+ *
+ * IMPORTANTE: este mapeo es OPT-IN. `PENDING`/`ACCEPTED`/`COMPLETED` también
+ * son valores de `PostulationStatus`, donde significan otra cosa — por eso
+ * nunca debe aplicarse a badges de postulaciones. Usar solo sobre estados de
+ * carga/viaje.
+ */
+export type SolicitudStage =
+  | 'CREATED'
+  | 'ASSIGNED'
+  | 'STARTED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+const SOLICITUD_STAGE_BY_STATUS: Record<string, SolicitudStage> = {
+  // LoadStatus
+  PUBLISHED: 'CREATED',
+  ASSIGNED: 'ASSIGNED',
+  IN_TRANSIT: 'STARTED',
+  DELIVERED: 'COMPLETED',
+  // TripStatus
+  PENDING: 'CREATED',
+  ACCEPTED: 'ASSIGNED',
+  IN_PROGRESS: 'STARTED',
+  COMPLETED: 'COMPLETED',
+  // Compartido por ambos enums
+  CANCELLED: 'CANCELLED',
+};
+
+const SOLICITUD_STAGE_LABELS: Record<SolicitudStage, string> = {
+  // "Pendiente" y "En tránsito" en vez de "Creado"/"Iniciado": describen la
+  // situación de la carga para el usuario, no el evento que la generó.
+  CREATED: 'Pendiente',
+  ASSIGNED: 'Asignado',
+  STARTED: 'En tránsito',
+  COMPLETED: 'Completado',
+  CANCELLED: 'Cancelado',
+};
+
+/** Deriva el stage unificado de la solicitud desde un `LoadStatus` o `TripStatus`. */
+export function getSolicitudStage(status: string): SolicitudStage | null {
+  return SOLICITUD_STAGE_BY_STATUS[status] ?? null;
+}
+
+/** Etiqueta en español del ciclo de la solicitud (Pendiente/Asignado/En tránsito/Completado/Cancelado). */
+export function getSolicitudStageLabel(status: string): string {
+  const stage = getSolicitudStage(status);
+  return stage ? SOLICITUD_STAGE_LABELS[stage] : getStatusLabel(status);
 }

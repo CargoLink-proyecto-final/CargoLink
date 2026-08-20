@@ -120,3 +120,54 @@ describe('PostulateModal — cancel & submitting', () => {
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
   });
 });
+
+// Carga publicada sin precio: el transportista es quien pone el número, así que
+// proponer uno deja de ser opcional y no hay piso contra el cual compararlo.
+describe('PostulateModal — carga "a convenir" (sin precio listado)', () => {
+  function renderToAgree(onSubmit = jest.fn()) {
+    render(
+      <PostulateModal
+        listedPrice={null}
+        submitting={false}
+        onSubmit={onSubmit}
+        onClose={jest.fn()}
+      />,
+    );
+    return { onSubmit };
+  }
+
+  it('says the load is "a convenir" instead of showing a listed price', () => {
+    renderToAgree();
+    expect(screen.queryByText('Precio listado:')).not.toBeInTheDocument();
+    expect(screen.getByText('a convenir')).toBeInTheDocument();
+  });
+
+  it('makes the proposed price required', () => {
+    renderToAgree();
+    expect(screen.getByLabelText('Precio propuesto')).toBeInTheDocument();
+    expect(
+      screen.getByText('Esta carga no tiene precio publicado: proponé el tuyo.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar postulación' })).toBeDisabled();
+  });
+
+  it('accepts any positive price — there is no listed floor', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderToAgree();
+
+    await user.type(screen.getByLabelText('Precio propuesto'), '1');
+    const submit = screen.getByRole('button', { name: 'Enviar postulación' });
+    expect(submit).toBeEnabled();
+
+    await user.click(submit);
+    expect(onSubmit).toHaveBeenCalledWith({ message: undefined, proposedPrice: 1 });
+  });
+
+  it('still rejects zero or negative', async () => {
+    const user = userEvent.setup();
+    renderToAgree();
+    await user.type(screen.getByLabelText('Precio propuesto'), '0');
+    expect(screen.getByText('El precio debe ser mayor a 0')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar postulación' })).toBeDisabled();
+  });
+});

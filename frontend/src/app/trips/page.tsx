@@ -5,10 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatusBadge from '@/components/ui/StatusBadge';
+import TripsMapView from '@/components/trips/TripsMapView';
 import { tripsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { formatDate, getStatusLabel } from '@/lib/utils';
-import { ArrowRight, Star, Truck } from 'lucide-react';
+import { formatDate, getSolicitudStageLabel } from '@/lib/utils';
+import { ArrowRight, Star, Truck, List, Map as MapIcon } from 'lucide-react';
 import type { Trip, TripStatus } from '@/types';
 
 const STATUSES: TripStatus[] = [
@@ -22,6 +23,7 @@ export default function TripsPage() {
   const user = useAuthStore((s) => s.user);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [page, setPage] = useState(1);
+  const [view, setView] = useState<'list' | 'map'>('list');
 
   const isShipper = user?.role === 'CARGO_GENERATOR';
 
@@ -50,17 +52,45 @@ export default function TripsPage() {
               Mis <span className="font-semibold text-primary-700">viajes</span>
             </h1>
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            className="w-full sm:w-auto px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
-          >
-            <option value="">Todos los estados</option>
-            {STATUSES.map((s) => <option key={s} value={s}>{getStatusLabel(s)}</option>)}
-          </select>
+          <div className="flex items-center gap-3">
+            <div className="inline-flex rounded-lg border border-ink-200 bg-surface-raised p-1">
+              <button
+                type="button"
+                onClick={() => setView('list')}
+                aria-pressed={view === 'list'}
+                className={`px-3 py-1.5 rounded-md text-[13px] font-medium inline-flex items-center gap-1.5 transition ${
+                  view === 'list' ? 'bg-ink-900 text-surface-raised' : 'text-ink-500 hover:text-ink-800'
+                }`}
+              >
+                <List size={14} /> Lista
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('map')}
+                aria-pressed={view === 'map'}
+                className={`px-3 py-1.5 rounded-md text-[13px] font-medium inline-flex items-center gap-1.5 transition ${
+                  view === 'map' ? 'bg-ink-900 text-surface-raised' : 'text-ink-500 hover:text-ink-800'
+                }`}
+              >
+                <MapIcon size={14} /> Mapa
+              </button>
+            </div>
+            {view === 'list' && (
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+                className="w-full sm:w-auto px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
+              >
+                <option value="">Todos los estados</option>
+                {STATUSES.map((s) => <option key={s} value={s}>{getSolicitudStageLabel(s)}</option>)}
+              </select>
+            )}
+          </div>
         </div>
 
-        {/* Table */}
+        {view === 'map' ? (
+          <TripsMapView />
+        ) : (
         <div className="card overflow-hidden">
           {isLoading ? (
             <div className="p-16 text-center text-ink-400 text-sm">Cargando…</div>
@@ -73,7 +103,7 @@ export default function TripsPage() {
                   <thead>
                     <tr className="text-left text-ink-500">
                       <Th>Carga</Th>
-                      <Th>{isShipper ? 'Transportista' : 'Dador de carga'}</Th>
+                      <Th>{isShipper ? 'Transportista' : 'Publicador de carga'}</Th>
                       <Th>Creación</Th>
                       <Th>Estado</Th>
                       <Th>Acción</Th>
@@ -104,7 +134,7 @@ export default function TripsPage() {
                           </td>
                           <td className="px-5 py-3.5 font-mono text-[12px] text-ink-700 whitespace-nowrap">{formatDate(trip.createdAt)}</td>
                           <td className="px-5 py-3.5">
-                            <StatusBadge status={trip.status} />
+                            <StatusBadge status={trip.status} kind="solicitud" />
                           </td>
                           <td className="px-5 py-3.5">
                             {canRate ? (
@@ -151,6 +181,7 @@ export default function TripsPage() {
             </>
           )}
         </div>
+        )}
       </div>
     </DashboardLayout>
   );

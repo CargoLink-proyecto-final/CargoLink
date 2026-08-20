@@ -10,7 +10,7 @@ import {
   Truck,
   User as UserIcon,
 } from 'lucide-react';
-import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { cn, formatPrice, formatDate } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import type { RegisterItem, RegisterParticipant } from '@/types/register';
 import MessageThread from './MessageThread';
@@ -77,7 +77,7 @@ export default function RegisterRow({ item }: Props) {
         </div>
 
         <div className="text-right shrink-0">
-          <p className="font-display text-[18px] text-ink-900 tabular-nums">{formatCurrency(item.price)}</p>
+          <p className="font-display text-[18px] text-ink-900 tabular-nums">{formatPrice(item.price)}</p>
           <p className="text-[11px] text-ink-500 font-mono">Retiro {formatDate(item.pickupDate)}</p>
           <p className="text-[11px] text-ink-400 mt-1.5 inline-flex items-center justify-end gap-1">
             <MessageSquare size={11} /> {trip?.messageCount ?? 0}
@@ -92,7 +92,7 @@ export default function RegisterRow({ item }: Props) {
               <Row label="Tipo" value={item.cargoType} />
               <Row label="Peso" value={<span className="font-mono">{item.weight} kg</span>} />
               <Row label="Volumen" value={item.volume ? <span className="font-mono">{item.volume} m³</span> : '—'} />
-              <Row label="Precio" value={<span className="font-mono">{formatCurrency(item.price)}</span>} />
+              <Row label="Precio" value={<span className="font-mono">{formatPrice(item.price)}</span>} />
               {item.description && (
                 <div className="pt-2">
                   <p className="eyebrow mb-1">Descripción</p>
@@ -118,7 +118,7 @@ export default function RegisterRow({ item }: Props) {
               </div>
             </Section>
 
-            <Section title="Generador de carga">
+            <Section title="Publicador de carga">
               <Row label="Nombre" value={participantLabel(item.shipper)} />
               <Row label="Email" value={<span className="font-mono text-[12px] break-all">{item.shipper.email ?? '—'}</span>} />
               <Row label="Teléfono" value={<span className="font-mono">{item.shipper.phone ?? '—'}</span>} />

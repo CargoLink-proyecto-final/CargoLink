@@ -3,7 +3,7 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef } from 'react';
-import { getStatusLabel } from '@/lib/utils';
+import { getSolicitudStageLabel } from '@/lib/utils';
 
 function createColorIcon(color: string) {
   return L.divIcon({
@@ -148,7 +148,7 @@ function drawMarkers(layer: L.LayerGroup, markers: MapMarker[]) {
   layer.clearLayers();
   markers.forEach((m) => {
     const marker = L.marker([m.lat, m.lng], { icon: getIconForMarker(m) });
-    marker.bindPopup(`<strong>${m.title}</strong>${m.status ? `<br/>${getStatusLabel(m.status)}` : ''}`);
+    marker.bindPopup(`<strong>${m.title}</strong>${m.status ? `<br/>${getSolicitudStageLabel(m.status)}` : ''}`);
     layer.addLayer(marker);
   });
 }

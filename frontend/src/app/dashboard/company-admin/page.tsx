@@ -150,7 +150,7 @@ export default function CompanyAdminDashboard() {
                       {trip.carrier?.firstName} {trip.carrier?.lastName}
                     </p>
                   </div>
-                  <StatusBadge status={trip.status} />
+                  <StatusBadge status={trip.status} kind="solicitud" />
                 </div>
               ))}
             </div>

@@ -1,10 +1,12 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_URL = 'http://localhost:3002/api';
+import { API_URL } from '../config/env';
 
 const api = axios.create({
   baseURL: API_URL,
+  // Sin timeout axios espera indefinidamente: en móvil, con red inestable o una
+  // IP de LAN equivocada, eso deja la pantalla colgada sin feedback.
+  timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -35,8 +37,13 @@ export const loadsApi = {
 };
 
 export const tripsApi = {
+  // Override de ADMIN que saltea el ciclo de postulación: un TRANSPORTER recibe
+  // 403. Para postularse va `postulationsApi.create`.
   accept: (loadId: string) => api.post(`/trips/accept/${loadId}`),
+  // Los viajes propios están partidos por rol: `my` es TRANSPORTER-only y
+  // `my-loads` CARGO_GENERATOR-only. Llamar el que no corresponde da 403.
   getMy: (params?: any) => api.get('/trips/my', { params }),
+  getMyLoads: (params?: any) => api.get('/trips/my-loads', { params }),
   getById: (id: string) => api.get(`/trips/${id}`),
   start: (id: string) => api.patch(`/trips/${id}/start`),
   complete: (id: string) => api.patch(`/trips/${id}/complete`),
@@ -44,13 +51,43 @@ export const tripsApi = {
     api.patch(`/trips/${id}/location`, data),
 };
 
+// Las conversaciones son por viaje (Trip), no entre usuarios: el backend valida
+// que quien llama sea el carrier o el shipper de ese viaje.
 export const messagesApi = {
-  send: (receiverId: string, content: string) =>
-    api.post(`/messages/${receiverId}`, { content }),
+  send: (tripId: string, content: string) =>
+    api.post(`/messages/trip/${tripId}`, { content }),
   getConversations: () => api.get('/messages/conversations'),
-  getConversation: (userId: string, params?: any) =>
-    api.get(`/messages/conversation/${userId}`, { params }),
-  markAsRead: (senderId: string) => api.patch(`/messages/read/${senderId}`),
+  getTripMessages: (tripId: string, params?: any) =>
+    api.get(`/messages/trip/${tripId}`, { params }),
+  markAsRead: (tripId: string) => api.patch(`/messages/trip/${tripId}/read`),
+  getUnreadCount: () => api.get('/messages/unread-count'),
+};
+
+export const usersApi = {
+  getMe: () => api.get('/users/me'),
+  updateMe: (data: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    companyName?: string;
+    industry?: string;
+    zoneLat?: number;
+    zoneLng?: number;
+    zoneRadiusKm?: number;
+  }) => api.patch('/users/me', data),
+};
+
+export const postulationsApi = {
+  create: (loadId: string, data: { message?: string; proposedPrice?: number }) =>
+    api.post(`/loads/${loadId}/postulations`, data),
+  listForLoad: (loadId: string) => api.get(`/loads/${loadId}/postulations`),
+  listMine: (status?: string) =>
+    api.get('/postulations/my', { params: status ? { status } : undefined }),
+  accept: (id: string) => api.post(`/postulations/${id}/accept`),
+  counterOffer: (id: string, price: number) =>
+    api.post(`/postulations/${id}/counter-offer`, { price }),
+  acceptOffer: (id: string) => api.post(`/postulations/${id}/accept-offer`),
+  withdraw: (id: string) => api.delete(`/postulations/${id}`),
 };
 
 export const ratingsApi = {

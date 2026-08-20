@@ -10,7 +10,7 @@ import { loadsApi, postulationsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useRoute } from '@/lib/useRoute';
 import Link from 'next/link';
-import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
+import { formatCurrency, formatPrice, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import {
   MapPin,
   Package,
@@ -50,7 +50,7 @@ function NegotiationResponder({
       counterParsed <= 0
         ? 'El precio debe ser mayor a 0'
         : counterParsed <= counterOfferPrice
-        ? `Debe ser mayor a la contra-oferta del dador ($${counterOfferPrice}). Si aceptás ese precio, usá "Aceptar".`
+        ? `Debe ser mayor a la contra-oferta del publicador ($${counterOfferPrice}). Si aceptás ese precio, usá "Aceptar".`
         : null
     );
 
@@ -142,7 +142,7 @@ export default function LoadDetailPage() {
   const isOwner =
     user?.role === 'CARGO_GENERATOR' && load?.shipperId === user.id;
 
-  // El dador de carga califica al transportista una vez entregada la carga
+  // El publicador de carga califica al transportista una vez entregada la carga
   // (viaje completado) y mientras no lo haya calificado todavía.
   const canRateCarrier =
     isOwner &&
@@ -259,7 +259,7 @@ export default function LoadDetailPage() {
           <div>
             <h1 className="text-2xl font-bold">{load.title}</h1>
             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(load.status)}`}>
-              {getStatusLabel(load.status)}
+              {getSolicitudStageLabel(load.status)}
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -383,7 +383,7 @@ export default function LoadDetailPage() {
             {hasPendingCounterOffer && myPostulation.counterOfferPrice != null && (
               <div className="rounded-card border border-warning-400/40 bg-warning-50 p-3 space-y-2">
                 <p className="text-sm font-medium text-warning-800">
-                  El dador de carga propuso {formatCurrency(myPostulation.counterOfferPrice)}
+                  El publicador de carga propuso {formatCurrency(myPostulation.counterOfferPrice)}
                 </p>
                 <NegotiationResponder
                   counterOfferPrice={myPostulation.counterOfferPrice}
@@ -398,7 +398,7 @@ export default function LoadDetailPage() {
             )}
 
             {myPostulation.status === 'NEGOTIATING' && myPostulation.lastOfferBy === 'TRANSPORTER' && (
-              <p className="text-sm text-ink-400 italic">Contra-oferta enviada — esperando respuesta del dador de carga…</p>
+              <p className="text-sm text-ink-400 italic">Contra-oferta enviada — esperando respuesta del publicador de carga…</p>
             )}
           </div>
         )}
@@ -423,7 +423,11 @@ export default function LoadDetailPage() {
               <div><span className="text-gray-500">Tipo:</span> <span className="font-medium">{load.cargoType}</span></div>
               <div><span className="text-gray-500">Peso:</span> <span className="font-medium">{load.weight} kg</span></div>
               {load.volume && <div><span className="text-gray-500">Volumen:</span> <span className="font-medium">{load.volume} m3</span></div>}
-              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatCurrency(load.price)}</span></div>
+              {load.packageCount != null && <div><span className="text-gray-500">Bultos:</span> <span className="font-medium">{load.packageCount}</span></div>}
+              {(load.heightCm != null || load.widthCm != null || load.lengthCm != null) && (
+                <div><span className="text-gray-500">Dimensiones:</span> <span className="font-medium">{[load.heightCm, load.widthCm, load.lengthCm].map((d) => (d != null ? d : '—')).join(' × ')} cm</span></div>
+              )}
+              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatPrice(load.price)}</span></div>
             </div>
           </div>
 
@@ -445,16 +449,17 @@ export default function LoadDetailPage() {
             <h2 className="font-semibold flex items-center gap-2"><Calendar size={18} /> Fechas</h2>
             <div className="space-y-2 text-sm">
               <div><span className="text-gray-500">Recogida:</span> <span className="font-medium">{formatDate(load.pickupDate)}</span></div>
-              {load.deliveryDate && <div><span className="text-gray-500">Entrega:</span> <span className="font-medium">{formatDate(load.deliveryDate)}</span></div>}
+              {load.deliveryDate && <div><span className="text-gray-500">Entrega deseada:</span> <span className="font-medium">{formatDate(load.deliveryDate)}</span></div>}
               <div><span className="text-gray-500">Creado:</span> <span className="font-medium">{formatDate(load.createdAt)}</span></div>
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
-            <h2 className="font-semibold flex items-center gap-2"><User size={18} /> Generador de carga</h2>
+            <h2 className="font-semibold flex items-center gap-2"><User size={18} /> Publicador de carga</h2>
             <div className="text-sm">
               <p className="font-medium">{load.shipper?.firstName} {load.shipper?.lastName}</p>
               {load.shipper?.companyName && <p className="text-gray-500">{load.shipper.companyName}</p>}
+              {load.shipper?.industry && <p className="text-gray-500">Rubro: {load.shipper.industry}</p>}
             </div>
             {load.trip && (
               <>
@@ -462,7 +467,7 @@ export default function LoadDetailPage() {
                 <div className="text-sm">
                   <p className="font-medium">{load.trip.carrier?.firstName} {load.trip.carrier?.lastName}</p>
                   <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(load.trip.status)}`}>
-                    {getStatusLabel(load.trip.status)}
+                    {getSolicitudStageLabel(load.trip.status)}
                   </span>
                 </div>
               </>

@@ -6,13 +6,18 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { loadsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { formatDate, getStatusLabel } from '@/lib/utils';
+import { formatDate, getSolicitudStageLabel } from '@/lib/utils';
 import Link from 'next/link';
-import { Search, Filter, X, Calendar, ChevronDown, Plus, ArrowRight } from 'lucide-react';
+import { Search, Filter, X, MapPin, Flag, ChevronDown, Plus, ArrowRight } from 'lucide-react';
 import { LoadStatus } from '@/types';
+import CityCombobox, { City } from '@/components/geo/CityCombobox';
+import { geoApi } from '@/lib/api';
 
 interface DateRange { from: string; to: string }
 const EMPTY_RANGE: DateRange = { from: '', to: '' };
+
+// Cada tramo del viaje agrupa sus propios filtros (fecha + ciudad).
+type Leg = 'pickup' | 'delivery';
 
 const DATE_MIN = '2020-01-01';
 const DATE_MAX = `${new Date().getFullYear() + 5}-12-31`;
@@ -40,10 +45,13 @@ export default function LoadsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [cargoType, setCargoType] = useState('');
-  const [createdRange, setCreatedRange] = useState<DateRange>(EMPTY_RANGE);
   const [pickupRange, setPickupRange] = useState<DateRange>(EMPTY_RANGE);
   const [deliveryRange, setDeliveryRange] = useState<DateRange>(EMPTY_RANGE);
-  const [datesOpen, setDatesOpen] = useState(false);
+  // El filtro va por id de ciudad; el nombre se guarda solo para mostrarlo.
+  const [pickupCity, setPickupCity] = useState<City | null>(null);
+  const [deliveryCity, setDeliveryCity] = useState<City | null>(null);
+  // Un solo panel de tramo abierto a la vez: abrir uno cierra el otro.
+  const [openLeg, setOpenLeg] = useState<Leg | null>(null);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -51,24 +59,31 @@ export default function LoadsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Ciudades realmente presentes en las cargas visibles, por tramo.
+  const { data: filterCities } = useQuery<{ origin: City[]; dest: City[] }>({
+    queryKey: ['loads', 'filter-cities'],
+    queryFn: () => geoApi.getLoadFilterCities().then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data, isLoading } = useQuery({
     queryKey: [
       'loads', statusFilter, cargoType, debouncedSearch, page,
-      createdRange.from, createdRange.to,
       pickupRange.from, pickupRange.to,
       deliveryRange.from, deliveryRange.to,
+      pickupCity?.id, deliveryCity?.id,
     ],
     queryFn: () => {
       const params: any = { page, limit: 20 };
       if (statusFilter) params.status = statusFilter;
       if (cargoType) params.cargoType = cargoType;
       if (debouncedSearch) params.q = debouncedSearch;
-      if (createdRange.from) params.createdFrom = createdRange.from;
-      if (createdRange.to) params.createdTo = createdRange.to;
       if (pickupRange.from) params.pickupFrom = pickupRange.from;
       if (pickupRange.to) params.pickupTo = pickupRange.to;
       if (deliveryRange.from) params.deliveryFrom = deliveryRange.from;
       if (deliveryRange.to) params.deliveryTo = deliveryRange.to;
+      if (pickupCity) params.originCityId = pickupCity.id;
+      if (deliveryCity) params.destCityId = deliveryCity.id;
       if (user?.role === 'CARGO_GENERATOR') return loadsApi.getMy(params).then((r) => r.data);
       if (user?.role === 'TRANSPORTER')     return loadsApi.getAvailable(params).then((r) => r.data);
       return loadsApi.getAll(params).then((r) => r.data);
@@ -84,21 +99,32 @@ export default function LoadsPage() {
     key: 'from' | 'to', value: string, current: DateRange,
   ) => { setter({ ...current, [key]: value }); setPage(1); };
 
-  const activeDateCount =
-    [
-      createdRange.from || createdRange.to,
-      pickupRange.from || pickupRange.to,
-      deliveryRange.from || deliveryRange.to,
-    ].filter(Boolean).length;
-  const clearDates = activeDateCount > 0;
-  const resetDates = () => {
-    setCreatedRange(EMPTY_RANGE);
+  const countActive = (range: DateRange, city: City | null) =>
+    [range.from || range.to, city].filter(Boolean).length;
+  const pickupActive = countActive(pickupRange, pickupCity);
+  const deliveryActive = countActive(deliveryRange, deliveryCity);
+
+  const clearPickup = () => {
     setPickupRange(EMPTY_RANGE);
-    setDeliveryRange(EMPTY_RANGE);
+    setPickupCity(null);
     setPage(1);
   };
+  const clearDelivery = () => {
+    setDeliveryRange(EMPTY_RANGE);
+    setDeliveryCity(null);
+    setPage(1);
+  };
+  const selectCity = (setter: (city: City | null) => void) => (_: string, city?: City) => {
+    setter(city ?? null);
+    setPage(1);
+  };
+  const toggleLeg = (leg: Leg) => setOpenLeg((current) => (current === leg ? null : leg));
 
   const heading = ROLE_TITLE[user?.role ?? 'ADMIN'] ?? ROLE_TITLE.ADMIN;
+  // El transportista ve una tabla más corta: la fecha de publicación no le
+  // ayuda a decidir, y el estado sería siempre el mismo porque solo lista
+  // cargas publicadas.
+  const isCarrier = user?.role === 'TRANSPORTER';
 
   return (
     <DashboardLayout>
@@ -123,9 +149,9 @@ export default function LoadsPage() {
           )}
         </div>
 
-        {/* Filter bar */}
-        <div className="space-y-3">
-          <div className="card p-3 flex flex-col lg:flex-row gap-3 lg:items-center">
+        {/* Filter bar — búsqueda, categoría, estado y filtros por tramo en una sola card */}
+        <div className="card">
+          <div className="p-3 flex flex-col lg:flex-row gap-3 lg:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" size={16} />
               <input
@@ -135,76 +161,72 @@ export default function LoadsPage() {
                 className="w-full pl-9 pr-4 py-2 bg-transparent border border-ink-200 rounded-lg text-[14px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Filter size={15} className="text-ink-400 shrink-0" />
-              <select
-                value={cargoType}
-                onChange={(e) => { setCargoType(e.target.value); setPage(1); }}
-                className="w-full sm:w-auto px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
-              >
-                <option value="">Todos los tipos</option>
-                {CARGO_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="flex items-center gap-2">
+                <Filter size={15} className="text-ink-400 shrink-0" />
+                {/* El ancho de un select nativo lo fija su opción más larga; sin
+                    tope, "Muebles y artículos del hogar" estira todo el control. */}
+                <select
+                  value={cargoType}
+                  aria-label="Tipo de carga"
+                  onChange={(e) => { setCargoType(e.target.value); setPage(1); }}
+                  className="w-full sm:w-[150px] px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
+                >
+                  <option value="">Todos</option>
+                  {CARGO_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              {user?.role !== 'TRANSPORTER' && (
+                <select
+                  value={statusFilter}
+                  aria-label="Estado"
+                  onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+                  className="w-full sm:w-[150px] px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
+                >
+                  <option value="">Todos</option>
+                  {statuses.map((s) => <option key={s} value={s}>{getSolicitudStageLabel(s)}</option>)}
+                </select>
+              )}
+              {/* Un toggle por tramo: cada panel agrupa fecha + ciudad de ese tramo */}
+              <LegToggle
+                label="Recogida"
+                icon={<MapPin size={15} />}
+                open={openLeg === 'pickup'}
+                activeCount={pickupActive}
+                onClick={() => toggleLeg('pickup')}
+              />
+              <LegToggle
+                label="Entrega"
+                icon={<Flag size={15} />}
+                open={openLeg === 'delivery'}
+                activeCount={deliveryActive}
+                onClick={() => toggleLeg('delivery')}
+              />
             </div>
-            {user?.role !== 'TRANSPORTER' && (
-              <select
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                className="w-full sm:w-auto px-3 py-2 border border-ink-200 rounded-lg text-[13.5px] bg-surface-raised focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
-              >
-                <option value="">Todos los estados</option>
-                {statuses.map((s) => <option key={s} value={s}>{getStatusLabel(s)}</option>)}
-              </select>
-            )}
           </div>
 
-          {/* Collapsible date filters */}
-          <div className="card">
-            <button
-              type="button"
-              onClick={() => setDatesOpen((o) => !o)}
-              className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-[13.5px] text-ink-700 hover:bg-surface-sunk/60 transition rounded-card"
-              aria-expanded={datesOpen}
-            >
-              <span className="flex items-center gap-2.5">
-                <Calendar size={15} className="text-ink-400" />
-                <span className="font-medium">Filtros por fecha</span>
-                {clearDates && (
-                  <span className="text-[10px] font-semibold bg-primary-50 text-primary-700 rounded-full px-2 py-0.5 tracking-wide uppercase">
-                    {activeDateCount} activo{activeDateCount > 1 ? 's' : ''}
-                  </span>
-                )}
-              </span>
-              <span className="flex items-center gap-3">
-                {clearDates && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => { e.stopPropagation(); resetDates(); }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault(); e.stopPropagation(); resetDates();
-                      }
-                    }}
-                    className="text-[11px] uppercase tracking-wider text-ink-500 hover:text-ink-700 flex items-center gap-1 cursor-pointer"
-                  >
-                    <X size={12} /> Limpiar
-                  </span>
-                )}
-                <ChevronDown size={16} className={`text-ink-400 transition-transform ${datesOpen ? 'rotate-180' : ''}`} />
-              </span>
-            </button>
-            {datesOpen && (
-              <div className="card-divider px-4 py-4 flex flex-col lg:flex-row gap-5 lg:items-end lg:flex-wrap">
-                <DateRangeField label="Creación" range={createdRange}
-                  onChange={(k, v) => updateRange(setCreatedRange, k, v, createdRange)} />
-                <DateRangeField label="Recogida" range={pickupRange}
-                  onChange={(k, v) => updateRange(setPickupRange, k, v, pickupRange)} />
-                <DateRangeField label="Entrega" range={deliveryRange}
-                  onChange={(k, v) => updateRange(setDeliveryRange, k, v, deliveryRange)} />
-              </div>
-            )}
-          </div>
+          {openLeg === 'pickup' && (
+            <LegFilters
+              range={pickupRange}
+              onRangeChange={(k, v) => updateRange(setPickupRange, k, v, pickupRange)}
+              city={pickupCity}
+              onCityChange={selectCity(setPickupCity)}
+              cities={filterCities?.origin ?? []}
+              activeCount={pickupActive}
+              onClear={clearPickup}
+            />
+          )}
+          {openLeg === 'delivery' && (
+            <LegFilters
+              range={deliveryRange}
+              onRangeChange={(k, v) => updateRange(setDeliveryRange, k, v, deliveryRange)}
+              city={deliveryCity}
+              onCityChange={selectCity(setDeliveryCity)}
+              cities={filterCities?.dest ?? []}
+              activeCount={deliveryActive}
+              onClear={clearDelivery}
+            />
+          )}
         </div>
 
         {/* Table */}
@@ -222,10 +244,10 @@ export default function LoadsPage() {
                       <Th>Título</Th>
                       <Th>Origen</Th>
                       <Th>Destino</Th>
-                      <Th>Creación</Th>
+                      {!isCarrier && <Th>Creación</Th>}
                       <Th>Recogida</Th>
                       <Th>Entrega</Th>
-                      <Th>Estado</Th>
+                      {!isCarrier && <Th>Estado</Th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -240,14 +262,18 @@ export default function LoadsPage() {
                         </td>
                         <td className="px-5 py-3.5 text-ink-600 max-w-[120px] sm:max-w-[220px] truncate">{load.originAddress}</td>
                         <td className="px-5 py-3.5 text-ink-600 max-w-[120px] sm:max-w-[220px] truncate">{load.destAddress}</td>
-                        <td className="px-5 py-3.5 font-mono text-[12px] text-ink-700 whitespace-nowrap">{formatDate(load.createdAt)}</td>
+                        {!isCarrier && (
+                          <td className="px-5 py-3.5 font-mono text-[12px] text-ink-700 whitespace-nowrap">{formatDate(load.createdAt)}</td>
+                        )}
                         <td className="px-5 py-3.5 font-mono text-[12px] text-ink-700 whitespace-nowrap">{formatDate(load.pickupDate)}</td>
                         <td className="px-5 py-3.5 font-mono text-[12px] text-ink-700 whitespace-nowrap">
                           {load.deliveryDate ? formatDate(load.deliveryDate) : <span className="text-ink-300">—</span>}
                         </td>
-                        <td className="px-5 py-3.5">
-                          <StatusBadge status={load.status} />
-                        </td>
+                        {!isCarrier && (
+                          <td className="px-5 py-3.5">
+                            <StatusBadge status={load.status} kind="solicitud" />
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -282,6 +308,87 @@ export default function LoadsPage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+interface LegToggleProps {
+  label: string;
+  icon: React.ReactNode;
+  open: boolean;
+  activeCount: number;
+  onClick: () => void;
+}
+
+// Mismo alto, radio y tipografía que los selects de la fila para que la barra
+// se lea como un único grupo de controles.
+function LegToggle({ label, icon, open, activeCount, onClick }: LegToggleProps) {
+  const active = activeCount > 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={open}
+      className={`w-full sm:w-auto shrink-0 inline-flex items-center justify-between sm:justify-start gap-2 px-3 py-2 rounded-lg border text-[13.5px] outline-none transition focus:ring-4 focus:ring-primary-600/15 ${
+        active
+          ? 'border-primary-600 bg-primary-50/60 text-primary-700'
+          : 'border-ink-200 bg-surface-raised text-ink-700 hover:bg-surface-sunk/60'
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        <span className={active ? 'text-primary-700' : 'text-ink-400'}>{icon}</span>
+        {label}
+      </span>
+      <span className="flex items-center gap-1.5">
+        {active && (
+          <span className="text-[10px] font-semibold bg-primary-600 text-white rounded-full min-w-[16px] h-4 px-1 inline-flex items-center justify-center tabular-nums">
+            {activeCount}
+          </span>
+        )}
+        <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''} ${active ? 'text-primary-700' : 'text-ink-400'}`} />
+      </span>
+    </button>
+  );
+}
+
+interface LegFiltersProps {
+  range: DateRange;
+  onRangeChange: (key: 'from' | 'to', value: string) => void;
+  city: City | null;
+  onCityChange: (value: string, city?: City) => void;
+  cities: City[];
+  activeCount: number;
+  onClear: () => void;
+}
+
+function LegFilters({
+  range, onRangeChange, city, onCityChange, cities, activeCount, onClear,
+}: LegFiltersProps) {
+  return (
+    <div className="card-divider px-4 py-4 flex flex-col lg:flex-row gap-5 lg:items-end lg:flex-wrap">
+      <DateRangeField label="Fecha" range={range} onChange={onRangeChange} />
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[10px] font-medium text-ink-500 uppercase tracking-[0.14em]">Ciudad</span>
+        <CityCombobox
+          aria-label="Ciudad"
+          value={city?.name ?? ''}
+          selectedId={city?.id}
+          onChange={onCityChange}
+          cities={cities}
+          placeholder={cities.length > 0 ? 'Todas' : 'Sin ciudades'}
+          disabled={cities.length === 0}
+          inputClassName="w-full lg:w-[240px] px-2.5 py-1.5 border border-ink-200 rounded-md text-[12.5px] outline-none focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 transition disabled:bg-surface-sunk/60 disabled:text-ink-400"
+        />
+      </div>
+      {activeCount > 0 && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="self-start lg:self-end lg:ml-auto inline-flex items-center gap-1 px-2 py-1.5 -mx-2 rounded-md text-[11px] uppercase tracking-wider text-ink-500 hover:text-ink-700 hover:bg-surface-sunk/60 transition"
+        >
+          <X size={12} /> Limpiar
+        </button>
+      )}
+    </div>
   );
 }
 

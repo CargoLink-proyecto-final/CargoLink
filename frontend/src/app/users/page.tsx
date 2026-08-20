@@ -10,7 +10,7 @@ import { Search, Shield, UserCheck, UserX, History, AlertTriangle, Mail } from '
 import type { Role, RoleChangeLog } from '@/types';
 
 const ROLE_LABEL: Record<string, string> = {
-  CARGO_GENERATOR: 'Generador de carga',
+  CARGO_GENERATOR: 'Publicador de carga',
   TRANSPORTER: 'Transportista',
   ADMIN: 'Administrador',
   COMPANY_ADMIN: 'Administrador de empresa',
@@ -140,7 +140,7 @@ export default function UsersPage() {
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
           >
             <option value="">Todos los Roles</option>
-            <option value="CARGO_GENERATOR">Generador de carga</option>
+            <option value="CARGO_GENERATOR">Publicador de carga</option>
             <option value="TRANSPORTER">Transportista</option>
             <option value="ADMIN">Admin</option>
             <option value="COMPANY_ADMIN">Administrador de empresa</option>

@@ -1,9 +1,13 @@
 import { PrismaClient, Role, JoinRequestStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { seedGeo } from './seed-geo';
+import { backfillLoadCities } from './backfill-load-cities';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const geo = await seedGeo(prisma);
+
   const password = await bcrypt.hash('password123', 10);
 
   const admin = await prisma.user.upsert({
@@ -150,7 +154,7 @@ async function main() {
           destAddress: 'Av. Colón 567, Córdoba',
           destLat: -31.4201,
           destLng: -64.1888,
-          cargoType: 'Electrónica',
+          cargoType: 'Electrónica y tecnología',
           weight: 2500,
           volume: 8.5,
           pickupDate: pickup,
@@ -159,7 +163,10 @@ async function main() {
         },
       });
 
+  const backfill = await backfillLoadCities(prisma);
+
   console.log('Datos de seed listos:', {
+    geo: `${geo.provinces} provincias, ${geo.cities} ciudades (${geo.inserted} nuevas, ${geo.postalCodes} CP completados)`,
     admin: admin.email,
     shipper: shipper.email,
     carrier: carrier.email,
@@ -169,6 +176,7 @@ async function main() {
     pendingRequest: `${driverPending.email} -> ${joinRequest.status}`,
     load: load.id,
     reused: !!existing,
+    backfill: `${backfill.origin} orígenes / ${backfill.dest} destinos resueltos sobre ${backfill.pending} cargas`,
   });
 }
 

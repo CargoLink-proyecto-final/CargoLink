@@ -6,7 +6,7 @@ Referencia rápida para inspeccionar el deploy de CargoLink en Google Cloud (Clo
 
 | Dato | Valor |
 |---|---|
-| **Project** | `cargo-link-2026` |
+| **Project** | `project-9dc11c1e-5a14-4076-a74` |
 | **Region** | `southamerica-east1` |
 | **Servicios Cloud Run (prod)** | `cargolink-backend`, `cargolink-frontend` |
 | **Servicios Cloud Run (dev)** | `cargolink-dev-backend`, `cargolink-dev-frontend` |
@@ -22,7 +22,7 @@ Abrí **Cloud Shell** en la consola de GCP (ícono `>_` arriba a la derecha) y u
 ## 1. Apuntar gcloud al proyecto/región
 
 ```bash
-gcloud config set project cargo-link-2026
+gcloud config set project project-9dc11c1e-5a14-4076-a74
 gcloud config set run/region southamerica-east1
 ```
 
@@ -69,11 +69,11 @@ gcloud run services logs tail cargolink-backend --region southamerica-east1
 ```bash
 # repo prod
 gcloud artifacts docker images list \
-  southamerica-east1-docker.pkg.dev/cargo-link-2026/cargolink
+  southamerica-east1-docker.pkg.dev/project-9dc11c1e-5a14-4076-a74/cargolink
 
 # repo dev
 gcloud artifacts docker images list \
-  southamerica-east1-docker.pkg.dev/cargo-link-2026/cargolink-dev
+  southamerica-east1-docker.pkg.dev/project-9dc11c1e-5a14-4076-a74/cargolink-dev
 ```
 
 ## Bonus — la instancia Cloud SQL (container de la DB)

@@ -28,18 +28,32 @@ jest.mock('expo-device', () => ({
   },
 }));
 
+// Same pattern for the EAS project id, which gates push token issuance.
+let mockProjectId: string | undefined = 'test-project-id';
+jest.mock('expo-constants', () => ({
+  get expoConfig() {
+    return { extra: { eas: { projectId: mockProjectId } } };
+  },
+  get easConfig() {
+    return { projectId: mockProjectId };
+  },
+}));
+
 const mockedNotifications = Notifications as jest.Mocked<typeof Notifications>;
 
 describe('notifications service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
     mockDeviceIsDevice = true;
+    mockProjectId = 'test-project-id';
     Platform.OS = 'ios';
   });
 
   afterEach(() => {
     (console.log as jest.Mock).mockRestore?.();
+    (console.warn as jest.Mock).mockRestore?.();
   });
 
   describe('registerForPushNotifications', () => {
@@ -109,6 +123,32 @@ describe('notifications service', () => {
       const token = await registerForPushNotifications();
 
       expect(token).toBe('ExponentPushToken[success]');
+      expect(mockedNotifications.getExpoPushTokenAsync).toHaveBeenCalledWith({
+        projectId: 'test-project-id',
+      });
+    });
+
+    it('returns null when there is no EAS project id configured', async () => {
+      mockProjectId = undefined;
+      mockedNotifications.getPermissionsAsync.mockResolvedValue({
+        status: 'granted',
+      } as any);
+
+      const token = await registerForPushNotifications();
+
+      expect(token).toBeNull();
+      expect(mockedNotifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
+    });
+
+    it('returns null instead of throwing when the token request fails', async () => {
+      mockedNotifications.getPermissionsAsync.mockResolvedValue({
+        status: 'granted',
+      } as any);
+      mockedNotifications.getExpoPushTokenAsync.mockRejectedValue(
+        new Error('network down'),
+      );
+
+      await expect(registerForPushNotifications()).resolves.toBeNull();
     });
 
     it('configures the android notification channel on android', async () => {

@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
 const ROLE_BADGE: Record<string, { label: string; tone: string }> = {
-  CARGO_GENERATOR: { label: 'Generador',     tone: 'text-info-700 ring-info-600/20 bg-info-50' },
+  CARGO_GENERATOR: { label: 'Publicador',    tone: 'text-info-700 ring-info-600/20 bg-info-50' },
   TRANSPORTER:     { label: 'Transportista', tone: 'text-primary-700 ring-primary-600/20 bg-primary-50' },
   ADMIN:           { label: 'Admin',         tone: 'text-ink-800 ring-ink-300 bg-ink-100' },
 };
@@ -110,7 +110,7 @@ export default function AdminDashboard() {
                     <p className="font-medium text-ink-900 truncate">{load.title}</p>
                     <p className="text-[12px] text-ink-500 truncate">{load.shipper?.firstName} {load.shipper?.lastName}</p>
                   </div>
-                  <StatusBadge status={load.status} />
+                  <StatusBadge status={load.status} kind="solicitud" />
                 </Link>
               ))}
             </div>

@@ -19,7 +19,7 @@ flowchart TB
 
   GA -->|"OIDC token<br/>(keyless)"| WIF
 
-  subgraph GCP["Google Cloud · project cargo-link-2026 · southamerica-east1"]
+  subgraph GCP["Google Cloud · project-9dc11c1e-5a14-4076-a74 · southamerica-east1"]
     direction TB
     WIF["🔑 Workload Identity Federation<br/>impersonates github-deployer SA"]
     TF["📦 Terraform (infra/gcp)<br/>provisions infra · owns config<br/>ignore_changes on image"]
@@ -70,7 +70,7 @@ flowchart TB
 
 - **Developer → GitHub**: cada merge a `develop` o `main` dispara el workflow `deploy-gcp.yml`.
 - **Autenticación keyless**: GitHub Actions obtiene un token OIDC; Workload Identity Federation lo valida (restringido al repo) y deja impersonar la service account `github-deployer`. No hay keys guardadas en GitHub.
-- **Dos entornos** en el mismo proyecto `cargo-link-2026`, totalmente separados (Cloud Run, Cloud SQL, Secret Manager y Artifact Registry propios):
+- **Dos entornos** en el mismo proyecto `project-9dc11c1e-5a14-4076-a74`, totalmente separados (Cloud Run, Cloud SQL, Secret Manager y Artifact Registry propios):
   - `develop` → **dev** (`cargolink-dev-*`), backend escala a cero.
   - `main` → **prod** (`cargolink-*`), backend siempre caliente.
 - **CI vs Terraform**: el workflow builda la imagen y la deploya con `gcloud run deploy`; Terraform (en `infra/gcp/`) provisiona y es dueño del resto de la config. El `ignore_changes` sobre la imagen evita que se pisen.

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { Eye, EyeOff } from 'lucide-react';
 import { authApi } from '@/lib/api';
+import ZonePicker from '@/components/maps/ZonePicker';
 
 interface RegisterForm {
   email: string;
@@ -16,6 +17,7 @@ interface RegisterForm {
   phone: string;
   role: 'CARGO_GENERATOR' | 'TRANSPORTER' | 'COMPANY_ADMIN';
   companyName?: string;
+  industry?: string;
 }
 
 export default function RegisterPage() {
@@ -34,13 +36,19 @@ export default function RegisterPage() {
 
   const selectedRole = watch('role');
   const passwordValue = watch('password');
+  // Zona de influencia (P12) — solo aplica al transportista; opcional.
+  const [zone, setZone] = useState<{ lat: number; lng: number; radiusKm: number } | null>(null);
 
   const onSubmit = async (data: RegisterForm) => {
     setError('');
     setLoading(true);
     try {
       const { confirmPassword: _, ...submitData } = data;
-      await authApi.register(submitData);
+      const payload =
+        data.role === 'TRANSPORTER' && zone
+          ? { ...submitData, zoneLat: zone.lat, zoneLng: zone.lng, zoneRadiusKm: zone.radiusKm }
+          : submitData;
+      await authApi.register(payload);
       router.push(`/auth/check-email?email=${encodeURIComponent(data.email)}`);
     } catch (err) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -66,7 +74,7 @@ export default function RegisterPage() {
           <div className="grid grid-cols-3 gap-2">
             <label className={`text-center py-2 px-1 rounded-lg border-2 cursor-pointer transition text-xs font-medium ${selectedRole === 'CARGO_GENERATOR' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600'}`}>
               <input type="radio" value="CARGO_GENERATOR" {...register('role')} className="sr-only" />
-              Generador de carga
+              Publicador de carga
             </label>
             <label className={`text-center py-2 px-1 rounded-lg border-2 cursor-pointer transition text-xs font-medium ${selectedRole === 'TRANSPORTER' ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600'}`}>
               <input type="radio" value="TRANSPORTER" {...register('role')} className="sr-only" />
@@ -212,6 +220,30 @@ export default function RegisterPage() {
               {errors.companyName && (
                 <p className="text-red-500 text-xs mt-1">{errors.companyName.message}</p>
               )}
+            </div>
+          )}
+
+          {selectedRole === 'CARGO_GENERATOR' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rubro (opcional)</label>
+              <input
+                {...register('industry')}
+                placeholder="Ej., Agroindustria, Construcción, Retail"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              />
+              <p className="text-xs text-gray-500 mt-1">Tu rubro o actividad da contexto a los transportistas.</p>
+            </div>
+          )}
+
+          {selectedRole === 'TRANSPORTER' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Zona de influencia (opcional)</label>
+              <ZonePicker
+                lat={zone?.lat}
+                lng={zone?.lng}
+                radiusKm={zone?.radiusKm}
+                onChange={setZone}
+              />
             </div>
           )}
 

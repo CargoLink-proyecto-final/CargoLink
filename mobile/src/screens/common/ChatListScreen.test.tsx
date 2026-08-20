@@ -2,11 +2,17 @@ import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ChatListScreen from './ChatListScreen';
 import { messagesApi } from '../../services/api';
+import { getChatSocket } from '../../services/socket';
 
 jest.mock('../../services/api', () => ({
   messagesApi: {
     getConversations: jest.fn(),
   },
+}));
+
+const mockSocket = { on: jest.fn(), off: jest.fn(), connected: true };
+jest.mock('../../services/socket', () => ({
+  getChatSocket: jest.fn(() => mockSocket),
 }));
 
 let mockUser: any = { id: 'me', firstName: 'Me', lastName: 'User' };
@@ -16,16 +22,24 @@ jest.mock('../../store/auth', () => ({
   useAuthStore: (selector: any) => selector({ user: mockUser }),
 }));
 
+// Shape returned by GET /messages/conversations — one row per trip.
 const conversation = {
-  id: 'm1',
-  senderId: 'me',
-  sender: { id: 'me', firstName: 'Me', lastName: 'User' },
-  receiverId: 'other',
-  receiver: { id: 'other', firstName: 'Otto', lastName: 'Receiver' },
-  content: 'Hello there',
-  isRead: true,
-  createdAt: '2026-01-01T00:00:00Z',
+  tripId: 'trip-1',
+  tripStatus: 'IN_PROGRESS',
+  loadTitle: 'Soja a Rosario',
+  otherUser: { id: 'other', firstName: 'Otto', lastName: 'Receiver' },
+  lastMessage: {
+    id: 'm1',
+    senderId: 'other',
+    tripId: 'trip-1',
+    content: 'Hello there',
+    isRead: false,
+    createdAt: '2026-01-01T00:00:00Z',
+  },
+  unreadCount: 2,
 };
+
+const navigationStub = () => ({ navigate: jest.fn(), addListener: jest.fn() });
 
 describe('ChatListScreen', () => {
   beforeEach(() => {
@@ -36,49 +50,67 @@ describe('ChatListScreen', () => {
   it('lists conversations returned by the API', async () => {
     (messagesApi.getConversations as jest.Mock).mockResolvedValue({ data: [conversation] });
 
-    const { getByText } = render(<ChatListScreen navigation={{ navigate: jest.fn() }} />);
+    const { getByText } = render(<ChatListScreen navigation={navigationStub()} />);
 
     await waitFor(() => expect(getByText('Otto Receiver')).toBeTruthy());
     expect(getByText('Hello there')).toBeTruthy();
+    expect(getByText('Soja a Rosario')).toBeTruthy();
+  });
+
+  it('shows the unread badge with its count', async () => {
+    (messagesApi.getConversations as jest.Mock).mockResolvedValue({ data: [conversation] });
+
+    const { getByText } = render(<ChatListScreen navigation={navigationStub()} />);
+
+    await waitFor(() => expect(getByText('2')).toBeTruthy());
+  });
+
+  it('falls back to a placeholder when the trip has no messages yet', async () => {
+    (messagesApi.getConversations as jest.Mock).mockResolvedValue({
+      data: [{ ...conversation, lastMessage: null, unreadCount: 0 }],
+    });
+
+    const { getByText } = render(<ChatListScreen navigation={navigationStub()} />);
+
+    await waitFor(() => expect(getByText('Sin mensajes todavía')).toBeTruthy());
   });
 
   it('shows the empty state when there are no conversations', async () => {
     (messagesApi.getConversations as jest.Mock).mockResolvedValue({ data: [] });
 
-    const { getByText } = render(<ChatListScreen navigation={{ navigate: jest.fn() }} />);
+    const { getByText } = render(<ChatListScreen navigation={navigationStub()} />);
 
     await waitFor(() => expect(getByText('Aún no hay conversaciones')).toBeTruthy());
   });
 
-  it('navigates to the Chat screen with the other user when a card is pressed', async () => {
+  it('navigates to the Chat screen with the trip id when a card is pressed', async () => {
     (messagesApi.getConversations as jest.Mock).mockResolvedValue({ data: [conversation] });
-    const navigate = jest.fn();
+    const navigation = navigationStub();
 
-    const { getByText } = render(<ChatListScreen navigation={{ navigate }} />);
+    const { getByText } = render(<ChatListScreen navigation={navigation} />);
 
     await waitFor(() => expect(getByText('Otto Receiver')).toBeTruthy());
     fireEvent.press(getByText('Otto Receiver'));
 
-    expect(navigate).toHaveBeenCalledWith('Chat', {
-      userId: 'other',
+    expect(navigation.navigate).toHaveBeenCalledWith('Chat', {
+      tripId: 'trip-1',
       name: 'Otto Receiver',
+      loadTitle: 'Soja a Rosario',
     });
   });
 
-  it('picks the sender as the other user when the current user is the receiver', async () => {
-    const incoming = {
-      ...conversation,
-      id: 'm2',
-      senderId: 'other',
-      sender: { id: 'other', firstName: 'Otto', lastName: 'Receiver' },
-      receiverId: 'me',
-      receiver: { id: 'me', firstName: 'Me', lastName: 'User' },
-      isRead: false,
-    };
-    (messagesApi.getConversations as jest.Mock).mockResolvedValue({ data: [incoming] });
+  it('refetches when a message arrives over the socket', async () => {
+    (messagesApi.getConversations as jest.Mock).mockResolvedValue({ data: [conversation] });
 
-    const { getByText } = render(<ChatListScreen navigation={{ navigate: jest.fn() }} />);
+    render(<ChatListScreen navigation={navigationStub()} />);
 
-    await waitFor(() => expect(getByText('Otto Receiver')).toBeTruthy());
+    await waitFor(() => expect(messagesApi.getConversations).toHaveBeenCalledTimes(1));
+    expect(getChatSocket).toHaveBeenCalledWith('me');
+
+    const handler = mockSocket.on.mock.calls.find(([event]) => event === 'newMessage')?.[1];
+    expect(handler).toBeDefined();
+    handler();
+
+    await waitFor(() => expect(messagesApi.getConversations).toHaveBeenCalledTimes(2));
   });
 });

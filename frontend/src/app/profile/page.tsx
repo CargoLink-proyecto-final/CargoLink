@@ -8,12 +8,14 @@ import { usersApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { User as UserIcon, Check } from 'lucide-react';
 import type { User } from '@/types';
+import ZonePicker from '@/components/maps/ZonePicker';
 
 interface ProfileForm {
   firstName: string;
   lastName: string;
   phone: string;
   companyName: string;
+  industry: string;
 }
 
 const inputClass =
@@ -24,6 +26,7 @@ export default function ProfilePage() {
   const role = user?.role;
   const isCompany = role === 'COMPANY_ADMIN';
   const showCompanyName = role === 'CARGO_GENERATOR';
+  const showZone = role === 'TRANSPORTER';
 
   const { data: profile } = useQuery<User>({
     queryKey: ['profile'],
@@ -37,6 +40,12 @@ export default function ProfilePage() {
     formState: { errors, isDirty },
   } = useForm<ProfileForm>();
   const [profileSaved, setProfileSaved] = useState(false);
+  // Zona de influencia (P12) — solo transportista; vive fuera de RHF porque la
+  // edita un componente de mapa.
+  const [zone, setZone] = useState<{ lat: number; lng: number; radiusKm: number } | null>(null);
+  // RHF no ve la zona (vive fuera del form), así que rastreamos su edición a mano
+  // para habilitar el botón de guardar.
+  const [zoneDirty, setZoneDirty] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -45,7 +54,11 @@ export default function ProfilePage() {
         lastName: profile.lastName ?? '',
         phone: profile.phone ?? '',
         companyName: profile.companyName ?? '',
+        industry: profile.industry ?? '',
       });
+      if (profile.zoneLat != null && profile.zoneLng != null) {
+        setZone({ lat: profile.zoneLat, lng: profile.zoneLng, radiusKm: profile.zoneRadiusKm ?? 50 });
+      }
     }
   }, [profile, reset]);
 
@@ -58,7 +71,9 @@ export default function ProfilePage() {
         lastName: updated.lastName ?? '',
         phone: updated.phone ?? '',
         companyName: updated.companyName ?? '',
+        industry: updated.industry ?? '',
       });
+      setZoneDirty(false);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
     },
@@ -72,7 +87,12 @@ export default function ProfilePage() {
           firstName: data.firstName.trim(),
           lastName: data.lastName.trim(),
           phone: data.phone.trim(),
-          ...(showCompanyName ? { companyName: data.companyName.trim() } : {}),
+          ...(showCompanyName
+            ? { companyName: data.companyName.trim(), industry: data.industry.trim() }
+            : {}),
+          ...(showZone && zone
+            ? { zoneLat: zone.lat, zoneLng: zone.lng, zoneRadiusKm: zone.radiusKm }
+            : {}),
         };
     profileMutation.mutate(payload);
   };
@@ -148,10 +168,34 @@ export default function ProfilePage() {
               </div>
             )}
 
+            {showCompanyName && (
+              <div>
+                <label className="block text-[12px] font-medium text-ink-700 mb-1.5">
+                  Rubro <span className="text-ink-400">(opcional)</span>
+                </label>
+                <input className={inputClass} {...register('industry')} placeholder="Ej., Agroindustria, Construcción, Retail" />
+                <p className="text-ink-500 text-xs mt-1.5">Tu rubro o actividad da contexto a los transportistas.</p>
+              </div>
+            )}
+
+            {showZone && (
+              <div>
+                <label className="block text-[12px] font-medium text-ink-700 mb-1.5">
+                  Zona de influencia <span className="text-ink-400">(opcional)</span>
+                </label>
+                <ZonePicker
+                  lat={zone?.lat}
+                  lng={zone?.lng}
+                  radiusKm={zone?.radiusKm}
+                  onChange={(z) => { setZone(z); setZoneDirty(true); }}
+                />
+              </div>
+            )}
+
             <div className="flex items-center gap-3 pt-1">
               <button
                 type="submit"
-                disabled={profileMutation.isPending || !isDirty}
+                disabled={profileMutation.isPending || (!isDirty && !zoneDirty)}
                 className="bg-ink-900 hover:bg-ink-800 text-surface-raised font-medium px-5 py-2.5 rounded-lg transition disabled:opacity-50 text-[14px]"
               >
                 {profileMutation.isPending ? 'Guardando…' : 'Guardar cambios'}

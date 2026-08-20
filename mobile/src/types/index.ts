@@ -1,6 +1,12 @@
-export type Role = 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN';
+export type Role = 'CARGO_GENERATOR' | 'TRANSPORTER' | 'ADMIN' | 'COMPANY_ADMIN';
 export type LoadStatus = 'PUBLISHED' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type TripStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+export type PostulationStatus =
+  | 'PENDING'
+  | 'NEGOTIATING'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'WITHDRAWN';
 
 export interface User {
   id: string;
@@ -10,13 +16,21 @@ export interface User {
   phone?: string;
   role: Role;
   companyName?: string;
+  // Rubro del publicador. Contexto que el transportista ve en el detalle de la carga.
+  industry?: string;
+  avatarUrl?: string;
+  // Zona de influencia del transportista: centro + radio. Cuando está definida,
+  // el backend ordena GET /loads/available por cercanía del origen a este punto.
+  zoneLat?: number;
+  zoneLng?: number;
+  zoneRadiusKm?: number;
   isActive: boolean;
 }
 
 export interface Load {
   id: string;
   shipperId: string;
-  shipper: Pick<User, 'id' | 'firstName' | 'lastName' | 'companyName'>;
+  shipper: Pick<User, 'id' | 'firstName' | 'lastName' | 'companyName' | 'industry'>;
   title: string;
   description?: string;
   originAddress: string;
@@ -28,11 +42,17 @@ export interface Load {
   cargoType: string;
   weight: number;
   volume?: number;
+  packageCount?: number;
+  heightCm?: number;
+  widthCm?: number;
+  lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
-  price: number;
+  // Opcional: sin precio, la carga sale "a convenir" y lo fija la postulación.
+  price?: number | null;
   status: LoadStatus;
   trip?: Trip;
+  pendingPostulationsCount?: number;
   createdAt: string;
 }
 
@@ -47,7 +67,36 @@ export interface Trip {
   currentLng?: number;
   startedAt?: string;
   completedAt?: string;
+  // Sólo viene en el detalle de la carga (`GET /loads/:id`), que incluye
+  // `trip.ratings`. Sirve para saber si el publicador ya calificó el viaje.
+  ratings?: Rating[];
   createdAt: string;
+}
+
+export interface Rating {
+  id: string;
+  tripId: string;
+  fromUserId: string;
+  toUserId: string;
+  score: number;
+  comment?: string;
+  createdAt: string;
+}
+
+export interface Postulation {
+  id: string;
+  loadId: string;
+  load?: Load;
+  transporterId: string;
+  transporter?: Pick<User, 'id' | 'firstName' | 'lastName' | 'companyName'>;
+  message?: string;
+  proposedPrice?: number;
+  counterOfferPrice?: number;
+  // Quién hizo la última oferta: sirve para saber a quién le toca responder.
+  lastOfferBy?: string;
+  status: PostulationStatus;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Message {
@@ -56,9 +105,22 @@ export interface Message {
   sender: Pick<User, 'id' | 'firstName' | 'lastName'>;
   receiverId: string;
   receiver?: Pick<User, 'id' | 'firstName' | 'lastName'>;
+  // Las conversaciones son por viaje, no entre usuarios sueltos.
+  tripId: string;
   content: string;
   isRead: boolean;
   createdAt: string;
+}
+
+// Fila del listado de conversaciones (GET /messages/conversations). No es un
+// Message: el backend agrega el viaje, el otro participante y el no-leído.
+export interface Conversation {
+  tripId: string;
+  tripStatus: TripStatus;
+  loadTitle: string;
+  otherUser: Pick<User, 'id' | 'firstName' | 'lastName'>;
+  lastMessage: Message | null;
+  unreadCount: number;
 }
 
 export interface AuthResponse {

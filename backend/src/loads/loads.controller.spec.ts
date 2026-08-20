@@ -22,6 +22,7 @@ describe('LoadsController', () => {
   let service: {
     create: jest.Mock;
     findAll: jest.Mock;
+    findAvailable: jest.Mock;
     findById: jest.Mock;
     update: jest.Mock;
     cancel: jest.Mock;
@@ -33,6 +34,7 @@ describe('LoadsController', () => {
     service = {
       create: jest.fn().mockResolvedValue({ id: 'load-1' }),
       findAll: jest.fn().mockResolvedValue({ loads: [], total: 0 }),
+      findAvailable: jest.fn().mockResolvedValue({ loads: [], total: 0 }),
       findById: jest.fn().mockResolvedValue({ id: 'load-1' }),
       update: jest.fn().mockResolvedValue({ id: 'load-1' }),
       cancel: jest.fn().mockResolvedValue({ id: 'load-1' }),
@@ -66,9 +68,12 @@ describe('LoadsController', () => {
   describe('findAll', () => {
     it('forwards all filters and coerces numeric ranges', async () => {
       await controller.findAll(
+        'ADMIN',
         LoadStatus.PUBLISHED,
         'Electronics',
         'foo',
+        'city-origin',
+        'city-dest',
         100 as any,
         9000 as any,
         1000 as any,
@@ -84,8 +89,11 @@ describe('LoadsController', () => {
       );
       expect(service.findAll).toHaveBeenCalledWith({
         status: LoadStatus.PUBLISHED,
+        hidePostulationCount: false,
         cargoType: 'Electronics',
         q: 'foo',
+        originCityId: 'city-origin',
+        destCityId: 'city-dest',
         minWeight: 100,
         maxWeight: 9000,
         minPrice: 1000,
@@ -101,6 +109,11 @@ describe('LoadsController', () => {
       });
     });
 
+    it('hides the postulation count when a carrier hits the generic listing', async () => {
+      await controller.findAll('TRANSPORTER');
+      expect(service.findAll.mock.calls[0][0].hidePostulationCount).toBe(true);
+    });
+
     it('leaves numeric range filters undefined when absent', async () => {
       await controller.findAll();
       const arg = service.findAll.mock.calls[0][0];
@@ -112,10 +125,12 @@ describe('LoadsController', () => {
   });
 
   describe('findAvailable', () => {
-    it('forces PUBLISHED status and forwards filters', async () => {
-      await controller.findAvailable('Electronics', 'q');
-      const arg = service.findAll.mock.calls[0][0];
-      expect(arg.status).toBe(LoadStatus.PUBLISHED);
+    it('delegates to service.findAvailable with the carrier id and filters', async () => {
+      // El primer argumento es el userId del transportista (zona de influencia, P12).
+      await controller.findAvailable('carrier-1', 'Electronics', 'q');
+      expect(service.findAvailable).toHaveBeenCalled();
+      const [carrierId, arg] = service.findAvailable.mock.calls[0];
+      expect(carrierId).toBe('carrier-1');
       expect(arg.cargoType).toBe('Electronics');
       expect(arg.q).toBe('q');
     });
@@ -140,9 +155,9 @@ describe('LoadsController', () => {
   });
 
   describe('findOne', () => {
-    it('delegates to service.findById', async () => {
-      await controller.findOne('load-1');
-      expect(service.findById).toHaveBeenCalledWith('load-1');
+    it('delegates to service.findById passing the viewer role', async () => {
+      await controller.findOne('load-1', 'TRANSPORTER');
+      expect(service.findById).toHaveBeenCalledWith('load-1', 'TRANSPORTER');
     });
   });
 

@@ -2,12 +2,28 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { postulationsApi } from '@/lib/api';
+import { formatCurrency } from '@/lib/utils';
 import type { PostulationWithTransporter } from '@/types';
 import PostulationCard from './PostulationCard';
 
+// Oferta vigente del transportista en una postulación: su contra-oferta si fue
+// el último en ofertar, sino el precio propuesto; si no propuso nada, acepta el
+// precio listado. En una carga "a convenir" siempre hay proposedPrice (el
+// backend lo exige), así que el fallback no aplica.
+function transporterCurrentOffer(
+  p: PostulationWithTransporter,
+  listedPrice: number | null,
+): number | null {
+  if (p.status === 'NEGOTIATING' && p.lastOfferBy === 'TRANSPORTER' && p.counterOfferPrice != null) {
+    return p.counterOfferPrice;
+  }
+  return p.proposedPrice ?? listedPrice;
+}
+
 interface Props {
   loadId: string;
-  listedPrice: number;
+  /** `null` = carga "a convenir": no hay precio de referencia publicado. */
+  listedPrice: number | null;
   canAccept: boolean;
 }
 
@@ -38,6 +54,14 @@ export default function PostulationsPanel({ loadId, listedPrice, canAccept }: Pr
     },
   });
 
+  const total = data?.length ?? 0;
+  // Promediamos solo las postulaciones que tienen un número: en una carga sin
+  // precio listado, una postulación sin oferta no aporta al promedio.
+  const offers =
+    data?.map((p) => transporterCurrentOffer(p, listedPrice)).filter((o): o is number => o != null) ?? [];
+  const averageOffer =
+    offers.length > 0 ? offers.reduce((sum, o) => sum + o, 0) / offers.length : null;
+
   return (
     <div className="card p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -46,11 +70,28 @@ export default function PostulationsPanel({ loadId, listedPrice, canAccept }: Pr
           <h2 className="font-display text-lg font-semibold">
             Transportistas interesados{' '}
             <span className="text-ink-500 font-normal">
-              ({data?.length ?? 0})
+              ({total})
             </span>
           </h2>
         </div>
       </div>
+
+      {/* Resumen para el publicador: total de postulaciones + precio promedio
+          ofertado (solo visible en esta vista del dueño de la carga). */}
+      {total > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-card border border-ink-200/60 bg-surface-sunk p-3">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-ink-500">Postulaciones</p>
+            <p className="font-display text-xl font-semibold text-ink-900">{total}</p>
+          </div>
+          <div className="rounded-card border border-ink-200/60 bg-surface-sunk p-3">
+            <p className="text-[11px] uppercase tracking-[0.12em] text-ink-500">Precio promedio ofertado</p>
+            <p className="font-display text-xl font-semibold text-ink-900">
+              {averageOffer != null ? formatCurrency(averageOffer) : '—'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {isLoading && (
         <div className="text-sm text-ink-500">Cargando postulaciones...</div>

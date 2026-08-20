@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -106,18 +106,37 @@ describe('UsersController', () => {
   });
 
   describe('findOne', () => {
-    it('returns the user by id', async () => {
+    const self = { id: 'user-1', role: 'CARGO_GENERATOR' };
+    const admin = { id: 'admin-1', role: 'ADMIN' };
+
+    it('returns your own user', async () => {
       usersService.findById.mockResolvedValue(baseUser);
-      const result = await controller.findOne('user-1');
+      const result = await controller.findOne('user-1', self);
       expect(usersService.findById).toHaveBeenCalledWith('user-1');
       expect(result).toBe(baseUser);
     });
 
+    it('lets an admin read any user', async () => {
+      usersService.findById.mockResolvedValue(baseUser);
+      const result = await controller.findOne('user-1', admin);
+      expect(usersService.findById).toHaveBeenCalledWith('user-1');
+      expect(result).toBe(baseUser);
+    });
+
+    it('rejects reading another user profile', () => {
+      // Antes cualquier autenticado leía la ficha de cualquier otro con su id.
+      // El guard corta antes de tocar el service, así que tira sincrónicamente.
+      expect(() => controller.findOne('someone-else', self)).toThrow(
+        ForbiddenException,
+      );
+      expect(usersService.findById).not.toHaveBeenCalled();
+    });
+
     it('propagates NotFoundException for a missing user', async () => {
       usersService.findById.mockRejectedValue(new NotFoundException());
-      await expect(controller.findOne('missing')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        controller.findOne('admin-1', admin),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

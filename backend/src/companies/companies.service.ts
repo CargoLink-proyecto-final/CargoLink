@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { JoinRequestStatus, TripStatus } from '@prisma/client';
+import { JoinRequestStatus, PostulationStatus, TripStatus } from '@prisma/client';
 import { computeFuelAndDeliveryMetrics } from '../common/metrics';
 
 // Campos públicos de un conductor — nunca exponemos password ni tokens.
@@ -309,7 +309,21 @@ export class CompaniesService {
         completedAt: true,
         fuelLiters: true,
         distanceKm: true,
-        load: { select: { price: true, deliveryDate: true } },
+        load: {
+          select: {
+            price: true,
+            deliveryDate: true,
+            // El precio realmente pactado vive en la postulación aceptada:
+            // accept() escribe ahí el finalPrice y nunca lo copia a load.price.
+            // Sin esto, una carga publicada "a convenir" sumaría $0 a los
+            // ingresos del conductor.
+            postulations: {
+              where: { status: PostulationStatus.ACCEPTED },
+              select: { proposedPrice: true },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
@@ -320,8 +334,10 @@ export class CompaniesService {
         t.status === TripStatus.ACCEPTED ||
         t.status === TripStatus.PENDING,
     );
+    // Precio del viaje: el pactado en la postulación aceptada; si el
+    // transportista no propuso nada, aceptó el precio publicado.
     const totalRevenue = completed.reduce(
-      (sum, t) => sum + (t.load?.price ?? 0),
+      (sum, t) => sum + (t.load?.postulations[0]?.proposedPrice ?? t.load?.price ?? 0),
       0,
     );
 

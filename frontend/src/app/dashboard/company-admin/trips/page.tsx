@@ -163,7 +163,7 @@ export default function CompanyTripsPage() {
                       <span>{formatDate(trip.createdAt)}</span>
                     </div>
                   </div>
-                  <StatusBadge status={trip.status} />
+                  <StatusBadge status={trip.status} kind="solicitud" />
                 </div>
               ))}
             </div>

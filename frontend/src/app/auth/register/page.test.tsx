@@ -49,7 +49,7 @@ async function fillSharedFields(user: ReturnType<typeof userEvent.setup>) {
 describe('RegisterPage — rendering', () => {
   it('renders the role selector and core fields (CARGO_GENERATOR default)', () => {
     render(<RegisterPage />);
-    expect(screen.getByText('Generador de carga')).toBeInTheDocument();
+    expect(screen.getByText('Publicador de carga')).toBeInTheDocument();
     expect(screen.getByText('Transportista')).toBeInTheDocument();
     expect(screen.getByText('Empresa')).toBeInTheDocument();
     expect(getFirstName()).toBeInTheDocument();
@@ -62,9 +62,9 @@ describe('RegisterPage — rendering', () => {
   it('hides name fields and shows a required company field for COMPANY_ADMIN', async () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
-    // CARGO_GENERATOR default: firstName, lastName, email, phone, companyName.
+    // CARGO_GENERATOR default: firstName, lastName, email, phone, companyName, industry.
     // (email type="email" and phone type="tel" both expose the textbox role in jsdom.)
-    expect(allTextboxes()).toHaveLength(5);
+    expect(allTextboxes()).toHaveLength(6);
     await user.click(screen.getByText('Empresa'));
     await waitFor(() => {
       // COMPANY_ADMIN: name fields gone → email, phone, companyName remain.

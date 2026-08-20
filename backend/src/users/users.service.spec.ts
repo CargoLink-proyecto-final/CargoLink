@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
-import { UsersService } from './users.service';
+import { PUBLIC_USER_SELECT, UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 
@@ -130,11 +130,12 @@ describe('UsersService', () => {
   });
 
   describe('findById', () => {
-    it('returns the user when found', async () => {
+    it('returns the user when found, asking Prisma for the safe fields only', async () => {
       prisma.user.findUnique.mockResolvedValue(baseUser);
       const result = await service.findById('user-1');
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user-1' },
+        select: PUBLIC_USER_SELECT,
       });
       expect(result).toBe(baseUser);
     });
@@ -142,6 +143,40 @@ describe('UsersService', () => {
     it('throws NotFoundException when the user does not exist', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       await expect(service.findById('missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // El bug era devolver el registro crudo de Prisma: el hash de la contraseña y
+  // los tokens de verificación/reset viajaban en cada respuesta que incluía un
+  // usuario. La allowlist es el arreglo; estos tests la fijan.
+  describe('PUBLIC_USER_SELECT', () => {
+    it('never exposes the password hash or the account tokens', () => {
+      const exposed = Object.keys(PUBLIC_USER_SELECT);
+      for (const secret of [
+        'password',
+        'resetToken',
+        'resetTokenExp',
+        'emailVerificationToken',
+        'emailVerificationTokenExp',
+      ]) {
+        expect(exposed).not.toContain(secret);
+      }
+    });
+
+    it('is an allowlist, so a new column is not exposed by default', () => {
+      // Si esto se rompe es porque alguien usó `false` para excluir un campo:
+      // eso vuelve el select una denylist y reintroduce el bug.
+      expect(Object.values(PUBLIC_USER_SELECT).every((v) => v === true)).toBe(true);
+    });
+
+    it('still carries what the JWT strategy needs to authorize a request', () => {
+      // jwt.strategy resuelve el usuario en cada request con findById.
+      expect(PUBLIC_USER_SELECT).toMatchObject({
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+      });
     });
   });
 
@@ -238,6 +273,7 @@ describe('UsersService', () => {
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data,
+        select: PUBLIC_USER_SELECT,
       });
       expect(result.firstName).toBe('Updated');
     });
@@ -275,6 +311,7 @@ describe('UsersService', () => {
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data: { isActive: false },
+        select: PUBLIC_USER_SELECT,
       });
       expect(result.isActive).toBe(false);
     });
@@ -312,6 +349,7 @@ describe('UsersService', () => {
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data: { isActive: true },
+        select: PUBLIC_USER_SELECT,
       });
       expect(result.isActive).toBe(true);
     });
@@ -330,6 +368,9 @@ describe('UsersService', () => {
         expect.objectContaining({
           where: { id: 'user-1' },
           data: expect.objectContaining({ email: 'new@example.com', emailVerified: false }),
+          // Esta ruta escribe un token de verificación nuevo: sin el select, la
+          // respuesta se lo devolvería al admin junto con el hash.
+          select: PUBLIC_USER_SELECT,
         }),
       );
       expect(mailService.sendVerificationEmail).toHaveBeenCalled();
@@ -385,6 +426,7 @@ describe('UsersService', () => {
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data: { role: Role.CARGO_GENERATOR, companyId: null },
+        select: PUBLIC_USER_SELECT,
       });
     });
 

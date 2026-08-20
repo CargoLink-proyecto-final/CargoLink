@@ -2,9 +2,15 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "baseUrl": ".",
+    // Sin baseUrl (deprecado en TS 6): los paths se resuelven relativo a este archivo.
     "paths": {
-      "@/*": ["src/*"]
-    }
-  }
+      "@/*": ["./src/*"]
+    },
+    // Explícito porque los tipos de react-native declaran un `namespace jest`
+    // propio que tapa la auto-inclusión de @types/jest y deja sin tipar los
+    // globals de los tests (describe/it/expect).
+    "types": ["jest", "node"]
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules"]
 }
