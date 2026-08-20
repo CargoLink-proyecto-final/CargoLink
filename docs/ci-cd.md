@@ -15,7 +15,7 @@ Source: [`../.github/workflows/deploy-gcp.yml`](../.github/workflows/deploy-gcp.
 | Artifact Registry | `cargolink-dev` | `cargolink` |
 | Backend min instances | 0 (escala a cero) | 1 (caliente) |
 
-Ambos entornos viven en el mismo proyecto GCP `cargo-link-2026`, con DB, secrets y service account propios por entorno (ver `infra/gcp/README.md`).
+Ambos entornos viven en el mismo proyecto GCP `project-9dc11c1e-5a14-4076-a74`, con DB, secrets y service account propios por entorno (ver `infra/gcp/README.md`).
 
 ## Cuándo dispara
 
@@ -61,7 +61,7 @@ permissions:
 - uses: google-github-actions/auth@v2
   with:
     workload_identity_provider: projects/.../workloadIdentityPools/github-pool/providers/github-provider
-    service_account: github-deployer@cargo-link-2026.iam.gserviceaccount.com
+    service_account: github-deployer@project-9dc11c1e-5a14-4076-a74.iam.gserviceaccount.com
 ```
 
 GitHub emite un token OIDC; GCP lo valida contra el provider (restringido al repo `CargoLink-proyecto-final/CargoLink`) y deja al workflow impersonar la SA `github-deployer`. Esa SA tiene los roles mínimos: `run.admin` (deploy), `artifactregistry.writer` (push), `iam.serviceAccountUser` (correr Cloud Run como la SA de runtime). El provider y la SA email **no son secretos** → van como `env:` en el workflow. El setup (pool, provider, SA, roles) está documentado en `infra/gcp/README.md`.
@@ -108,7 +108,7 @@ O re-deployar una imagen anterior por SHA (siguen en Artifact Registry):
 
 ```bash
 gcloud run deploy cargolink-backend \
-  --image=southamerica-east1-docker.pkg.dev/cargo-link-2026/cargolink/cargolink-backend:prod-abc1234 \
+  --image=southamerica-east1-docker.pkg.dev/project-9dc11c1e-5a14-4076-a74/cargolink/cargolink-backend:prod-abc1234 \
   --region=southamerica-east1
 ```
 

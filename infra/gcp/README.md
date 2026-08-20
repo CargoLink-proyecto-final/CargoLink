@@ -297,7 +297,7 @@ Por entorno: una IP global estática, Serverless NEG por servicio (front/back), 
 
 ## Entornos dev / prod + CI/CD
 
-CargoLink corre **dos entornos en el mismo proyecto** `cargo-link-2026`, separados por nombre y con DB propia:
+CargoLink corre **dos entornos en el mismo proyecto** `project-9dc11c1e-5a14-4076-a74`, separados por nombre y con DB propia:
 
 | | prod | dev |
 |---|---|---|
@@ -337,21 +337,21 @@ El workflow buildea las imágenes (frontend con `NEXT_PUBLIC_API_URL` resuelto e
 
 ```bash
 # Pool + provider OIDC restringido al repo
-gcloud iam workload-identity-pools create github-pool --location=global --project=cargo-link-2026
+gcloud iam workload-identity-pools create github-pool --location=global --project=project-9dc11c1e-5a14-4076-a74
 gcloud iam workload-identity-pools providers create-oidc github-provider \
   --location=global --workload-identity-pool=github-pool \
   --issuer-uri="https://token.actions.githubusercontent.com" \
   --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
-  --attribute-condition="assertion.repository=='CargoLink-proyecto-final/CargoLink'" --project=cargo-link-2026
+  --attribute-condition="assertion.repository=='CargoLink-proyecto-final/CargoLink'" --project=project-9dc11c1e-5a14-4076-a74
 # SA deployer + roles + binding WIF
-gcloud iam service-accounts create github-deployer --project=cargo-link-2026
+gcloud iam service-accounts create github-deployer --project=project-9dc11c1e-5a14-4076-a74
 for R in roles/run.admin roles/artifactregistry.writer roles/iam.serviceAccountUser; do
-  gcloud projects add-iam-policy-binding cargo-link-2026 \
-    --member="serviceAccount:github-deployer@cargo-link-2026.iam.gserviceaccount.com" --role="$R" --condition=None
+  gcloud projects add-iam-policy-binding project-9dc11c1e-5a14-4076-a74 \
+    --member="serviceAccount:github-deployer@project-9dc11c1e-5a14-4076-a74.iam.gserviceaccount.com" --role="$R" --condition=None
 done
-gcloud iam service-accounts add-iam-policy-binding github-deployer@cargo-link-2026.iam.gserviceaccount.com \
+gcloud iam service-accounts add-iam-policy-binding github-deployer@project-9dc11c1e-5a14-4076-a74.iam.gserviceaccount.com \
   --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/projects/772498480601/locations/global/workloadIdentityPools/github-pool/attribute.repository/CargoLink-proyecto-final/CargoLink"
+  --member="principalSet://iam.googleapis.com/projects/904221754802/locations/global/workloadIdentityPools/github-pool/attribute.repository/CargoLink-proyecto-final/CargoLink"
 ```
 
 El workflow referencia el provider y la SA por env vars (no son secretos). Los servicios Cloud Run deben existir (provisionados por Terraform) antes del primer deploy de CI.
