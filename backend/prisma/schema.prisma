@@ -331,6 +331,16 @@ model City {
   // Centroide de la localidad — habilita ordenar por cercanía sin geocodificar.
   lat        Float
   lng        Float
+  // `name` normalizado (sin acentos, minúsculas, sin invisibles) para el
+  // type-ahead: ILIKE en Postgres ignora mayúsculas pero NO acentos, así que
+  // "cordoba" nunca matcheaba "Córdoba". Lo llena el seed con
+  // `normalizeSearchText` — no se expone por la API, es solo clave de búsqueda.
+  // Sin índice a propósito: la búsqueda es LIKE 'prefijo%', que un btree con la
+  // collation del server no puede servir, y `text_pattern_ops` no sobrevive la
+  // introspección de Prisma 5 (deja drift fantasma en cada migrate dev). Sobre
+  // 4.027 filas estáticas el seq scan es sub-milisegundo; si el padrón creciera
+  // en un orden de magnitud, el próximo paso es un GIN con pg_trgm.
+  searchName String  @default("") @map("search_name")
 
   provinceId String   @map("province_id")
   province   Province @relation(fields: [provinceId], references: [id])
