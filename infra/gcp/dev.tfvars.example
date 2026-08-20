@@ -1,12 +1,12 @@
 # Variables del entorno DEV. Copiá a dev.tfvars (gitignoreado) y completá.
 # Se aplica en el workspace "dev": terraform workspace select dev && terraform apply -var-file=dev.tfvars
-project_id  = "cargo-link-2026"
+project_id  = "project-9dc11c1e-5a14-4076-a74"
 environment = "dev"
 region      = "southamerica-east1"
 
 # Imágenes en el Artifact Registry de dev (repo "cargolink-dev").
 # Para el bootstrap inicial; después CI las actualiza por SHA.
-backend_image  = "southamerica-east1-docker.pkg.dev/cargo-link-2026/cargolink-dev/cargolink-backend:bootstrap"
+backend_image  = "southamerica-east1-docker.pkg.dev/project-9dc11c1e-5a14-4076-a74/cargolink-dev/cargolink-backend:bootstrap"
 frontend_image = "" # fase 2: se completa tras conocer la URL del backend dev
 
 # Dev escala a cero para ahorrar (acepta cold starts + re-seed idempotente).

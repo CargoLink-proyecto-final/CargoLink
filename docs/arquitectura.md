@@ -65,7 +65,7 @@ Bottom-tabs por rol (shipper/carrier) sobre stack de auth. Usa `react-native-map
 
 ### Infraestructura — Docker Compose (dev local) + GCP Cloud Run (prod)
 
-`docker-compose.yml` orquesta los tres servicios solo para dev local. Producción corre en GCP Cloud Run + Cloud SQL (proyecto `cargo-link-2026`): las imágenes se buildean en GitHub Actions y se publican a Artifact Registry, y el deploy lo hace `gcloud run deploy` por entorno (`dev`/`prod`). Infra como código en `infra/gcp/` (Terraform). Detalle en [`docker.md`](./docker.md), [`ci-cd.md`](./ci-cd.md) e [`infra/gcp/README.md`](../infra/gcp/README.md).
+`docker-compose.yml` orquesta los tres servicios solo para dev local. Producción corre en GCP Cloud Run + Cloud SQL (proyecto `project-9dc11c1e-5a14-4076-a74`): las imágenes se buildean en GitHub Actions y se publican a Artifact Registry, y el deploy lo hace `gcloud run deploy` por entorno (`dev`/`prod`). Infra como código en `infra/gcp/` (Terraform). Detalle en [`docker.md`](./docker.md), [`ci-cd.md`](./ci-cd.md) e [`infra/gcp/README.md`](../infra/gcp/README.md).
 
 ## Roles del sistema
 
