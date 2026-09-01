@@ -9,9 +9,15 @@ jest.mock('@/components/layout/DashboardLayout', () => ({
 }));
 
 // LocationPicker is loaded via next/dynamic and touches Leaflet/window — stub it.
+// El stub expone lat/lng y un botón que dispara onChange, para poder ejercitar
+// el "el usuario arrastra el pin" sin Leaflet.
 jest.mock('@/components/maps/LocationPicker', () => ({
   __esModule: true,
-  default: () => <div data-testid="location-picker" />,
+  default: ({ lat, lng, onChange }: { lat: number; lng: number; onChange: (lat: number, lng: number) => void }) => (
+    <div data-testid="location-picker" data-lat={lat} data-lng={lng}>
+      <button type="button" onClick={() => onChange(-34.123456789, -58.987654321)}>drag-pin</button>
+    </div>
+  ),
 }));
 
 const push = jest.fn();
@@ -112,7 +118,8 @@ describe('NewLoadPage — validation', () => {
 
   it('does not require a price — an empty one means "a convenir"', async () => {
     const user = userEvent.setup();
-    render(<NewLoadPage />);
+    // renderPage(): el combo de ciudades usa react-query y necesita el provider.
+    renderPage();
 
     expect(screen.getByText('Precio (ARS, opcional)')).toBeInTheDocument();
     expect(
@@ -254,5 +261,132 @@ describe('NewLoadPage — mismatch hard block', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Corregí la dirección')).toBeInTheDocument();
     expect(loadsApi.create).not.toHaveBeenCalled();
+  });
+});
+
+// El modo Coordenadas tenía el bloque de Dirección oculto con display:none: sus
+// campos requeridos seguían montados en react-hook-form y bloqueaban el submit
+// con errores invisibles. Estos tests cubren esa regresión y el mapa del modo.
+describe('NewLoadPage — modo Coordenadas', () => {
+  async function switchBothToCoords(user: ReturnType<typeof userEvent.setup>) {
+    const tabs = screen.getAllByRole('tab', { name: 'Coordenadas' });
+    await user.click(tabs[0]);
+    await user.click(tabs[1]);
+  }
+
+  async function typeCoords(
+    user: ReturnType<typeof userEvent.setup>,
+    values: { originLat: string; originLng: string; destLat: string; destLng: string },
+  ) {
+    for (const [name, value] of Object.entries(values)) {
+      const input = document.querySelector(`input[name="${name}"]`) as HTMLInputElement;
+      await user.clear(input);
+      if (value) await user.type(input, value);
+    }
+  }
+
+  it('crea la carga con coordenadas sin exigir los campos de Dirección', async () => {
+    const user = userEvent.setup();
+    reverseGeocode.mockResolvedValue('Punto resuelto, Argentina');
+    loadsApi.create.mockResolvedValue({ data: { id: 'new-2' } });
+
+    renderPage();
+    await fillBaseFields(user);
+    await switchBothToCoords(user);
+    await typeCoords(user, {
+      originLat: '-34.6037', originLng: '-58.3816',
+      destLat: '-31.4201', destLng: '-64.1888',
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Crear Carga' }));
+
+    await waitFor(() => expect(loadsApi.create).toHaveBeenCalledTimes(1));
+    expect(loadsApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originLat: -34.6037,
+        originLng: -58.3816,
+        destLat: -31.4201,
+        destLng: -64.1888,
+        originCityId: undefined,
+        destCityId: undefined,
+      }),
+    );
+    // En modo Coordenadas no se geocodifica ninguna dirección.
+    expect(geocodeStructured).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith('/dashboard/shipper');
+  });
+
+  it('marca error y no crea cuando la latitud está fuera de rango', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+    await fillBaseFields(user);
+    await switchBothToCoords(user);
+    await typeCoords(user, {
+      originLat: '-134.6037', originLng: '-58.3816',
+      destLat: '-31.4201', destLng: '-64.1888',
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Crear Carga' }));
+
+    expect(await screen.findByText('Debe estar entre -90 y 90')).toBeInTheDocument();
+    expect(loadsApi.create).not.toHaveBeenCalled();
+  });
+
+  it('un campo vacío marca Requerido en vez de mandar la carga a (0, 0)', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+    await fillBaseFields(user);
+    await switchBothToCoords(user);
+    await typeCoords(user, {
+      originLat: '-34.6037', originLng: '',
+      destLat: '-31.4201', destLng: '-64.1888',
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Crear Carga' }));
+
+    expect(await screen.findAllByText('Requerido')).not.toHaveLength(0);
+    expect(loadsApi.create).not.toHaveBeenCalled();
+  });
+
+  it('muestra el mapa recién cuando el par lat/lng es válido y lo sigue al arrastrar el pin', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(screen.getAllByRole('tab', { name: 'Coordenadas' })[0]);
+
+    expect(screen.queryByTestId('location-picker')).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText('Ingresá una latitud y una longitud válidas para ver el mapa.').length,
+    ).toBeGreaterThan(0);
+
+    const lat = document.querySelector('input[name="originLat"]') as HTMLInputElement;
+    const lng = document.querySelector('input[name="originLng"]') as HTMLInputElement;
+    await user.type(lat, '-34.6037');
+    await user.type(lng, '-58.3816');
+
+    const picker = await screen.findByTestId('location-picker');
+    expect(picker).toHaveAttribute('data-lat', '-34.6037');
+
+    // Arrastrar el pin reescribe los inputs, redondeado a 6 decimales.
+    await user.click(within(picker).getByRole('button', { name: 'drag-pin' }));
+    await waitFor(() => expect(lat.value).toBe('-34.123457'));
+    expect(lng.value).toBe('-58.987654');
+  });
+
+  it('verifica el punto con reverse geocoding', async () => {
+    const user = userEvent.setup();
+    reverseGeocode.mockResolvedValue('Av. Corrientes 1234, Buenos Aires');
+
+    renderPage();
+    await user.click(screen.getAllByRole('tab', { name: 'Coordenadas' })[0]);
+    await user.type(document.querySelector('input[name="originLat"]') as HTMLInputElement, '-34.6037');
+    await user.type(document.querySelector('input[name="originLng"]') as HTMLInputElement, '-58.3816');
+
+    await user.click(screen.getByRole('button', { name: 'Verificar coordenadas' }));
+
+    expect(await screen.findByText('Av. Corrientes 1234, Buenos Aires')).toBeInTheDocument();
+    expect(reverseGeocode).toHaveBeenCalledWith(-34.6037, -58.3816);
   });
 });
