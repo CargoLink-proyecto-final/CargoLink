@@ -128,25 +128,15 @@ export default function LoadsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      {/* pb extra: deja aire para que el botón flotante no tape la paginación */}
+      <div className="space-y-8 pb-24">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-          <div>
-            <p className="eyebrow">{heading.eyebrow}</p>
-            <h1 className="mt-2 font-display text-3xl sm:text-[38px] leading-[1.05]">
-              {heading.title}{' '}
-              <span className="font-semibold text-primary-700">{heading.italic}</span>
-            </h1>
-          </div>
-          {user?.role === 'CARGO_GENERATOR' && (
-            <Link
-              href="/loads/new"
-              className="inline-flex items-center gap-2 bg-ink-900 hover:bg-ink-800 text-surface-raised px-4 py-2.5 rounded-lg text-[13.5px] font-medium transition shadow-card"
-            >
-              <Plus size={15} />
-              Nueva carga
-            </Link>
-          )}
+        <div>
+          <p className="eyebrow">{heading.eyebrow}</p>
+          <h1 className="mt-2 font-display text-3xl sm:text-[38px] leading-[1.05]">
+            {heading.title}{' '}
+            <span className="font-semibold text-primary-700">{heading.italic}</span>
+          </h1>
         </div>
 
         {/* Filter bar — búsqueda, categoría, estado y filtros por tramo en una sola card */}
@@ -307,6 +297,19 @@ export default function LoadsPage() {
           )}
         </div>
       </div>
+
+      {/* Atajo a "Nueva carga" flotante: siempre alcanzable sin scrollear hasta
+          el header. Solo para el dador de carga, que es quien publica.
+          z-20 lo deja por debajo del backdrop del menú mobile (z-30). */}
+      {user?.role === 'CARGO_GENERATOR' && (
+        <Link
+          href="/loads/new"
+          className="fixed bottom-6 right-5 z-20 inline-flex items-center gap-2 bg-ink-900 hover:bg-ink-800 text-surface-raised pl-4 pr-5 py-3 rounded-full text-[13.5px] font-medium transition shadow-lg shadow-ink-900/25"
+        >
+          <Plus size={16} />
+          Nueva carga
+        </Link>
+      )}
     </DashboardLayout>
   );
 }
