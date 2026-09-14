@@ -67,7 +67,7 @@ Para cada `migration.sql` nuevo encontrado:
 
 Si un archivo tiene patrones de más de un nivel, tomá el **más alto**.
 
-**Cómo se aplican**: el `docker-entrypoint.sh` del backend corre `prisma migrate deploy` al startup del contenedor en el server. Todo lo listado se aplica automáticamente al primer arranque post-deploy, sin intervención manual y **sin backup automático** (ver `docs/deployment.md`).
+**Cómo se aplican**: al mergear a `main`, `deploy-vps.yml` corre `deploy/vps/deploy.sh prod` en el VPS: build → **backup automático de la DB de prod** (`~/backups/backup.sh`; si falla, aborta) → `docker compose up -d`. El `docker-entrypoint.sh` del backend corre `prisma migrate deploy` al arrancar, así que todo lo listado se aplica en ese deploy sin intervención manual (ver `docs/deployment.md`).
 
 ### 3. Detectar breaking changes en API
 
@@ -112,22 +112,22 @@ Items condicionales — adaptalos al release real. El item de **backup es obliga
 
 **Si el release tiene al menos una migración 🟡 o 🔴**:
 ```
-- [ ] **OBLIGATORIO — Backup reciente de la DB prod tomado antes del merge** (ver comando en skill db-migration y docs/deployment.md).
-      `docker compose exec postgres pg_dump -U postgres -Fc cargolink > backup-$(date +%F-%H%M).dump`
-- [ ] **OBLIGATORIO si hay migración 🔴** — Restore del backup probado en un entorno paralelo.
-- [ ] Rollback plan definido para cada migración 🔴 (recordar: rollback de imagen NO revierte la migración → restore + luego imagen vieja).
-- [ ] Coordinación con equipo si el deploy requiere downtime (migración pesada bloquea el arranque del backend).
+- [ ] **OBLIGATORIO — Backup de la DB prod**: lo toma el pipeline antes de levantar la versión nueva. Verificar después del merge, en el log del job `deploy-prod` en Actions, que el paso "Backup de la DB" terminó OK. Si el runner está caído y se deploya a mano, `deploy/vps/deploy.sh prod` también lo toma (docs/deployment.md § Backups).
+- [ ] **OBLIGATORIO si hay migración 🔴** — Restore del backup probado en dev antes del merge.
+- [ ] Rollback plan definido para cada migración 🔴 (recordar: rollback de imagen NO revierte la migración → restore + luego imágenes `:previous`; ver docs/deployment.md § Rollback).
+- [ ] Coordinación con equipo si el deploy requiere downtime (migración pesada demora el arranque del backend; el healthcheck espera hasta 300 s).
+- [ ] Runner self-hosted *Idle* en Settings → Actions → Runners antes del merge.
 - [ ] Comunicación a stakeholders si hay breaking changes en la API.
-- [ ] Tests/lint locales verdes en origin/develop antes del merge a main (el CI no corre tests — solo buildea imágenes; ver docs/ci-cd.md).
+- [ ] Tests/lint locales verdes en origin/develop antes del merge a main (el CI no corre tests — solo deploya; ver docs/ci-cd.md).
 - [ ] Release notes revisadas y publicadas.
-- [ ] Smoke test post-deploy ejecutado manualmente (ver docs/deployment.md § Smoke test).
+- [ ] Job `deploy-prod` verde en Actions (incluye healthcheck) + smoke test funcional manual (ver docs/deployment.md § Smoke test).
 ```
 
 **Si el release tiene solo migraciones 🟢 o ninguna**:
 ```
-- [ ] Tests/lint locales verdes en origin/develop antes del merge a main (el CI no corre tests — solo buildea imágenes).
+- [ ] Tests/lint locales verdes en origin/develop antes del merge a main (el CI no corre tests — solo deploya).
 - [ ] Release notes revisadas y publicadas.
-- [ ] Smoke test post-deploy ejecutado manualmente.
+- [ ] Job `deploy-prod` verde en Actions + smoke test funcional manual.
 - [ ] Comunicación a stakeholders si hay breaking changes en la API (si los hay).
 ```
 
@@ -195,5 +195,5 @@ Nada antes ni después. El informe va tal cual al body del PR.
 
 - `/release` slash-command que te invoca.
 - `backend/docker-entrypoint.sh` — contexto: corre `prisma migrate deploy` al startup del contenedor, así que las migraciones del release se aplican al primer arranque post-deploy.
-- `docs/deployment.md` — estado real del setup productivo (deploy/backup/smoke/rollback son manuales hoy).
-- `docs/ci-cd.md` — el CI solo buildea y pushea imágenes a GHCR; no corre tests/lint.
+- `docs/deployment.md` — setup productivo en el VPS: backup pre-deploy automático en prod, healthcheck automático, rollback y smoke test funcional manuales.
+- `docs/ci-cd.md` — `deploy-vps.yml` (runner self-hosted) deploya dev/prod en push a develop/main; no corre tests/lint.

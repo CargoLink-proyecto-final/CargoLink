@@ -337,7 +337,7 @@ docker compose exec backend node dist/prisma/seed.js
 
 ## Backups y restore
 
-**No automatizado en este repo.** El `docker-entrypoint.sh` no toma backup. Si vas a probar algo destructivo en una DB con datos reales, hacelo manualmente:
+En el VPS (prod y dev) hay backup diario por cron y el pipeline toma uno antes de cada deploy a prod: ver [`deployment.md`](./deployment.md) § Backups y Restore. El `docker-entrypoint.sh` no toma backup. En dev local, si vas a probar algo destructivo con datos que te importan, hacelo manualmente:
 
 ```bash
 # dump
@@ -347,7 +347,7 @@ docker compose exec postgres pg_dump -U postgres cargolink > backup-$(date +%F).
 docker compose exec -T postgres psql -U postgres cargolink < backup-2026-05-23.sql
 ```
 
-Para producción, ver la sección de backup en [`deployment.md`](./deployment.md) — es un gap reconocido del setup actual.
+Para producción, ver [`deployment.md`](./deployment.md). Gap pendiente: los dumps quedan en el mismo disco del VPS.
 
 ## Convenciones al evolucionar el schema
 
