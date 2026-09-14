@@ -219,6 +219,17 @@ dc up -d --no-build backend frontend
 
 A nivel compose, Postgres tiene healthcheck (`pg_isready`); backend y frontend no.
 
+### Frontend en 502 y API OK
+
+Si el healthcheck muestra `frontend=false api=true` y la URL pública da 502, lo más probable es que Next esté escuchando solo en la IP de la red `default` y cloudflared no lo alcance por `edge`. Pasó en el primer deploy a prod (2026-09-14). La imagen trae `ENV HOSTNAME=0.0.0.0` para evitarlo. Para verificarlo:
+
+```bash
+docker logs cargolink-frontend-1 --tail 5    # tiene que decir Network: http://0.0.0.0:3000
+docker run --rm --network edge curlimages/curl -s -o /dev/null -w '%{http_code}\n' http://prod-frontend:3000/
+```
+
+Si hacés rollback a una imagen `:previous` construida antes de ese fix, el 502 vuelve. Levantala con un override que setee `HOSTNAME: 0.0.0.0` en `frontend.environment`.
+
 ## Smoke test post-deploy
 
 El healthcheck es automático; lo funcional sigue siendo manual:
