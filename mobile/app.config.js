@@ -1,7 +1,7 @@
 /**
  * Config de Expo en JS (antes era app.json) para poder leer variables de entorno
- * en build time: la URL del API y la key de Google Maps cambian entre dev, el
- * entorno dev de Cloud Run y prod, y no queremos hardcodearlas ni commitear keys.
+ * en build time: la URL del API y la key de Google Maps cambian entre dev local,
+ * el entorno dev del VPS y prod, y no queremos hardcodearlas ni commitear keys.
  */
 module.exports = () => ({
   expo: {
@@ -24,7 +24,7 @@ module.exports = () => ({
         NSLocationAlwaysAndWhenInUseUsageDescription:
           'CargoLink usa tu ubicación en segundo plano para actualizar el seguimiento del viaje.',
         // Permite http:// contra el backend local durante desarrollo; en prod
-        // las URLs de Cloud Run son https y no se apoya en esta excepción.
+        // las URLs del VPS (vía Cloudflare Tunnel) son https y no se apoya en esta excepción.
         NSAppTransportSecurity: {
           NSAllowsLocalNetworking: true,
         },

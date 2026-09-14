@@ -7,7 +7,7 @@ Deploy continuo al **VPS propio** (`ubuntu-tesis01`) con GitHub Actions y un **r
 - Por qué este diseño y qué se descartó: [`decision-deploy-vps.md`](./decision-deploy-vps.md)
 - Layout del VPS, túnel, backups y operación: [`deployment.md`](./deployment.md)
 
-> `deploy-gcp.yml` (Cloud Run) está **desactivado**: ya no dispara en push y queda solo con `workflow_dispatch` hasta que se apague GCP.
+> El deploy anterior a GCP Cloud Run (`deploy-gcp.yml`) se eliminó el 2026-09-14, junto con los proyectos de GCP. Ver [`decision-deploy-vps.md`](./decision-deploy-vps.md) § GCP.
 
 ## Dos entornos
 

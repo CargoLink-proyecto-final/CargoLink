@@ -63,7 +63,6 @@ Toda la documentación técnica vive bajo [`docs/`](./docs/). Índice en [`docs/
 |---|---|
 | [`resumen.md`](./docs/resumen.md) | Mapa general del repo: estructura, dónde vive cada feature, índice. |
 | [`arquitectura.md`](./docs/arquitectura.md) | Overview técnico, diagrama, flujo end-to-end. |
-| [`arquitectura-gcp.md`](./docs/arquitectura-gcp.md) | Arquitectura anterior en GCP (en desuso). |
 | [`primeros-pasos.md`](./docs/primeros-pasos.md) | Setup Docker + dev local, troubleshooting. |
 | [`docker.md`](./docs/docker.md) | Compose, Dockerfiles, env vars. |
 | [`backend.md`](./docs/backend.md) | NestJS: módulos, guards, mail service. |
