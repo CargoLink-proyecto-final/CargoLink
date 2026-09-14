@@ -19,6 +19,10 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# El server standalone de Next escucha en $HOSTNAME, que Docker setea con el id
+# del contenedor: eso resuelve a la IP de una sola red. Con el frontend en dos
+# redes (default + edge del túnel) quedaba inalcanzable desde cloudflared → 502.
+ENV HOSTNAME=0.0.0.0
 
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
