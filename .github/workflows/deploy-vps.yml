@@ -1,0 +1,48 @@
+name: Deploy to VPS
+
+# Deploy continuo al VPS propio (ubuntu-tesis01) mediante un runner
+# self-hosted que corre en el mismo VPS. El runner solo abre conexiones
+# salientes hacia GitHub, así que no hace falta SSH ni puertos abiertos.
+#
+#   push a develop → dev  (~/cargolink-dev)
+#   push a main    → prod (~/cargolink, con backup de la DB antes de migrar)
+#
+# La lógica vive en deploy/vps/deploy.sh (build → [backup] → up → healthcheck).
+# Decisión y alternativas: docs/decision-deploy-vps.md.
+#
+# SEGURIDAD: este workflow corre código del repo en el VPS con acceso a
+# Docker. Solo dispara en push a develop/main — nunca en pull_request ni en
+# workflow_dispatch — y el job repite el guard por si alguien cambia el `on:`.
+
+on:
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: deploy-vps-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: [self-hosted, linux, cargolink-vps]
+    timeout-minutes: 45
+    steps:
+      # Solo se trae deploy/vps/ para ejecutar el script del commit que se
+      # deploya; el código que se buildea es el del clone del entorno.
+      - name: Checkout deploy scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy/vps
+          persist-credentials: false
+
+      - name: Deploy
+        env:
+          DEPLOY_ENV: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+        run: bash deploy/vps/deploy.sh "$DEPLOY_ENV" "$GITHUB_SHA"
