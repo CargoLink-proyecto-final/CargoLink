@@ -112,7 +112,7 @@ Items condicionales — adaptalos al release real. El item de **backup es obliga
 
 **Si el release tiene al menos una migración 🟡 o 🔴**:
 ```
-- [ ] **OBLIGATORIO — Backup de la DB prod**: lo toma el pipeline antes de levantar la versión nueva. Verificar después del merge, en el log del job `deploy-prod` en Actions, que el paso "Backup de la DB" terminó OK. Si el runner está caído y se deploya a mano, `deploy/vps/deploy.sh prod` también lo toma (docs/deployment.md § Backups).
+- [ ] **OBLIGATORIO — Backup de la DB prod**: lo toma el pipeline antes de levantar la versión nueva. Verificar después del merge, en el log del step "Deploy" del job `deploy-prod` en Actions, que el grupo "Backup de la DB antes de migrar" terminó OK. Si el runner está caído y se deploya a mano, `deploy/vps/deploy.sh prod` también lo toma (docs/deployment.md § Backups).
 - [ ] **OBLIGATORIO si hay migración 🔴** — Restore del backup probado en dev antes del merge.
 - [ ] Rollback plan definido para cada migración 🔴 (recordar: rollback de imagen NO revierte la migración → restore + luego imágenes `:previous`; ver docs/deployment.md § Rollback).
 - [ ] Coordinación con equipo si el deploy requiere downtime (migración pesada demora el arranque del backend; el healthcheck espera hasta 300 s).

@@ -96,10 +96,16 @@ main() {
   local base_url="https://$app_host"
 
   # ── 2. Rollback point ──
-  group "Tag de las imágenes actuales como :previous"
-  local svc
+  # Se toma la imagen del contenedor en ejecución y no :latest: si un deploy
+  # anterior cortó después del build, :latest apunta a algo que nunca salió.
+  group "Tag de las imágenes en ejecución como :previous"
+  local svc cid
   for svc in backend frontend; do
-    if docker image inspect "$project-$svc:latest" >/dev/null 2>&1; then
+    cid=$("${dc[@]}" ps -q "$svc" 2>/dev/null | head -n1 || true)
+    if [[ -n "$cid" ]]; then
+      docker image tag "$(docker inspect -f '{{.Image}}' "$cid")" "$project-$svc:previous"
+      echo "imagen en ejecución de $svc → $project-$svc:previous"
+    elif docker image inspect "$project-$svc:latest" >/dev/null 2>&1; then
       docker image tag "$project-$svc:latest" "$project-$svc:previous"
       echo "$project-$svc:latest → :previous"
     else

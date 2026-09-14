@@ -47,7 +47,7 @@ push a develop o main
              ├── valida el clone: rama correcta, sin cambios trackeados; en prod, que exista backup.sh
              ├── flock global (un deploy por vez en el host)
              ├── git fetch + merge --ff-only <sha>
-             ├── tag <proyecto>-{backend,frontend}:latest → :previous   (rollback)
+             ├── tag imagen en ejecución de backend/frontend → :previous   (rollback)
              ├── docker compose build backend frontend   (los contenedores viejos siguen sirviendo)
              ├── [prod] ~/backups/backup.sh  → si falla, aborta sin tocar contenedores
              ├── docker compose up -d --no-build
@@ -97,9 +97,9 @@ Sin SHA, deploya la punta de `origin/main` u `origin/develop`.
 
 ## Por qué no hay CI de tests / lint
 
-El repo tiene infraestructura de tests (Jest en backend) pero **todavía no tiene tests escritos**, y no hay step de lint. Es deliberado por la etapa del proyecto: la calidad pasa por el flujo de PR + el subagente `qa-engineer`.
+El backend tiene tests Jest (`backend/src/**/*.spec.ts`) pero **ningún workflow los corre**, y no hay step de lint. La calidad pasa por el flujo de PR + el subagente `qa-engineer`, que corre tests y lint localmente.
 
-Cuando se sumen tests, lo natural sería un workflow `pr-checks.yml` en `pull_request` sobre **runners hosteados por GitHub** (`ubuntu-latest`, nunca el self-hosted) que corra `npm test` + lint, manteniendo `deploy-vps.yml` separado y solo post-merge.
+Para gatear los merges con tests, lo natural sería un workflow `pr-checks.yml` en `pull_request` sobre **runners hosteados por GitHub** (`ubuntu-latest`, nunca el self-hosted) que corra `npm test` + lint, manteniendo `deploy-vps.yml` separado y solo post-merge.
 
 ## PR template
 
