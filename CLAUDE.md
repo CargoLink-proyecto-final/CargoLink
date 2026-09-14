@@ -16,7 +16,7 @@ Este mínimo de contexto alcanza para la mayoría de las tareas. Para detalle de
 | **Web** (`frontend/`) | Next.js 14 (App Router) · React 18 · TypeScript `strict: true` · Tailwind · zustand · @tanstack/react-query · axios · react-hook-form · zod · leaflet/react-leaflet · socket.io-client · lucide-react |
 | **Backend** (`backend/`) | NestJS 10 · Prisma 5 · JWT (@nestjs/jwt + passport-jwt) · Socket.IO (@nestjs/websockets) · Swagger · class-validator/class-transformer · bcrypt · nodemailer |
 | **Base de datos** | PostgreSQL 15 (vía Prisma — schema en `backend/prisma/schema.prisma`, migraciones en `backend/prisma/migrations/`, seed en `backend/prisma/seed.ts`) |
-| **Infra / dev** | Único `docker-compose.yml` en la raíz (`postgres` :5432, `backend` :3001, `frontend` :3000) para dev local · prod en GCP Cloud Run + Cloud SQL, imágenes multi-stage en Artifact Registry |
+| **Infra / dev** | Único `docker-compose.yml` en la raíz (`postgres` :5432, `backend` :3001, `frontend` :3000) para dev local · prod y dev en un VPS propio con Docker Compose + Cloudflare Tunnel, deploy continuo con runner self-hosted (`deploy/vps/`) |
 | **Tests** | jest (backend) |
 
 Comandos útiles de referencia:
@@ -337,15 +337,17 @@ Cuando `develop` tiene cambios listos para producción:
    - **Breaking changes** detectados en la API NestJS (endpoints removidos, DTOs alterados, columnas de modelos Prisma eliminadas).
    - **Release notes** borrador desde conventional commits agrupados por tipo (feat / fix / refactor / docs / tests / chore).
    - **Checklist operacional** para el mantenedor humano (rollback plan, coordinación, smoke test post-deploy, comunicación).
-   - **Si hay migraciones 🟡/🔴** (cambios destructivos: drop column/table, renames), el checklist incluye como recomendación fuerte tomar un backup manual de la DB de prod antes del merge. El repo **no** automatiza backups — ver [`docs/deployment.md`](./docs/deployment.md) y [`docs/base-de-datos.md`](./docs/base-de-datos.md) § "Backups y restore".
+   - **Si hay migraciones 🟡/🔴** (cambios destructivos: drop column/table, renames), el checklist lo resalta. El pipeline de prod toma un backup automático justo antes de levantar la versión nueva (y aborta si falla); para 🔴 además hay que probar el restore en dev antes del merge — ver [`docs/deployment.md`](./docs/deployment.md) § "Backups" y "Rollback".
 3. `/release` abre el PR `develop → main` con ese informe como body.
 4. **Claude no mergea ni aprueba ese PR.** Regla dura — está en el hook, en este documento y en el slash-command. El merge a `main` lo hace el mantenedor humano desde GitHub con su propia cuenta.
 5. El user revisa el PR (con visibilidad concreta de lo que va a pasar gracias al informe), lo aprueba con su cuenta (o con la de otro reviewer), y lo mergea manualmente.
-6. **Al mergear a `main`, el deploy a prod es automático.** El workflow [`.github/workflows/deploy-gcp.yml`](./.github/workflows/deploy-gcp.yml) buildea las imágenes Docker de backend y frontend, las pushea a Artifact Registry y corre `gcloud run deploy` contra el entorno **prod** de Cloud Run (servicios `cargolink-backend`/`cargolink-frontend`, DB `cargolink-db`) en el proyecto GCP `project-9dc11c1e-5a14-4076-a74`. Auth keyless vía Workload Identity Federation (sin keys en GitHub), TLS automático en las URLs `*.run.app`. Detalle en [`docs/ci-cd.md`](./docs/ci-cd.md).
+6. **Al mergear a `main`, el deploy a prod es automático.** El workflow [`.github/workflows/deploy-vps.yml`](./.github/workflows/deploy-vps.yml) corre en un **runner self-hosted dentro del VPS** (`ubuntu-tesis01`) y ejecuta [`deploy/vps/deploy.sh`](./deploy/vps/deploy.sh) sobre el clone de prod (`~/cargolink`): fast-forward a `main` → build de backend y frontend → **backup de la DB** → `docker compose up -d` (las migraciones corren al arrancar) → healthcheck contra `https://plataforma.cargolink.com.ar`. Publicado vía Cloudflare Tunnel; sin secretos en GitHub. Detalle en [`docs/ci-cd.md`](./docs/ci-cd.md) y la decisión en [`docs/decision-deploy-vps.md`](./docs/decision-deploy-vps.md).
 
-**Entorno `dev`**: el merge a `develop` dispara el mismo workflow contra el entorno **dev** (servicios `cargolink-dev-*`, imágenes en el repo `cargolink-dev` de Artifact Registry), cada uno con su propia DB y secrets.
+**Entorno `dev`**: el merge a `develop` dispara el mismo workflow contra el clone de dev (`~/cargolink-dev`, proyecto compose `cargolink-dev`, https://dev.cargolink.com.ar), con su propia DB y secrets y sin backup pre-deploy.
 
-**Por qué el merge a main es manual**: es la decisión humana ("quiero que esto entre a prod"). El merge dispara el deploy automático a Cloud Run prod, pero la decisión de mergear sigue en manos del mantenedor.
+**Runner self-hosted — regla dura**: nunca uses el runner (`runs-on: self-hosted` / `cargolink-vps`) en workflows que disparen con `pull_request`, ni agregues ese trigger a `deploy-vps.yml`: ejecutaría código no revisado en el VPS con acceso a Docker. `deploy-gcp.yml` (Cloud Run) está desactivado y no se reactiva.
+
+**Por qué el merge a main es manual**: es la decisión humana ("quiero que esto entre a prod"). El merge dispara el deploy automático a prod en el VPS, pero la decisión de mergear sigue en manos del mantenedor.
 
 ## Slash-commands disponibles
 

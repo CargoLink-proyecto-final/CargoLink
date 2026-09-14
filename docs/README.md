@@ -10,7 +10,7 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 |---|---|
 | [`resumen.md`](./resumen.md) | **Mapa general**: estructura del repo, dónde vive cada feature en backend/frontend/mobile, índice de todo. |
 | [`arquitectura.md`](./arquitectura.md) | Overview técnico lógico, componentes, flujo end-to-end, matriz de roles. |
-| [`arquitectura-gcp.md`](./arquitectura-gcp.md) | Arquitectura física en GCP: Cloud Run, Cloud SQL, Secret Manager, Load Balancer. |
+| [`arquitectura-gcp.md`](./arquitectura-gcp.md) | **Histórico / en desuso**: arquitectura física anterior en GCP (Cloud Run, Cloud SQL, Secret Manager, Load Balancer). |
 | [`primeros-pasos.md`](./primeros-pasos.md) | Setup con Docker Compose y dev local, prerequisitos, cuentas demo, troubleshooting. |
 | [`docker.md`](./docker.md) | `docker-compose.yml`, Dockerfiles backend/frontend, entrypoint, tabla consolidada de env vars. |
 | [`backend.md`](./backend.md) | Estructura NestJS, bootstrap, módulos, guards, decorators, mail service, comandos de dev. |
@@ -21,12 +21,13 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 | [`autenticacion.md`](./autenticacion.md) | Flujo register/verify/login, JWT, guards, roles, password reset, token storage frontend/mobile. |
 | [`frontend.md`](./frontend.md) | Next.js 14 App Router, rutas, componentes, estado (Zustand + React Query), Tailwind. |
 | [`mobile.md`](./mobile.md) | Expo SDK 50, screens por rol, navegación, GPS, push notifications, permisos. |
-| [`ci-cd.md`](./ci-cd.md) | GitHub Actions → deploy a Cloud Run (`dev`/`prod`), Artifact Registry, Workload Identity Federation. |
-| [`deployment.md`](./deployment.md) | Variables de entorno de prod, servicios recomendados, migraciones, healthchecks, rollback. |
+| [`ci-cd.md`](./ci-cd.md) | GitHub Actions con runner self-hosted → deploy al VPS (`develop`→dev, `main`→prod), healthcheck. |
+| [`deployment.md`](./deployment.md) | VPS: layout, Cloudflare Tunnel, runner, env vars, migraciones, backups, restore, rollback. |
+| [`decision-deploy-vps.md`](./decision-deploy-vps.md) | Decisión: deploy al VPS con runner self-hosted y alternativas descartadas. |
 | [`workflow-claude-code.md`](./workflow-claude-code.md) | `.claude/` tooling — hooks, skills, agents, slash-commands. |
 | [`contribuir.md`](./contribuir.md) | Gitflow, naming de ramas, conventional commits, flujo de PR/release, secretos. |
 
-> Infra como código (Terraform de GCP) tiene su propio README en [`../infra/gcp/README.md`](../infra/gcp/README.md), complementario a [`arquitectura-gcp.md`](./arquitectura-gcp.md) y [`deployment.md`](./deployment.md).
+> El Terraform de GCP (setup anterior, en desuso) tiene su propio README en [`../infra/gcp/README.md`](../infra/gcp/README.md). Los archivos del VPS están en [`../deploy/vps/`](../deploy/vps/) y se documentan en [`deployment.md`](./deployment.md).
 
 ## Convenciones
 
@@ -47,6 +48,7 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 | El gateway de WebSocket | [`websockets.md`](./websockets.md) |
 | `docker-compose.yml` o un Dockerfile | [`docker.md`](./docker.md) y [`primeros-pasos.md`](./primeros-pasos.md) |
 | El workflow de GitHub Actions | [`ci-cd.md`](./ci-cd.md) |
+| Algo de `deploy/vps/` o del VPS | [`deployment.md`](./deployment.md) y [`ci-cd.md`](./ci-cd.md) |
 | Una ruta o componente de frontend | [`frontend.md`](./frontend.md) |
 | Algo de `.claude/` | [`workflow-claude-code.md`](./workflow-claude-code.md) |
 

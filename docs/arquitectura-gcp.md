@@ -1,5 +1,7 @@
 # Arquitectura de despliegue — GCP
 
+> ⚠️ **Histórico / en desuso desde 2026-09-13.** Prod y dev corren en un VPS propio con deploy continuo vía runner self-hosted (ver [`deployment.md`](./deployment.md) y [`decision-deploy-vps.md`](./decision-deploy-vps.md)). `deploy-gcp.yml` ya no dispara en push. Esta página queda como referencia hasta que se apaguen los recursos de GCP.
+
 Diagrama del despliegue de CargoLink en Google Cloud: dos entornos (dev/prod) con deploy continuo desde GitHub Actions, autenticación keyless vía Workload Identity Federation, e infraestructura como código con Terraform.
 
 > Detalle operativo en [`ci-cd.md`](./ci-cd.md) (pipeline) y [`../infra/gcp/README.md`](../infra/gcp/README.md) (Terraform + setup).

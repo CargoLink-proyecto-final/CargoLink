@@ -161,7 +161,7 @@ El subagente `release-engineer` produce un informe que se convierte en el body d
 - Revisa el informe.
 - Aprueba con su cuenta (o pide review a otro).
 - Mergea.
-- Al merge a `main`, GitHub Actions buildea las imágenes, las pushea a Artifact Registry y **deploya automáticamente a Cloud Run prod** (ver [`deployment.md`](./deployment.md) y [`ci-cd.md`](./ci-cd.md)).
+- Al merge a `main`, GitHub Actions (runner self-hosted en el VPS) **deploya automáticamente a prod**: build, backup de la DB, `docker compose up -d` y healthcheck (ver [`deployment.md`](./deployment.md) y [`ci-cd.md`](./ci-cd.md)).
 
 ## Convenciones de lenguaje
 

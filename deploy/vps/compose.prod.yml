@@ -1,0 +1,29 @@
+# Override de PROD para el VPS (clone de `main` en ~/cargolink).
+#
+#   docker compose -f docker-compose.yml -f deploy/vps/compose.prod.yml <cmd>
+#
+# Nada queda publicado en el host: el único acceso es Cloudflare Tunnel, que
+# llega a backend/frontend por la red Docker externa `edge` usando estos
+# aliases (ver docs/deployment.md § Cloudflare Tunnel). Los secretos viven en
+# el `.env` del clone, nunca en el repo.
+services:
+  postgres:
+    ports: !reset []
+  backend:
+    ports: !reset []
+    networks:
+      default: {}
+      edge:
+        aliases: [prod-backend]
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: https://${APP_HOST:?Set APP_HOST in .env}/api
+    ports: !reset []
+    networks:
+      default: {}
+      edge:
+        aliases: [prod-frontend]
+networks:
+  edge:
+    external: true

@@ -1,5 +1,10 @@
-name: Deploy to GCP (Cloud Run)
+name: Deploy to GCP (Cloud Run) — desactivado
 
+# ⚠️ DESACTIVADO desde 2026-09-13: prod y dev corren en el VPS propio y el
+# deploy continuo lo hace deploy-vps.yml (ver docs/decision-deploy-vps.md).
+# Ya no dispara en push; queda solo con disparo manual mientras existan los
+# recursos de GCP. Borrar este archivo cuando se apague GCP.
+#
 # Deploy continuo a Cloud Run, con jobs separados para ver en el grafo de
 # Actions qué entorno deploya y cuál se saltea según la rama:
 #   build-and-push (siempre)
@@ -9,8 +14,7 @@ name: Deploy to GCP (Cloud Run)
 # (infra/gcp/); este workflow solo builda y deploya la imagen (ignore_changes).
 
 on:
-  push:
-    branches: [develop, main]
+  workflow_dispatch:
 
 concurrency:
   group: deploy-gcp-${{ github.ref_name }}
