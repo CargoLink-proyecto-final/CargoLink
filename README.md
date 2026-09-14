@@ -63,7 +63,7 @@ Toda la documentación técnica vive bajo [`docs/`](./docs/). Índice en [`docs/
 |---|---|
 | [`resumen.md`](./docs/resumen.md) | Mapa general del repo: estructura, dónde vive cada feature, índice. |
 | [`arquitectura.md`](./docs/arquitectura.md) | Overview técnico, diagrama, flujo end-to-end. |
-| [`arquitectura-gcp.md`](./docs/arquitectura-gcp.md) | Arquitectura física en GCP. |
+| [`arquitectura-gcp.md`](./docs/arquitectura-gcp.md) | Arquitectura anterior en GCP (en desuso). |
 | [`primeros-pasos.md`](./docs/primeros-pasos.md) | Setup Docker + dev local, troubleshooting. |
 | [`docker.md`](./docs/docker.md) | Compose, Dockerfiles, env vars. |
 | [`backend.md`](./docs/backend.md) | NestJS: módulos, guards, mail service. |
@@ -74,8 +74,9 @@ Toda la documentación técnica vive bajo [`docs/`](./docs/). Índice en [`docs/
 | [`autenticacion.md`](./docs/autenticacion.md) | JWT, guards, roles, password reset. |
 | [`frontend.md`](./docs/frontend.md) | Next.js, componentes, estado. |
 | [`mobile.md`](./docs/mobile.md) | Expo, screens, GPS, push. |
-| [`ci-cd.md`](./docs/ci-cd.md) | GitHub Actions → Cloud Run. |
-| [`deployment.md`](./docs/deployment.md) | Producción, backups, rollback. |
+| [`ci-cd.md`](./docs/ci-cd.md) | GitHub Actions (runner self-hosted) → VPS. |
+| [`deployment.md`](./docs/deployment.md) | Producción en el VPS, túnel, backups, rollback. |
+| [`decision-deploy-vps.md`](./docs/decision-deploy-vps.md) | Por qué VPS + runner self-hosted. |
 | [`workflow-claude-code.md`](./docs/workflow-claude-code.md) | `.claude/` tooling. |
 | [`contribuir.md`](./docs/contribuir.md) | Branches, commits, PRs, secretos. |
 

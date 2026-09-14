@@ -1,0 +1,28 @@
+# Override de DEV para el VPS (clone de `develop` en ~/cargolink-dev).
+#
+#   docker compose -f docker-compose.yml -f deploy/vps/compose.dev.yml <cmd>
+#
+# Igual al de prod salvo los aliases en la red `edge`. El `.env` del clone
+# define COMPOSE_PROJECT_NAME=cargolink-dev para no pisar los contenedores ni
+# los volúmenes de prod.
+services:
+  postgres:
+    ports: !reset []
+  backend:
+    ports: !reset []
+    networks:
+      default: {}
+      edge:
+        aliases: [dev-backend]
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: https://${APP_HOST:?Set APP_HOST in .env}/api
+    ports: !reset []
+    networks:
+      default: {}
+      edge:
+        aliases: [dev-frontend]
+networks:
+  edge:
+    external: true
