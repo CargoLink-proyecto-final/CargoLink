@@ -18,7 +18,6 @@ CargoLink-deploy/
 ├── frontend/         Web app Next.js 14 (App Router)
 ├── mobile/           App React Native + Expo SDK 50 (iOS/Android)
 ├── deploy/vps/       Overrides compose, compose del túnel y script de deploy del VPS
-├── infra/            Terraform de GCP (setup anterior, en desuso)
 ├── docs/             Documentación técnica (este folder)
 ├── .claude/          Tooling de Claude Code (hooks, skills, agents, commands)
 ├── .github/          GitHub Actions (deploy al VPS con runner self-hosted)
@@ -35,7 +34,6 @@ CargoLink-deploy/
 | `frontend/` | Web app Next.js 14 App Router | [`frontend.md`](./frontend.md) |
 | `mobile/` | App Expo / React Native | [`mobile.md`](./mobile.md) |
 | `deploy/vps/` | Overrides compose prod/dev, compose del túnel, `deploy.sh` | [`deployment.md`](./deployment.md), [`ci-cd.md`](./ci-cd.md) |
-| `infra/gcp/` | Terraform de GCP (setup anterior, en desuso) | [`arquitectura-gcp.md`](./arquitectura-gcp.md), [`infra/gcp/README.md`](../infra/gcp/README.md) |
 | `docs/` | Documentación técnica | [`README.md`](./README.md) |
 | `.claude/` | Hooks, skills, agents y slash-commands de Claude Code | [`workflow-claude-code.md`](./workflow-claude-code.md) |
 | `.github/workflows/` | Pipeline de deploy al VPS (runner self-hosted) | [`ci-cd.md`](./ci-cd.md) |
@@ -157,7 +155,6 @@ Enums: `Role`, `JoinRequestStatus`, `LoadStatus`, `TripStatus`, `PostulationStat
 | **Dev local** | `docker-compose.yml` (postgres :5432, backend :3001, frontend :3000) | [`docker.md`](./docker.md), [`primeros-pasos.md`](./primeros-pasos.md) |
 | **Hosting (VPS)** | `deploy/vps/` (overrides compose, túnel, `deploy.sh`); `.env` locales en el VPS | [`deployment.md`](./deployment.md), [`decision-deploy-vps.md`](./decision-deploy-vps.md) |
 | **CI/CD** | `.github/workflows/deploy-vps.yml` (runner self-hosted; `develop`→dev, `main`→prod) | [`ci-cd.md`](./ci-cd.md), [`deployment.md`](./deployment.md) |
-| **IaC GCP (en desuso)** | `infra/gcp/*.tf`; `deploy-gcp.yml` desactivado | [`arquitectura-gcp.md`](./arquitectura-gcp.md), [`infra/gcp/README.md`](../infra/gcp/README.md) |
 | **Validación de commits** | `.githooks/commit-msg` (opt-in) + hook `PreToolUse` de Claude | [`contribuir.md`](./contribuir.md) |
 | **Tooling Claude Code** | `.claude/` (hooks, skills, agents, slash-commands) | [`workflow-claude-code.md`](./workflow-claude-code.md), [`.claude/README.md`](../.claude/README.md) |
 
@@ -185,8 +182,6 @@ Endpoints locales: Frontend http://localhost:3000 · API http://localhost:3001/a
 ## Para profundizar
 
 - **Levantar el proyecto**: [`primeros-pasos.md`](./primeros-pasos.md).
-- **Arquitectura lógica**: [`arquitectura.md`](./arquitectura.md). **Física (GCP)**: [`arquitectura-gcp.md`](./arquitectura-gcp.md).
+- **Arquitectura lógica**: [`arquitectura.md`](./arquitectura.md). **Física (VPS)**: [`deployment.md`](./deployment.md).
 - **Contribuir** (gitflow, commits, PRs): [`contribuir.md`](./contribuir.md).
 - **Índice completo de docs**: [`README.md`](./README.md).
-</content>
-</invoke>

@@ -345,7 +345,7 @@ Cuando `develop` tiene cambios listos para producción:
 
 **Entorno `dev`**: el merge a `develop` dispara el mismo workflow contra el clone de dev (`~/cargolink-dev`, proyecto compose `cargolink-dev`, https://dev.cargolink.com.ar), con su propia DB y secrets y sin backup pre-deploy.
 
-**Runner self-hosted — regla dura**: nunca uses el runner (`runs-on: self-hosted` / `cargolink-vps`) en workflows que disparen con `pull_request`, ni agregues ese trigger a `deploy-vps.yml`: ejecutaría código no revisado en el VPS con acceso a Docker. `deploy-gcp.yml` (Cloud Run) está desactivado y no se reactiva.
+**Runner self-hosted — regla dura**: nunca uses el runner (`runs-on: self-hosted` / `cargolink-vps`) en workflows que disparen con `pull_request`, ni agregues ese trigger a `deploy-vps.yml`: ejecutaría código no revisado en el VPS con acceso a Docker. GCP (Cloud Run + Cloud SQL) se apagó el 2026-09-14 y su workflow e infra se quitaron del repo: no los reintroduzcas.
 
 **Por qué el merge a main es manual**: es la decisión humana ("quiero que esto entre a prod"). El merge dispara el deploy automático a prod en el VPS, pero la decisión de mergear sigue en manos del mantenedor.
 

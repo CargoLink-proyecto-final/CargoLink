@@ -10,7 +10,6 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 |---|---|
 | [`resumen.md`](./resumen.md) | **Mapa general**: estructura del repo, dónde vive cada feature en backend/frontend/mobile, índice de todo. |
 | [`arquitectura.md`](./arquitectura.md) | Overview técnico lógico, componentes, flujo end-to-end, matriz de roles. |
-| [`arquitectura-gcp.md`](./arquitectura-gcp.md) | **Histórico / en desuso**: arquitectura física anterior en GCP (Cloud Run, Cloud SQL, Secret Manager, Load Balancer). |
 | [`primeros-pasos.md`](./primeros-pasos.md) | Setup con Docker Compose y dev local, prerequisitos, cuentas demo, troubleshooting. |
 | [`docker.md`](./docker.md) | `docker-compose.yml`, Dockerfiles backend/frontend, entrypoint, tabla consolidada de env vars. |
 | [`backend.md`](./backend.md) | Estructura NestJS, bootstrap, módulos, guards, decorators, mail service, comandos de dev. |
@@ -27,7 +26,7 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 | [`workflow-claude-code.md`](./workflow-claude-code.md) | `.claude/` tooling — hooks, skills, agents, slash-commands. |
 | [`contribuir.md`](./contribuir.md) | Gitflow, naming de ramas, conventional commits, flujo de PR/release, secretos. |
 
-> El Terraform de GCP (setup anterior, en desuso) tiene su propio README en [`../infra/gcp/README.md`](../infra/gcp/README.md). Los archivos del VPS están en [`../deploy/vps/`](../deploy/vps/) y se documentan en [`deployment.md`](./deployment.md).
+> Los archivos del VPS están en [`../deploy/vps/`](../deploy/vps/) y se documentan en [`deployment.md`](./deployment.md). El setup anterior en GCP (Terraform en `infra/gcp/`, `arquitectura-gcp.md`) se apagó el 2026-09-14 y quedó solo en el historial de git: ver [`decision-deploy-vps.md`](./decision-deploy-vps.md) § GCP.
 
 ## Convenciones
 
@@ -43,7 +42,6 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 | Un endpoint del backend | [`api.md`](./api.md) y, si aplica, [`backend.md`](./backend.md) |
 | Algo de empresas/flotas | [`empresas.md`](./empresas.md) |
 | El schema Prisma | [`base-de-datos.md`](./base-de-datos.md) |
-| La infra de GCP (Terraform) | [`arquitectura-gcp.md`](./arquitectura-gcp.md) e [`../infra/gcp/README.md`](../infra/gcp/README.md) |
 | La estructura del repo o dónde vive algo | [`resumen.md`](./resumen.md) |
 | El gateway de WebSocket | [`websockets.md`](./websockets.md) |
 | `docker-compose.yml` o un Dockerfile | [`docker.md`](./docker.md) y [`primeros-pasos.md`](./primeros-pasos.md) |

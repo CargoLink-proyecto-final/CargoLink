@@ -2,7 +2,7 @@
 
 - **Fecha**: 2026-09-13
 - **Estado**: aceptada
-- **Reemplaza**: el deploy continuo a GCP Cloud Run (`.github/workflows/deploy-gcp.yml`, hoy desactivado)
+- **Reemplaza**: el deploy continuo a GCP Cloud Run (`.github/workflows/deploy-gcp.yml`, eliminado el 2026-09-14)
 
 ## Contexto
 
@@ -49,7 +49,11 @@ Restricciones duras del VPS:
 - El PAT de los clones vence el **2027-09-13**. Si no se renueva, el `git fetch` del deploy falla.
 - **Pendiente de verificar en Billing**: GitHub anunció un cargo por minuto para runners self-hosted en repos privados. Con este volumen sería marginal.
 
-## Pendientes fuera de esta decisión
+## GCP
 
-- Apagar los recursos de GCP y borrar `deploy-gcp.yml` y `infra/gcp/`. Es otra tarea.
-- Los DNS `api.cargolink.com.ar` y `api.dev.cargolink.com.ar` siguen apuntando a GCP, igual que la app mobile, que usa esas URLs.
+El 2026-09-14, con prod y dev ya estables en el VPS, se apagó GCP:
+
+- Se eliminaron los proyectos `project-9dc11c1e-5a14-4076-a74` (Cloud Run, Cloud SQL, load balancers, Artifact Registry, Secret Manager) y `cargo-link-2026` (el proyecto anterior, que ya tenía la facturación cortada).
+- Antes de borrarlas se tomó un dump final de las bases de Cloud SQL de prod y dev. Queda fuera del repo, en manos del mantenedor.
+- Se borraron los DNS `api.cargolink.com.ar` y `api.dev.cargolink.com.ar`. La API ahora vive en `https://plataforma.cargolink.com.ar/api` (prod) y `https://dev.cargolink.com.ar/api` (dev), por la misma ruta del túnel que la web.
+- Se quitaron del repo `deploy-gcp.yml`, `infra/gcp/` (Terraform) y `docs/arquitectura-gcp.md`. Para consultarlos: `git show d692cca:docs/arquitectura-gcp.md` o `git checkout d692cca -- infra/gcp`.

@@ -64,7 +64,7 @@ Bottom-tabs por rol (shipper/carrier) sobre stack de auth. Usa `react-native-map
 
 ### Infraestructura — Docker Compose (dev local y VPS)
 
-`docker-compose.yml` orquesta los tres servicios. En dev local se usa tal cual; en el VPS propio (`ubuntu-tesis01`) corren **prod** (rama `main`) y **dev** (rama `develop`) con ese mismo compose más un override por entorno (`deploy/vps/compose.{prod,dev}.yml`), publicados por Cloudflare Tunnel sin puertos abiertos. El deploy continuo lo hace GitHub Actions con un runner self-hosted en el VPS. Detalle en [`docker.md`](./docker.md), [`ci-cd.md`](./ci-cd.md), [`deployment.md`](./deployment.md) y [`decision-deploy-vps.md`](./decision-deploy-vps.md). El setup anterior en GCP (Cloud Run + Cloud SQL, `infra/gcp/`) está en desuso.
+`docker-compose.yml` orquesta los tres servicios. En dev local se usa tal cual; en el VPS propio (`ubuntu-tesis01`) corren **prod** (rama `main`) y **dev** (rama `develop`) con ese mismo compose más un override por entorno (`deploy/vps/compose.{prod,dev}.yml`), publicados por Cloudflare Tunnel sin puertos abiertos. El deploy continuo lo hace GitHub Actions con un runner self-hosted en el VPS. Detalle en [`docker.md`](./docker.md), [`ci-cd.md`](./ci-cd.md), [`deployment.md`](./deployment.md) y [`decision-deploy-vps.md`](./decision-deploy-vps.md). El setup anterior en GCP (Cloud Run + Cloud SQL) se apagó el 2026-09-14.
 
 ## Roles del sistema
 
