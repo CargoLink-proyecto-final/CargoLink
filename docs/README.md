@@ -15,6 +15,7 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 | [`backend.md`](./backend.md) | Estructura NestJS, bootstrap, módulos, guards, decorators, mail service, comandos de dev. |
 | [`api.md`](./api.md) | Referencia REST completa: Auth, Users, Loads, Postulations, Trips, Messages, Ratings, Companies. |
 | [`empresas.md`](./empresas.md) | Flotas multi-conductor: rol `COMPANY_ADMIN`, modelo de datos, flujo de unión, endpoints, métricas. |
+| [`asistente-carga.md`](./asistente-carga.md) | Chatbot para publicar cargas: cadena Gemini → Groq → modo básico, flujo editable por admin, endpoints, UI de chat. |
 | [`websockets.md`](./websockets.md) | Socket.IO `/chat`: rooms, eventos `sendMessage`/`newMessage`, ejemplo de cliente. |
 | [`base-de-datos.md`](./base-de-datos.md) | Schema Prisma: enums, modelos, relaciones, índices, migraciones, seed. |
 | [`autenticacion.md`](./autenticacion.md) | Flujo register/verify/login, JWT, guards, roles, password reset, token storage frontend/mobile. |
@@ -41,6 +42,7 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 |---|---|
 | Un endpoint del backend | [`api.md`](./api.md) y, si aplica, [`backend.md`](./backend.md) |
 | Algo de empresas/flotas | [`empresas.md`](./empresas.md) |
+| El asistente conversacional de carga | [`asistente-carga.md`](./asistente-carga.md) |
 | El schema Prisma | [`base-de-datos.md`](./base-de-datos.md) |
 | La estructura del repo o dónde vive algo | [`resumen.md`](./resumen.md) |
 | El gateway de WebSocket | [`websockets.md`](./websockets.md) |

@@ -138,6 +138,8 @@ Viven en el `.env` de cada clone (ver [`docker.md`](./docker.md) para la tabla c
 | `CORS_ORIGIN`, `FRONTEND_URL` | `https://$APP_HOST`. `FRONTEND_URL` la usan los emails de verify/reset. |
 | `ADMIN_PASSWORD` | Obligatoria en prod. Si queda vacía, el seed usa un fallback versionado en el repo. |
 | `SMTP_*` | Cuenta real (Gmail soportecargolink@gmail.com con app password). |
+| `GEMINI_API_KEY`, `GROQ_API_KEY` | En el `.env` del clone, como el resto de los secretos — no salen del VPS. Ambas opcionales: sin ellas el [asistente de carga](./asistente-carga.md) sigue andando en modo básico. Ojo con el free tier de AI Studio: Google puede entrenar con los prompts, así que para prod conviene tier pago. |
+| `ASSISTANT_FLOW_CONFIG_PATH` | El contenedor del backend **no tiene volumen**, así que el flujo editado desde el panel admin vive en su filesystem y **se pierde en cada deploy** (los contenedores se recrean). Para que persista hay que montar un volumen en esta ruta. Ver el caveat en [`asistente-carga.md`](./asistente-carga.md). |
 | `NEXT_PUBLIC_API_URL` | No va en el `.env`: es build-arg y lo arma el override. |
 
 Si un secreto se commitea por accidente: **rotalo** (no alcanza con borrar el commit) y avisá antes de reescribir historia.

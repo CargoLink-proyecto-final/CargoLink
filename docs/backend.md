@@ -43,6 +43,15 @@ backend/src/
 │   ├── loads.service.ts
 │   ├── loads.module.ts
 │   └── dto/                   # create-load, update-load, register-query
+├── loads-assistant/           # /loads/assistant — chatbot que arma el borrador de una carga
+│   ├── loads-assistant.controller.ts
+│   ├── loads-assistant.service.ts
+│   ├── loads-assistant.module.ts
+│   ├── flow-config.ts         # FlowConfig editable + DEFAULT_FLOW (flujo semilla)
+│   ├── flow-config.service.ts # persistencia del flujo en JSON
+│   ├── basic-flow.engine.ts   # modo básico sin IA (parseo por reglas)
+│   ├── llm/                   # LlmProvider + gemini, groq y la cadena con failover
+│   └── dto/                   # assistant-message, update-flow
 ├── postulations/              # /loads/:id/postulations + /postulations/...
 │   ├── postulations.controller.ts
 │   ├── postulations.service.ts
@@ -174,6 +183,22 @@ Hay dos endpoints "register" que son específicos del dominio:
 - `GET /api/loads/register/export` — devuelve un ZIP con `loads.csv` (datos del load + trip + carrier + shipper, 30 columnas) y `messages.csv` (todos los mensajes asociados a esos trips). Implementado con `archiver` streameado a `res`.
 
 Las funciones `csvCell`, `csvRow`, `buildLoadsCsv` y `buildMessagesCsv` viven en el mismo controller — escapan comillas con `""` y citan celdas con caracteres especiales.
+
+### Loads Assistant (`src/loads-assistant/`)
+
+| Endpoint | Método | Auth |
+|---|---|---|
+| `/api/loads/assistant/flow` | GET | `CARGO_GENERATOR`, `ADMIN` |
+| `/api/loads/assistant/message` | POST | `CARGO_GENERATOR` |
+| `/api/loads/assistant/flow` | PUT | `ADMIN` |
+
+Chatbot que recolecta los datos de una carga conversando y devuelve un **borrador**; la creación sigue pasando por `POST /loads` con el mismo `CreateLoadDto`. Sin dependencia de Prisma — no toca el schema.
+
+- Resiliencia en tres niveles: **Gemini** (primario) → **Groq** (respaldo ante 429/timeout/5xx) → **modo básico** determinista sin IA, que recorre los pasos del flujo parseando con reglas. El turno degradado vuelve con `degraded: true`.
+- El flujo conversacional (pasos, preguntas, obligatoriedad, saludo, instrucción de sistema) es **configuración editable en runtime** por `ADMIN`, persistida en un JSON (`ASSISTANT_FLOW_CONFIG_PATH`).
+- `sanitize` descarta del borrador todo lo que no cumple el contrato de dominio (`cargoType` fuera de `CARGO_TYPES`, números o fechas inválidos) para que el asistente lo repregunte.
+
+Doc completa en [`asistente-carga.md`](./asistente-carga.md).
 
 ### Postulations (`src/postulations/`)
 

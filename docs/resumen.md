@@ -61,6 +61,7 @@ Cada fila cruza las tres capas. Útil cuando vas a tocar una funcionalidad de pu
 | **Auth / registro / verificación** | `auth/` | `app/auth/*`, `store/auth.ts`, `lib/api.ts` (`authApi`) | `screens/auth/*`, `store/auth.ts`, `services/api.ts` (`authApi`) |
 | **Perfil de usuario** | `users/` | `app/users/`, `lib/api.ts` (`usersApi`) | `screens/.../ProfileScreen` |
 | **Cargas (loads)** | `loads/` | `app/loads/*`, `lib/api.ts` (`loadsApi`) | `screens/shipper/*`, `screens/carrier/AvailableLoadsScreen` |
+| **Asistente conversacional de carga** | `loads-assistant/` | `app/loads/new/chat/`, `app/dashboard/admin/assistant-flow/`, `lib/api.ts` (`assistantApi`) | — (no implementado en mobile) |
 | **Postulaciones / negociación** | `postulations/` | `components/postulations/*`, `lib/api.ts` (`postulationsApi`) | `screens/.../LoadDetailScreen` |
 | **Viajes (trips) + GPS + métricas** | `trips/`, `common/metrics.ts`, `common/routing.ts` | `app/trips/*`, `app/tracking/*`, `components/maps/*` | `screens/.../TrackingScreen`, `services/api.ts` (`tripsApi`) |
 | **Chat en tiempo real** | `messages/` (+ `messages.gateway.ts`) | `app/messages/*`, `lib/api.ts` (`messagesApi`) | `screens/.../Chat*Screen`, `services/api.ts` (`messagesApi`) |
@@ -69,17 +70,18 @@ Cada fila cruza las tres capas. Útil cuando vas a tocar una funcionalidad de pu
 | **Registro / export CSV** | `loads/` (`/register`, `/register/export`) | `components/register/*`, `hooks/useRegister.ts` | — |
 | **Email (verificación, reset)** | `mail/` | — | — |
 
-Doc dedicada por feature: cargas/viajes/postulaciones en [`api.md`](./api.md), chat en [`websockets.md`](./websockets.md), empresas en [`empresas.md`](./empresas.md), auth en [`autenticacion.md`](./autenticacion.md).
+Doc dedicada por feature: cargas/viajes/postulaciones en [`api.md`](./api.md), chat en [`websockets.md`](./websockets.md), empresas en [`empresas.md`](./empresas.md), auth en [`autenticacion.md`](./autenticacion.md), asistente conversacional en [`asistente-carga.md`](./asistente-carga.md).
 
 ## Backend — mapa de módulos
 
-NestJS modular: **9 dominios** (Auth, Users, Loads, Postulations, Trips, Messages, Ratings, Companies, Mail) + **2 módulos de infraestructura** (Prisma, common). Bootstrap en `backend/src/main.ts`, root module en `backend/src/app.module.ts`.
+NestJS modular: **10 dominios** (Auth, Users, Loads, Loads Assistant, Postulations, Trips, Messages, Ratings, Companies, Mail) + **2 módulos de infraestructura** (Prisma, common). Bootstrap en `backend/src/main.ts`, root module en `backend/src/app.module.ts`.
 
 | Módulo | Path | Responsabilidad | Endpoints clave |
 |---|---|---|---|
 | Auth | `src/auth/` | Registro, login, verificación email, reset password, JWT | `POST /auth/{register,login,reset-password}`, `GET /auth/verify-email/:token` |
 | Users | `src/users/` | Perfil propio, listado/admin de usuarios | `GET/PATCH /users/me`, `GET /users` (admin) |
 | Loads | `src/loads/` | CRUD de cargas, filtros, registro + export ZIP | `POST /loads`, `GET /loads/{available,my,register}` |
+| Loads Assistant | `src/loads-assistant/` | Chatbot que arma el borrador de una carga (Gemini → Groq → modo básico) + flujo editable por admin | `POST /loads/assistant/message`, `GET/PUT /loads/assistant/flow` |
 | Postulations | `src/postulations/` | Bidding y negociación de precio | `POST /loads/:id/postulations`, `POST /postulations/:id/{accept,counter-offer,accept-offer}` |
 | Trips | `src/trips/` | Ciclo de viaje, GPS, métricas combustible/on-time | `PATCH /trips/:id/{start,complete,location}`, `GET /trips/metrics` |
 | Messages | `src/messages/` | Chat por trip (REST + gateway WebSocket `/chat`) | `POST/GET /messages/trip/:tripId`, evento `sendMessage` |
@@ -111,6 +113,8 @@ Next.js 14 App Router en `frontend/src/app/`. Estado de auth en `store/auth.ts` 
 | `/dashboard/{shipper,carrier,admin,company-admin}` | Dashboards por rol |
 | `/dashboard/company-admin/{drivers,drivers/[id],requests,trips}` | Gestión de flota |
 | `/loads`, `/loads/new`, `/loads/[id]`, `/loads/[id]/edit` | Cargas |
+| `/loads/new/chat` | Crear carga conversando con el asistente ([`asistente-carga.md`](./asistente-carga.md)) |
+| `/dashboard/admin/assistant-flow` | Panel admin para editar el flujo del asistente |
 | `/trips`, `/trips/[id]` | Viajes |
 | `/tracking`, `/tracking/[id]` | Seguimiento GPS en mapa (Leaflet) |
 | `/messages`, `/messages/trip/[tripId]` | Chat |
