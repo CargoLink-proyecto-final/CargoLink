@@ -3,3 +3,6 @@ dist/
 .env
 *.js.map
 coverage/
+# Flujo del asistente escrito en runtime por el panel admin (config editable,
+# no versionada — el default vive en flow-config.ts).
+assistant-flow.config.json

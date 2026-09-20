@@ -4,6 +4,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { LoadsModule } from './loads/loads.module';
+import { LoadsAssistantModule } from './loads-assistant/loads-assistant.module';
 import { TripsModule } from './trips/trips.module';
 import { PostulationsModule } from './postulations/postulations.module';
 import { MessagesModule } from './messages/messages.module';
@@ -18,6 +19,7 @@ import { CompaniesModule } from './companies/companies.module';
     AuthModule,
     UsersModule,
     LoadsModule,
+    LoadsAssistantModule,
     TripsModule,
     PostulationsModule,
     MessagesModule,
