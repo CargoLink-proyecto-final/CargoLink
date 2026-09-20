@@ -13,10 +13,10 @@ const VALID_TYPES: StepType[] = ['text', 'number', 'enum', 'address', 'date'];
  * DB. Ruta configurable con ASSISTANT_FLOW_CONFIG_PATH; por defecto vive junto
  * al proceso del backend. Si el archivo no existe, se sirve DEFAULT_FLOW.
  *
- * ⚠️ Cloud Run tiene filesystem efímero: una edición hecha por el panel NO
- * sobrevive a un redeploy ni se comparte entre instancias. Alcanza para dev y
- * para la demo del proyecto; para persistencia real habría que mover esto a DB
- * (ver memoria [[chatbot-load-creation]]).
+ * ⚠️ El contenedor del backend no monta ningún volumen, así que este archivo
+ * vive en su filesystem y cada deploy lo pierde (los contenedores se recrean).
+ * Alcanza para dev y para la demo del proyecto; para persistencia real hay que
+ * montar un volumen en ASSISTANT_FLOW_CONFIG_PATH o mover esto a DB.
  */
 @Injectable()
 export class FlowConfigService {

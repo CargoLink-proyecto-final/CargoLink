@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { LlmJsonRequest, LlmProvider } from './llm-provider';
 
 // Google AI Studio (Generative Language API). Free tier sin tarjeta; la key se
-// saca en https://aistudio.google.com/apikey y vive SOLO en el backend
-// (secreto GCP), nunca en el cliente.
+// saca en https://aistudio.google.com/apikey y vive SOLO en el backend, en el
+// .env del clone del VPS, nunca en el cliente.
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const TIMEOUT_MS = 20_000;

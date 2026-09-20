@@ -233,6 +233,27 @@ export class LoadsAssistantService {
     if (clean.deliveryDate && Number.isNaN(Date.parse(clean.deliveryDate))) {
       clean.deliveryDate = undefined;
     }
+
+    // Mismas reglas de cronología que el formulario tradicional (ver el wizard
+    // en frontend/src/app/loads/new/page.tsx): la recogida no puede quedar en el
+    // pasado y la entrega tiene que ser posterior a la recogida. Sin esto el
+    // chat publica cargas con fechas invertidas, porque CreateLoadDto solo pide
+    // que cada fecha sea parseable. Se descarta el valor en vez de tirar error
+    // para que el flujo lo vuelva a preguntar.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    if (clean.pickupDate && Date.parse(clean.pickupDate) < startOfToday.getTime()) {
+      clean.pickupDate = undefined;
+    }
+    if (
+      clean.deliveryDate &&
+      clean.pickupDate &&
+      Date.parse(clean.deliveryDate) <= Date.parse(clean.pickupDate)
+    ) {
+      clean.deliveryDate = undefined;
+    }
+
     return clean;
   }
 

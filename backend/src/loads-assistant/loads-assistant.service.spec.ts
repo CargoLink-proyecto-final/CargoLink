@@ -91,6 +91,49 @@ describe('LoadsAssistantService', () => {
     expect(turn.missing).toContain('weight');
   });
 
+  // Cronología de fechas: el wizard tradicional la valida en el cliente, así que
+  // el chat tiene que aplicar las mismas reglas o queda como puerta trasera para
+  // publicar cargas con fechas imposibles.
+  describe('cronología de fechas', () => {
+    const isoIn = (days: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      return d.toISOString();
+    };
+
+    it('drops a pickupDate in the past so it gets re-asked', async () => {
+      service = await makeService(
+        buildLlm({ assistantMessage: 'ok', draft: { pickupDate: isoIn(-3) } }),
+      );
+      const turn = await service.chat([{ role: 'user', content: 'el lunes pasado' }]);
+      expect(turn.draft.pickupDate).toBeUndefined();
+      expect(turn.missing).toContain('pickupDate');
+    });
+
+    it('drops a deliveryDate that is not after the pickupDate', async () => {
+      service = await makeService(
+        buildLlm({
+          assistantMessage: 'ok',
+          draft: { pickupDate: isoIn(5), deliveryDate: isoIn(1) },
+        }),
+      );
+      const turn = await service.chat([{ role: 'user', content: 'mañana' }]);
+      expect(turn.draft.pickupDate).toBeDefined();
+      expect(turn.draft.deliveryDate).toBeUndefined();
+    });
+
+    it('keeps a chronologically valid pair', async () => {
+      const pickupDate = isoIn(2);
+      const deliveryDate = isoIn(4);
+      service = await makeService(
+        buildLlm({ assistantMessage: 'ok', draft: { pickupDate, deliveryDate } }),
+      );
+      const turn = await service.chat([{ role: 'user', content: 'pasado mañana' }]);
+      expect(turn.draft.pickupDate).toBe(pickupDate);
+      expect(turn.draft.deliveryDate).toBe(deliveryDate);
+    });
+  });
+
   it('falls back gracefully when the model returns non-JSON', async () => {
     service = await makeService(buildLlm('esto no es json {'));
     const prior = { title: 'Mantener' };
