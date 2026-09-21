@@ -17,6 +17,7 @@ jest.mock('../../services/api', () => ({
   postulationsApi: {
     create: jest.fn(),
     listMine: jest.fn(),
+    listForLoad: jest.fn(),
     acceptOffer: jest.fn(),
     withdraw: jest.fn(),
   },
@@ -69,6 +70,8 @@ describe('LoadDetailScreen', () => {
     mockUser = { id: 'carrier1', role: 'TRANSPORTER', firstName: 'Carl', lastName: 'Driver' };
     (postulationsApi.listMine as jest.Mock).mockResolvedValue({ data: [] });
     (postulationsApi.create as jest.Mock).mockResolvedValue({ data: {} });
+    // Lo consume PostulationsPanel cuando el que mira es el publicador dueño.
+    (postulationsApi.listForLoad as jest.Mock).mockResolvedValue({ data: [] });
   });
 
   it('fetches the load by id and renders its details', async () => {
@@ -485,7 +488,7 @@ describe('LoadDetailScreen', () => {
       (postulationsApi.listMine as jest.Mock).mockResolvedValue({
         data: [{
           id: 'p1', loadId: 'l1', transporterId: 'carrier1', status: 'NEGOTIATING',
-          counterOfferPrice: 55000, lastOfferBy: 'CARGO_GENERATOR',
+          counterOfferPrice: 55000, lastOfferBy: 'SHIPPER',
         }],
       });
       (postulationsApi.acceptOffer as jest.Mock).mockResolvedValue({ data: {} });

@@ -76,6 +76,10 @@ export class UsersService {
     // mandan); Prisma los exige como string, así que garantizamos un valor.
     return this.prisma.user.create({
       data: { ...data, firstName: data.firstName ?? '', lastName: data.lastName ?? '' },
+      // Era el último método que devolvía el registro completo. Hoy `register`
+      // sólo responde `{message, email}`, así que no filtraba nada — pero deja
+      // de ser cierto apenas alguien devuelva este valor tal cual.
+      select: PUBLIC_USER_SELECT,
     });
   }
 

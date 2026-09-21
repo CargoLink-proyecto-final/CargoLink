@@ -1,10 +1,13 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
-  Patch,
   Param,
-  Body,
+  Patch,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -17,13 +20,18 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangeRoleDto } from './dto/change-role.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
+import { PushTokenDto } from './dto/push-token.dto';
+import { PushService, isExpoPushToken } from '../push/push.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private usersService: UsersService) {}
+  constructor(
+    private usersService: UsersService,
+    private pushService: PushService,
+  ) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -35,6 +43,26 @@ export class UsersController {
   @ApiOperation({ summary: 'Update current user profile' })
   updateProfile(@CurrentUser('id') userId: string, @Body() data: UpdateProfileDto) {
     return this.usersService.update(userId, data);
+  }
+
+  @Put('me/push-token')
+  @ApiOperation({ summary: 'Register this device for push notifications' })
+  async registerPushToken(
+    @CurrentUser('id') userId: string,
+    @Body() dto: PushTokenDto,
+  ) {
+    if (!isExpoPushToken(dto.token)) {
+      throw new BadRequestException('El token no tiene formato de Expo push token');
+    }
+    await this.pushService.registerToken(userId, dto.token);
+    return { registered: true };
+  }
+
+  @Delete('me/push-token')
+  @ApiOperation({ summary: 'Stop sending push notifications to this account' })
+  async clearPushToken(@CurrentUser('id') userId: string) {
+    await this.pushService.clearToken(userId);
+    return { registered: false };
   }
 
   @Get()
