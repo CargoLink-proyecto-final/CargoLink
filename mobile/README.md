@@ -193,8 +193,8 @@ Hay que repetir el `adb reverse` cada vez que se desconecta el cable.
 **Sobre `http://`**: Android bloquea tráfico en claro desde API 28, pero el
 `AndroidManifest.xml` del *debug* que genera el prebuild trae
 `usesCleartextTraffic="true"`, así que el backend local funciona sin tocar nada.
-Un build de **release** sí lo bloquea — en prod no importa porque Cloud Run es
-https.
+Un build de **release** sí lo bloquea — en prod no importa porque las URLs del
+VPS, publicadas vía Cloudflare Tunnel, son https.
 
 ### Notificaciones
 
@@ -260,12 +260,17 @@ Sólo hace falta loguearse con una cuenta que pertenezca a esa organización:
 ```bash
 cd mobile
 npx eas-cli login
+export EAS_PROJECT_ID=1069c26e-a3bd-4919-9461-01599fce42e9
 ```
 
-1. **`EAS_PROJECT_ID` va en `eas.json`, no en el `.env`.** El `.env` está
-   gitignoreado y EAS sólo sube lo que está commiteado, así que en los servidores
-   de build esa variable no existiría y `getExpoPushTokenAsync()` se quedaría sin
-   id. En `.env` se setea sólo para probar push en dev local.
+1. **`EAS_PROJECT_ID` va en `eas.json` _además_ del entorno local.** En
+   `eas.json` porque el `.env` está gitignoreado y EAS sólo sube lo que está
+   commiteado: en los servidores de build esa variable no existiría y
+   `getExpoPushTokenAsync()` se quedaría sin id. Y en el entorno local porque los
+   comandos del CLI que **no** toman `--profile` no reciben el `env` de ningún
+   perfil y no saben contra qué proyecto trabajar: `submit`, `device:create`,
+   `project:info`, `build:list`. Sin el `export` de arriba, el paso a TestFlight
+   corta con "EAS project not configured".
 2. **El bundle identifier tiene que ser tuyo.** `com.cargolink.app` (en
    `app.config.js`) está registrado por otra cuenta de Apple; con la cuenta paga
    hay que elegir uno libre y registrarlo en App Store Connect.
@@ -316,8 +321,10 @@ cifrado en cada subida.
 
 ## Pendientes conocidos
 
-- **Push remotas sin `EAS_PROJECT_ID`.** El código está completo de punta a
-  punta; falta correr `eas init`. Ver § "Notificaciones push".
+- **Push remotas sólo en builds de EAS.** El proyecto de EAS ya existe y su
+  `projectId` está cableado en `eas.json`, así que los builds de la nube emiten
+  token. En dev local hay que ponerlo en el `.env`, y en iOS hace falta una
+  cuenta de Apple paga. Ver § "Notificaciones push".
 - **Un solo dispositivo por cuenta.** El token de Expo se guarda en una columna
   de `User`: el último teléfono que se registra desplaza al anterior. Varios
   dispositivos a la vez necesitarían una tabla aparte.
