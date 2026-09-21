@@ -16,20 +16,25 @@ jest.mock('../../services/routing', () => ({
   fetchRoute: jest.fn(),
 }));
 
-// react-native-maps: render the native components as plain RN Views.
-jest.mock('react-native-maps', () => {
+// MapLibre: render the native components as plain RN Views. El nombre de
+// `mockFitBounds` tiene que empezar con "mock" para que jest lo deje usar
+// adentro del factory (que se hoistea arriba de las declaraciones).
+const mockFitBounds = jest.fn();
+
+jest.mock('@maplibre/maplibre-react-native', () => {
   const { View } = require('react-native');
   const React = require('react');
-  const MapView = React.forwardRef((p: any, ref: any) => {
-    React.useImperativeHandle(ref, () => ({ fitToCoordinates: jest.fn() }));
+  const Camera = React.forwardRef((p: any, ref: any) => {
+    React.useImperativeHandle(ref, () => ({ fitBounds: mockFitBounds }));
     return <View {...p} />;
   });
   return {
     __esModule: true,
-    default: MapView,
+    Map: (p: any) => <View {...p} />,
+    Camera,
     Marker: (p: any) => <View {...p} />,
-    Polyline: (p: any) => <View {...p} />,
-    PROVIDER_DEFAULT: 'default',
+    GeoJSONSource: (p: any) => <View {...p} />,
+    Layer: (p: any) => <View {...p} />,
   };
 });
 
@@ -92,11 +97,35 @@ describe('TrackingScreen', () => {
 
     const { getAllByText } = render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
 
-    // Markers render title text via the mocked View's `title` prop is not text,
-    // so assert via the route fetch + map presence instead.
+    // Los marcadores de MapLibre renderizan una vista propia sin texto, así que
+    // se asserta el pedido de ruta y la presencia del viaje en pantalla.
     await waitFor(() => expect(fetchRoute).toHaveBeenCalledWith(-34.6, -58.38, -31.4, -64.18));
-    // Trip title also appears in a marker; list + marker -> at least one.
     expect(getAllByText('Steel beams').length).toBeGreaterThanOrEqual(1);
+  });
+
+  // La cámara tiene que encuadrar los tres puntos del viaje: origen, destino y
+  // la última posición del conductor. Con react-native-maps esto era
+  // `fitToCoordinates`; MapLibre pide la caja ya calculada.
+  it('encuadra la cámara sobre origen, destino y posición actual', async () => {
+    (tripsApi.getMyLoads as jest.Mock).mockResolvedValue({ data: { trips: [trip] } });
+
+    render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => expect(mockFitBounds).toHaveBeenCalled());
+    expect(mockFitBounds).toHaveBeenCalledWith(
+      // [west, south, east, north]
+      [-64.18, -34.6, -58.0, -31.4],
+      expect.objectContaining({ padding: { top: 50, right: 50, bottom: 50, left: 50 } }),
+    );
+  });
+
+  it('no mueve la cámara cuando no hay viajes activos', async () => {
+    (tripsApi.getMyLoads as jest.Mock).mockResolvedValue({ data: { trips: [] } });
+
+    const { getByText } = render(<TrackingScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => expect(getByText('Sin viajes activos')).toBeTruthy());
+    expect(mockFitBounds).not.toHaveBeenCalled();
   });
 
   it('shows the empty state when there are no trips', async () => {

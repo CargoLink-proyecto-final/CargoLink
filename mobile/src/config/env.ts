@@ -40,3 +40,20 @@ export const API_URL = resolveApiUrl();
 
 /** El gateway de chat vive en el namespace /chat del mismo server, sin el prefijo /api. */
 export const SOCKET_URL = API_URL.replace(/\/api$/, '');
+
+/**
+ * Style de MapLibre para el mapa de seguimiento.
+ *
+ * OpenFreeMap sirve tiles vectoriales de OpenStreetMap sin API key ni cuota, que
+ * es la razón por la que el mobile usa MapLibre y no react-native-maps: en
+ * Android el mapa base lo renderizaría el SDK de Google y sin una key facturable
+ * queda gris. Además nos deja iguales al web (Leaflet + OSM) y al ruteo, que ya
+ * va contra OSRM en `src/services/routing.ts`.
+ *
+ * Se puede apuntar a otro proveedor (MapTiler, Stadia, un style propio) con
+ * EXPO_PUBLIC_MAP_STYLE_URL sin tocar código.
+ */
+export const MAP_STYLE_URL =
+  process.env.EXPO_PUBLIC_MAP_STYLE_URL ??
+  (Constants.expoConfig?.extra?.mapStyleUrl as string | undefined) ??
+  'https://tiles.openfreemap.org/styles/liberty';
