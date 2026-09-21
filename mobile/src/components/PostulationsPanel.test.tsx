@@ -62,6 +62,15 @@ describe('reglas de negociación', () => {
       });
       expect(transporterCurrentOffer(p, LISTED)).toBe(120000);
     });
+
+    // Una carga a convenir no publica precio: no hay número que heredar.
+    it('no inventa un número cuando la carga es a convenir y no hubo propuesta', () => {
+      expect(transporterCurrentOffer(make(), null)).toBeNull();
+    });
+
+    it('usa el precio propuesto aunque la carga sea a convenir', () => {
+      expect(transporterCurrentOffer(make({ proposedPrice: 120000 }), null)).toBe(120000);
+    });
   });
 
   describe('canAccept', () => {

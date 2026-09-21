@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { postulationsApi } from '../services/api';
-import { formatCurrency, getStatusLabel } from '../lib/labels';
+import { formatCurrency, formatPrice, getStatusLabel } from '../lib/labels';
 import { Postulation } from '../types';
 
 /**
@@ -17,12 +17,20 @@ import { Postulation } from '../types';
  * frontend/src/components/postulations/PostulationsPanel.tsx: su contra-oferta
  * si fue el último en ofertar, sino el precio que propuso; si no propuso nada,
  * está aceptando el precio listado.
+ *
+ * Devuelve `null` cuando no hay ningún número del cual hablar: en una carga a
+ * convenir no hay precio listado que heredar. El backend exige propuesta para
+ * postularse a esas cargas, así que en la práctica no debería pasar, pero el
+ * tipo no lo garantiza y no queremos mostrar un "$ NaN".
  */
-export function transporterCurrentOffer(p: Postulation, listedPrice: number): number {
+export function transporterCurrentOffer(
+  p: Postulation,
+  listedPrice?: number | null,
+): number | null {
   if (p.status === 'NEGOTIATING' && p.lastOfferBy === 'TRANSPORTER' && p.counterOfferPrice != null) {
     return p.counterOfferPrice;
   }
-  return p.proposedPrice ?? listedPrice;
+  return p.proposedPrice ?? listedPrice ?? null;
 }
 
 /**
@@ -51,7 +59,8 @@ export function canCounterOffer(p: Postulation): boolean {
 
 interface Props {
   loadId: string;
-  listedPrice: number;
+  /** Ausente en las cargas a convenir, que no publican precio. */
+  listedPrice?: number | null;
   /** Sólo se puede operar mientras la carga siga publicada. */
   isOpen: boolean;
   onChanged?: () => void;
@@ -142,16 +151,21 @@ export default function PostulationsPanel({ loadId, listedPrice, isOpen, onChang
     );
   }
 
-  const average =
-    postulations.reduce((sum, p) => sum + transporterCurrentOffer(p, listedPrice), 0) /
-    postulations.length;
+  // Sólo promedia las ofertas con número: una postulación sin precio en una
+  // carga a convenir no aporta nada, y sumarla como 0 hundiría el promedio.
+  const offers = postulations
+    .map((p) => transporterCurrentOffer(p, listedPrice))
+    .filter((offer): offer is number => offer != null);
+  const average = offers.length > 0 ? offers.reduce((sum, o) => sum + o, 0) / offers.length : null;
 
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>
         Postulaciones ({postulations.length})
       </Text>
-      <Text style={styles.helper}>Oferta promedio: {formatCurrency(average)}</Text>
+      {average != null && (
+        <Text style={styles.helper}>Oferta promedio: {formatCurrency(average)}</Text>
+      )}
 
       {postulations.map((p) => {
         const offer = transporterCurrentOffer(p, listedPrice);
@@ -170,7 +184,7 @@ export default function PostulationsPanel({ loadId, listedPrice, isOpen, onChang
             {p.message ? <Text style={styles.message}>{p.message}</Text> : null}
 
             <Text style={styles.offer}>
-              Pide {formatCurrency(offer)}
+              Pide {formatPrice(offer)}
               {p.proposedPrice == null && p.counterOfferPrice == null
                 ? ' (acepta el precio publicado)'
                 : ''}
@@ -188,11 +202,11 @@ export default function PostulationsPanel({ loadId, listedPrice, isOpen, onChang
                   style={styles.input}
                   value={counterPrice}
                   onChangeText={setCounterPrice}
-                  placeholder={`Menor a ${offer}`}
+                  placeholder={offer != null ? `Menor a ${offer}` : 'Precio'}
                   keyboardType="numeric"
                 />
                 <Text style={styles.helper}>
-                  Tiene que ser menor a lo que pide. Si estás de acuerdo con {formatCurrency(offer)},
+                  Tiene que ser menor a lo que pide. Si estás de acuerdo con {formatPrice(offer)},
                   aceptá la postulación.
                 </Text>
                 <View style={styles.row}>
