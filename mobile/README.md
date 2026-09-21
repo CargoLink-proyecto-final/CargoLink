@@ -9,6 +9,8 @@ frontend web: mismo API NestJS, mismos roles (`CARGO_GENERATOR` / `TRANSPORTER`)
 |---|---|---|
 | Node | `>= 22.13` | RN 0.86 lo exige. Con 22.11 npm tira `EBADENGINE`. |
 | Xcode | 16+ | Sólo para el simulador de iOS / build nativo. |
+| JDK | 17 | Sólo para Android. Gradle 9 con JDK 11 ni arranca. |
+| Android SDK | API 36 | Sólo para Android. No hace falta Android Studio — ver § "Correr en un Android físico". |
 | Watchman | opcional | Mejora el file watching de Metro en macOS. |
 
 ## Arrancar
@@ -16,10 +18,14 @@ frontend web: mismo API NestJS, mismos roles (`CARGO_GENERATOR` / `TRANSPORTER`)
 ```bash
 cd mobile
 npm install
-npm start          # Metro + QR para Expo Go
-npm run ios        # abre el simulador de iOS (requiere Xcode)
-npm run android    # abre el emulador de Android
+npm start          # Metro
+npm run ios        # build nativo + simulador de iOS (requiere Xcode)
+npm run android    # build nativo + emulador o teléfono conectado
 ```
+
+`npm start` solo no alcanza para levantar la app: el QR apunta a Expo Go, que no
+soporta este proyecto (ver § "Correr en un iPhone físico"). Hay que buildear
+nativo al menos una vez por dispositivo; después Metro recarga el JS solo.
 
 El backend tiene que estar corriendo aparte (`docker compose up -d` en la raíz).
 
@@ -38,7 +44,7 @@ No hay que hardcodear ninguna IP. `src/config/env.ts` resuelve la URL en este or
 ## Comandos
 
 ```bash
-npm test           # jest (20 suites, 129 tests)
+npm test           # jest (25 suites, 283 tests)
 npm run typecheck  # tsc --noEmit
 npm run doctor     # expo-doctor: chequeos de config y peer deps nativas
 npm run prebuild   # genera ios/ y android/ (ambos gitignoreados)
@@ -76,23 +82,23 @@ Para cambiar el logo, editar `drawTruck()` y volver a correrlo.
 Las **locales** funcionan hoy sin configuración: las emite el propio dispositivo
 cuando llega un mensaje por el socket.
 
-Las **remotas** (app cerrada) necesitan dos cosas que todavía no existen:
+Las **remotas** (app cerrada) ya están implementadas de punta a punta — el hook
+registra el token en `PUT /users/me/push-token` y el backend emite contra la
+Expo Push API cuando llega un mensaje. Sólo emite si el destinatario **no** tiene
+el socket de chat conectado, para no duplicar la notificación local.
 
-1. **Un projectId de EAS.** `eas init` no puede escribir en un `app.config.js`
-   dinámico, así que el id entra por env:
+Falta una sola cosa para que funcionen: **el projectId de EAS** en el entorno.
+`eas init` no puede escribir en un `app.config.js` dinámico, así que el id entra
+por env. El proyecto ya está creado (`@cargolink-2026/cargolink`) y los builds de
+la nube lo toman del `env` de cada perfil de `eas.json` — ver § "Builds en la
+nube y TestFlight (EAS)". Para dev local, va en el `.env`:
 
-   ```bash
-   npx eas-cli login
-   npx eas-cli init          # imprime el projectId
-   echo "EAS_PROJECT_ID=<el-id>" >> .env
-   ```
+```bash
+echo "EAS_PROJECT_ID=1069c26e-a3bd-4919-9461-01599fce42e9" >> .env
+```
 
-   Sin esa variable `registerForPushNotifications()` devuelve `null` y loguea un
-   warning, en vez de romper.
-
-2. **Soporte en el backend.** Hoy no hay dónde guardar el token (no existe
-   columna en `User`) ni desde dónde emitir pushes. El hook ya pide el token y lo
-   loguea; falta el endpoint que lo persista y el sender contra la Expo Push API.
+Sin esa variable `registerForPushNotifications()` devuelve `null`, no se registra
+ningún token y la app sigue andando con las notificaciones locales.
 
 ## Correr en un iPhone físico
 
@@ -112,19 +118,122 @@ Requiere un Apple ID cargado en Xcode (Settings → Accounts). Con cuenta gratui
 prebuild deja `aps-environment` en `ios/CargoLink/CargoLink.entitlements` porque
 lo agrega el plugin `expo-notifications`. Con eso puesto, Xcode falla con
 "Personal development teams … do not support the Push Notifications capability".
-Hay que vaciar el `<dict>` de ese archivo. No se pierde nada verificable: las
-push remotas ya están bloqueadas por lo de arriba. **Ojo: `ios/` está
-gitignoreado y `expo prebuild` regenera el entitlements — hay que repetirlo.**
+Hay que vaciar el `<dict>` de ese archivo. El costo es real desde que las push
+remotas están implementadas: un build firmado con cuenta gratuita no las va a
+recibir, sólo las locales. Para probarlas hace falta una cuenta de Apple
+Developer paga. **Ojo: `ios/` está gitignoreado y `expo prebuild` regenera el
+entitlements — hay que repetirlo.**
 
 La primera instalación también pide activar **Settings → Privacy & Security →
 Developer Mode** en el iPhone. Esa opción **no aparece** hasta que la Mac intenta
 instalar una app de desarrollo por primera vez.
 
+## Correr en un Android físico
+
+Igual que en iOS, **Expo Go no sirve** (SDK 57 contra un cliente que llega a 54).
+El camino es el build nativo por cable. La buena noticia es que en Android no hay
+firma de por medio: no hace falta cuenta de desarrollador, el certificado de
+debug lo genera Gradle solo y no vence.
+
+### Toolchain (una sola vez)
+
+**No hace falta instalar Android Studio.** Con las command-line tools alcanza y
+son ~1 GB en vez de ~12 GB:
+
+```bash
+brew install openjdk@17 android-commandlinetools android-platform-tools
+
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+
+yes | sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+```
+
+Las dos `export` conviene dejarlas en el `~/.zshrc`: `openjdk@17` es **keg-only**
+(brew no lo linkea para no pisar otros JDK), así que sin `JAVA_HOME` Gradle toma
+el `java` del PATH — si ese es el 11, el build muere en el arranque.
+
+### Preparar el teléfono
+
+1. **Settings → About phone** → tocar 7 veces **Build number** para habilitar las
+   opciones de desarrollador.
+2. **Settings → System → Developer options** → activar **USB debugging**.
+3. Conectar por cable y aceptar el diálogo *"Allow USB debugging?"* que aparece
+   en el teléfono. Confirmar que se ve:
+
+```bash
+adb devices        # tiene que listar el serial con estado `device`, no `unauthorized`
+```
+
+### Buildear
+
+```bash
+npx expo run:android --device
+```
+
+La primera corrida se toma varios minutos: baja Gradle 9.3 y las dependencias
+nativas (~1 GB en `~/.gradle`). Las siguientes son incrementales.
+
+### Cómo llega la app al backend
+
+Igual que en iOS: `src/config/env.ts` deduce la IP de LAN de la máquina que corre
+Metro, así que **teléfono y Mac tienen que estar en la misma red Wi-Fi**.
+
+Si no lo están (o la red aísla clientes, típico de Wi-Fi de facultad), el cable
+alcanza: `adb reverse` mapea un puerto de la Mac dentro del teléfono.
+
+```bash
+adb reverse tcp:3001 tcp:3001      # backend
+EXPO_PUBLIC_API_URL=http://localhost:3001/api npx expo run:android --device
+```
+
+Hay que repetir el `adb reverse` cada vez que se desconecta el cable.
+
+**Sobre `http://`**: Android bloquea tráfico en claro desde API 28, pero el
+`AndroidManifest.xml` del *debug* que genera el prebuild trae
+`usesCleartextTraffic="true"`, así que el backend local funciona sin tocar nada.
+Un build de **release** sí lo bloquea — en prod no importa porque Cloud Run es
+https.
+
+### Notificaciones
+
+Android 13+ pide `POST_NOTIFICATIONS` en runtime, y el plugin de
+`expo-notifications` **no** declara ese permiso solo: está agregado a mano en
+`android.permissions` de `app.config.js`. Si se saca, `requestPermissionsAsync()`
+devuelve denegado sin mostrar diálogo y no se ve ninguna notificación.
+
+Las push remotas siguen dependiendo de `EAS_PROJECT_ID` (ver § "Notificaciones
+push"), pero acá no hay límite de cuenta gratuita como en iOS: con el projectId
+puesto, un build de debug en Android las recibe.
+
 ## Mapas
 
-`TrackingScreen` usa `PROVIDER_DEFAULT`: Apple Maps en iOS (sin credenciales) y
-Google Maps en Android, que **sí** necesita `GOOGLE_MAPS_API_KEY_ANDROID` en el
-`.env` — sin esa key el mapa se ve en blanco.
+`TrackingScreen` dibuja el mapa con **MapLibre** (`@maplibre/maplibre-react-native`)
+sobre tiles de **OpenStreetMap** servidos por OpenFreeMap. **No hace falta
+ninguna API key**, ni en iOS ni en Android.
+
+Antes esto era `react-native-maps` con `PROVIDER_DEFAULT`, que resolvía iOS con
+Apple Maps pero en Android exigía una key de Google Maps facturable: sin ella el
+mapa quedaba gris. Poner tiles de OSM encima tampoco alcanzaba, porque el mapa
+base lo renderiza el SDK de Google y es lo que falla sin key. Cambiar de motor
+era la única salida real, y de paso alinea al mobile con el resto del stack: el
+web ya usa Leaflet + OSM y el ruteo va contra OSRM (`src/services/routing.ts`).
+
+Para usar otro proveedor de tiles (MapTiler, Stadia, un style propio) alcanza con
+`EXPO_PUBLIC_MAP_STYLE_URL` en el `.env`; no hay que tocar código.
+
+Diferencias de API respecto de `react-native-maps`, por si tocás la pantalla:
+
+| react-native-maps | MapLibre |
+|---|---|
+| `<MapView>` | `<Map mapStyle={...}>` |
+| `initialRegion` + `mapRef.fitToCoordinates(coords)` | `<Camera>` + `cameraRef.fitBounds([w, s, e, n])` (ver `src/lib/bounds.ts`) |
+| `<Marker pinColor="red">` | `<Marker lngLat={[lng, lat]}>` con una vista propia adentro |
+| `<Polyline coordinates>` | `<GeoJSONSource>` + `<Layer type="line">` |
+
+Ojo con el orden de las coordenadas: MapLibre usa `[longitud, latitud]` (como
+GeoJSON), al revés de `{ latitude, longitude }` que usa el resto del código.
 
 ## Builds en la nube y TestFlight (EAS)
 
@@ -207,12 +316,11 @@ cifrado en cada subida.
 
 ## Pendientes conocidos
 
-- **Push remotas incompletas.** Falta el `EAS_PROJECT_ID` y, sobre todo, el
-  soporte del backend (persistir el token + emitir). Ver § "Notificaciones push".
-- **El publicador no puede resolver postulaciones.** El transportista se postula,
-  contra-oferta y se retira desde `LoadDetailScreen`, pero del otro lado
-  `postulationsApi.accept` y `counterOffer` no los llama ninguna pantalla: aceptar
-  una postulación sólo se puede desde el web.
+- **Push remotas sin `EAS_PROJECT_ID`.** El código está completo de punta a
+  punta; falta correr `eas init`. Ver § "Notificaciones push".
+- **Un solo dispositivo por cuenta.** El token de Expo se guarda en una columna
+  de `User`: el último teléfono que se registra desplaza al anterior. Varios
+  dispositivos a la vez necesitarían una tabla aparte.
 - **Calificación unidireccional.** Sólo el publicador califica al transportista;
   el backend lo restringe a propósito (`@Roles('CARGO_GENERATOR')` + chequeo de
   ownership en `ratings.service.ts`). El sentido inverso requiere cambiar el
@@ -223,3 +331,11 @@ cifrado en cada subida.
   requiere `await` en los archivos de test de pantallas.
 - **Tipos de carga duplicados.** `src/constants/cargo.ts` es copia manual de la
   lista del web: si se agrega un tipo allá, hay que agregarlo acá.
+- **Sin marcadores con etiqueta en el mapa.** Los pines de MapLibre son vistas
+  propias (`MapPin` en `TrackingScreen`), y la migración no reprodujo los
+  callouts con título/dirección que traía `react-native-maps`. La info del viaje
+  está en la lista de abajo; si se quiere el popup hay que armarlo con
+  `<Callout>` o una `ViewAnnotation`.
+- **Tiles de OpenFreeMap sin contrato.** El style por defecto es un servicio
+  gratuito y sin cuota, pero tampoco tiene SLA. Si algún día se cae o mete
+  límites, se apunta `EXPO_PUBLIC_MAP_STYLE_URL` a otro proveedor y listo.

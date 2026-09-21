@@ -18,6 +18,7 @@ import {
   getSolicitudStageLabel,
   getStatusLabel,
 } from '../../lib/labels';
+import PostulationsPanel from '../../components/PostulationsPanel';
 import { Load, Postulation } from '../../types';
 
 /**
@@ -307,6 +308,16 @@ export default function LoadDetailScreen({ route, navigation }: any) {
         )}
       </View>
 
+      {/* Sólo el dueño ve las postulaciones: el endpoint es shipper-owner/ADMIN. */}
+      {user?.role === 'CARGO_GENERATOR' && load.shipperId === user.id && (
+        <PostulationsPanel
+          loadId={id}
+          listedPrice={load.price}
+          isOpen={load.status === 'PUBLISHED'}
+          onChanged={fetchLoad}
+        />
+      )}
+
       <View style={styles.actions}>
         {/* El transportista no toma la carga directo: se postula y el publicador
             decide. `POST /trips/accept/:loadId` quedó como override de ADMIN. */}
@@ -375,7 +386,7 @@ export default function LoadDetailScreen({ route, navigation }: any) {
             )}
 
             {myPostulation.counterOfferPrice != null &&
-              myPostulation.lastOfferBy === 'CARGO_GENERATOR' && (
+              myPostulation.lastOfferBy === 'SHIPPER' && (
                 <>
                   <Text style={styles.counterOffer}>
                     El publicador propuso {formatCurrency(myPostulation.counterOfferPrice)}

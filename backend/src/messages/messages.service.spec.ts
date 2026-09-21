@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 
 describe('MessagesService', () => {
   let service: MessagesService;
@@ -15,6 +16,7 @@ describe('MessagesService', () => {
       updateMany: jest.Mock;
     };
   };
+  let push: { notify: jest.Mock };
 
   const carrierId = 'carrier-1';
   const shipperId = 'shipper-1';
@@ -38,11 +40,13 @@ describe('MessagesService', () => {
         updateMany: jest.fn(),
       },
     };
+    push = { notify: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessagesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: PushService, useValue: push },
       ],
     }).compile();
 
@@ -102,6 +106,53 @@ describe('MessagesService', () => {
         ForbiddenException,
       );
       expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('push de mensajes nuevos', () => {
+    it('notifies the receiver, not the sender', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      prisma.message.create.mockResolvedValue({
+        id: 'm1',
+        content: 'Llego en 20',
+        sender: { id: carrierId, firstName: 'Carl', lastName: 'Driver' },
+      });
+
+      await service.create(carrierId, tripId, 'Llego en 20');
+
+      expect(push.notify).toHaveBeenCalledWith(shipperId, {
+        title: 'Carl Driver',
+        body: 'Llego en 20',
+        data: { tripId },
+      });
+    });
+
+    it('falls back to a generic title when the sender is missing', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      prisma.message.create.mockResolvedValue({ id: 'm1', content: 'Hola' });
+
+      await service.create(carrierId, tripId, 'Hola');
+
+      expect(push.notify).toHaveBeenCalledWith(
+        shipperId,
+        expect.objectContaining({ title: 'Nuevo mensaje' }),
+      );
+    });
+
+    it('still returns the message when notifying blows up', async () => {
+      // El mensaje ya está persistido: avisar es best-effort y no puede tumbar
+      // el envío.
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      prisma.message.create.mockResolvedValue({
+        id: 'm1',
+        content: 'Hola',
+        sender: { id: carrierId, firstName: 'Carl', lastName: 'Driver' },
+      });
+      push.notify.mockRejectedValue(new Error('expo caido'));
+
+      await expect(service.create(carrierId, tripId, 'Hola')).resolves.toMatchObject({
+        id: 'm1',
+      });
     });
   });
 

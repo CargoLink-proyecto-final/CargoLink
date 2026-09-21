@@ -1,6 +1,6 @@
 /**
  * Fetches a driving route from OSRM (Open Source Routing Machine).
- * Returns an array of { latitude, longitude } for react-native-maps Polyline.
+ * Returns an array of { latitude, longitude } for the MapLibre route line.
  * Falls back to a straight line if the API is unavailable.
  */
 export async function fetchRoute(

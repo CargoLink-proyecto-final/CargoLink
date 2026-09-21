@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { PushService } from '../push/push.service';
 
 describe('UsersController', () => {
   let controller: UsersController;
@@ -16,6 +17,7 @@ describe('UsersController', () => {
     changeRole: jest.Mock;
     getRoleHistory: jest.Mock;
   };
+  let pushService: { registerToken: jest.Mock; clearToken: jest.Mock };
 
   const baseUser = {
     id: 'user-1',
@@ -36,10 +38,17 @@ describe('UsersController', () => {
       changeRole: jest.fn(),
       getRoleHistory: jest.fn(),
     };
+    pushService = {
+      registerToken: jest.fn().mockResolvedValue(undefined),
+      clearToken: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
-      providers: [{ provide: UsersService, useValue: usersService }],
+      providers: [
+        { provide: UsersService, useValue: usersService },
+        { provide: PushService, useValue: pushService },
+      ],
     }).compile();
 
     controller = module.get<UsersController>(UsersController);
@@ -137,6 +146,35 @@ describe('UsersController', () => {
       await expect(
         controller.findOne('admin-1', admin),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('push token', () => {
+    it('registers a well-formed Expo token', async () => {
+      const result = await controller.registerPushToken('user-1', {
+        token: 'ExponentPushToken[abc]',
+      });
+
+      expect(pushService.registerToken).toHaveBeenCalledWith(
+        'user-1',
+        'ExponentPushToken[abc]',
+      );
+      expect(result).toEqual({ registered: true });
+    });
+
+    it('rejects anything that is not an Expo token', async () => {
+      // Guardar basura haría que cada mensaje intente un envío condenado.
+      await expect(
+        controller.registerPushToken('user-1', { token: 'not-a-token' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(pushService.registerToken).not.toHaveBeenCalled();
+    });
+
+    it('clears the token on request', async () => {
+      const result = await controller.clearPushToken('user-1');
+
+      expect(pushService.clearToken).toHaveBeenCalledWith('user-1');
+      expect(result).toEqual({ registered: false });
     });
   });
 

@@ -1,5 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from './auth';
+import { usersApi } from '../services/api';
+import { disconnectChatSocket } from '../services/socket';
+
+jest.mock('../services/api', () => ({
+  usersApi: { clearPushToken: jest.fn() },
+}));
+
+jest.mock('../services/socket', () => ({
+  disconnectChatSocket: jest.fn(),
+}));
 
 const user = {
   id: 'u1',
@@ -11,6 +21,8 @@ const user = {
 
 describe('mobile useAuthStore', () => {
   beforeEach(async () => {
+    jest.clearAllMocks();
+    (usersApi.clearPushToken as jest.Mock).mockResolvedValue({ data: {} });
     await AsyncStorage.clear();
     useAuthStore.setState({
       user: null,
@@ -89,6 +101,30 @@ describe('mobile useAuthStore', () => {
       const s = useAuthStore.getState();
       expect(s.isLoading).toBe(false);
       expect(s.isAuthenticated).toBe(false);
+    });
+  });
+
+  describe('logout', () => {
+    it('unregisters the device before dropping the token', async () => {
+      await useAuthStore.getState().login(user, 'jwt');
+
+      await useAuthStore.getState().logout();
+
+      // Va antes de borrar el JWT porque la request lo necesita; si no, el
+      // teléfono seguiría recibiendo las notificaciones del que se fue.
+      expect(usersApi.clearPushToken).toHaveBeenCalled();
+      expect(await AsyncStorage.getItem('token')).toBeNull();
+      expect(disconnectChatSocket).toHaveBeenCalled();
+    });
+
+    it('logs out anyway when unregistering fails', async () => {
+      (usersApi.clearPushToken as jest.Mock).mockRejectedValue(new Error('offline'));
+      await useAuthStore.getState().login(user, 'jwt');
+
+      await useAuthStore.getState().logout();
+
+      expect(useAuthStore.getState().isAuthenticated).toBe(false);
+      expect(await AsyncStorage.getItem('token')).toBeNull();
     });
   });
 });

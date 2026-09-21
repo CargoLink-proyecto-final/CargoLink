@@ -6,6 +6,7 @@ import {
   registerForPushNotifications,
   scheduleLocalNotification,
 } from '../services/notifications';
+import { usersApi } from '../services/api';
 
 const mockSocket = { on: jest.fn(), off: jest.fn(), connected: true };
 jest.mock('../services/socket', () => ({
@@ -15,6 +16,10 @@ jest.mock('../services/socket', () => ({
 jest.mock('../services/notifications', () => ({
   registerForPushNotifications: jest.fn(),
   scheduleLocalNotification: jest.fn(),
+}));
+
+jest.mock('../services/api', () => ({
+  usersApi: { registerPushToken: jest.fn(), clearPushToken: jest.fn() },
 }));
 
 const listener = () =>
@@ -36,6 +41,7 @@ describe('useMessageNotifications', () => {
     jest.clearAllMocks();
     setActiveTripId(null);
     (registerForPushNotifications as jest.Mock).mockResolvedValue(null);
+    (usersApi.registerPushToken as jest.Mock).mockResolvedValue({ data: {} });
   });
 
   it('does nothing without a logged-in user', () => {
@@ -50,6 +56,36 @@ describe('useMessageNotifications', () => {
 
     await waitFor(() => expect(registerForPushNotifications).toHaveBeenCalledTimes(1));
     expect(getChatSocket).toHaveBeenCalledWith('me');
+  });
+
+  it('sends the push token to the backend once it has one', async () => {
+    (registerForPushNotifications as jest.Mock).mockResolvedValue('ExponentPushToken[abc]');
+
+    renderHook(() => useMessageNotifications('me'));
+
+    await waitFor(() =>
+      expect(usersApi.registerPushToken).toHaveBeenCalledWith('ExponentPushToken[abc]'),
+    );
+  });
+
+  it('does not call the backend when there is no token', async () => {
+    // Sin projectId de EAS o en el simulador devuelve null: no es un error.
+    renderHook(() => useMessageNotifications('me'));
+
+    await waitFor(() => expect(registerForPushNotifications).toHaveBeenCalled());
+    expect(usersApi.registerPushToken).not.toHaveBeenCalled();
+  });
+
+  it('keeps working when registering the token fails', async () => {
+    (registerForPushNotifications as jest.Mock).mockResolvedValue('ExponentPushToken[abc]');
+    (usersApi.registerPushToken as jest.Mock).mockRejectedValue(new Error('offline'));
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    renderHook(() => useMessageNotifications('me'));
+
+    // El listener local se engancha igual: las notificaciones del socket no
+    // dependen del registro remoto.
+    await waitFor(() => expect(mockSocket.on).toHaveBeenCalledWith('newMessage', expect.any(Function)));
   });
 
   it('notifies an incoming message from another conversation', () => {
