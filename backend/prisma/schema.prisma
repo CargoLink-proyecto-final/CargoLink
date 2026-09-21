@@ -108,6 +108,9 @@ model User {
   roleChangesMade     RoleChangeLog[] @relation("RoleChangeAuthor")
 
   @@index([companyId])
+  // Cada registro de dispositivo desasocia el token de su dueño anterior con un
+  // `where: { expoPushToken: token }`. Sin índice eso es un seq scan sobre users.
+  @@index([expoPushToken])
   @@map("users")
 }
 
