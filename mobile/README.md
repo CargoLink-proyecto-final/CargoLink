@@ -44,7 +44,7 @@ No hay que hardcodear ninguna IP. `src/config/env.ts` resuelve la URL en este or
 ## Comandos
 
 ```bash
-npm test           # jest (25 suites, 280 tests)
+npm test           # jest (25 suites, 283 tests)
 npm run typecheck  # tsc --noEmit
 npm run doctor     # expo-doctor: chequeos de config y peer deps nativas
 npm run prebuild   # genera ios/ y android/ (ambos gitignoreados)
