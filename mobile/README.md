@@ -144,16 +144,19 @@ configurable.
 
 ### Antes del primer build
 
+El proyecto ya está creado: **`@cargolink-2026/cargolink`**, declarado en
+`app.config.js` vía `owner` y en el `env` de cada perfil vía `EAS_PROJECT_ID`.
+Sólo hace falta loguearse con una cuenta que pertenezca a esa organización:
+
 ```bash
 cd mobile
 npx eas-cli login
-npx eas-cli init          # crea el proyecto en Expo e imprime el projectId
 ```
 
 1. **`EAS_PROJECT_ID` va en `eas.json`, no en el `.env`.** El `.env` está
    gitignoreado y EAS sólo sube lo que está commiteado, así que en los servidores
    de build esa variable no existiría y `getExpoPushTokenAsync()` se quedaría sin
-   id. Después de `eas init`, agregá el id al `env` de cada perfil.
+   id. En `.env` se setea sólo para probar push en dev local.
 2. **El bundle identifier tiene que ser tuyo.** `com.cargolink.app` (en
    `app.config.js`) está registrado por otra cuenta de Apple; con la cuenta paga
    hay que elegir uno libre y registrarlo en App Store Connect.

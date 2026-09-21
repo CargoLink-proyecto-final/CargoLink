@@ -14,7 +14,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://dev.cargolink.com.ar/api"
+        "EXPO_PUBLIC_API_URL": "https://dev.cargolink.com.ar/api",
+        "EAS_PROJECT_ID": "1069c26e-a3bd-4919-9461-01599fce42e9"
       },
       "ios": {
         "resourceClass": "medium"
@@ -27,7 +28,8 @@
       "distribution": "store",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://plataforma.cargolink.com.ar/api"
+        "EXPO_PUBLIC_API_URL": "https://plataforma.cargolink.com.ar/api",
+        "EAS_PROJECT_ID": "1069c26e-a3bd-4919-9461-01599fce42e9"
       },
       "ios": {
         "resourceClass": "medium"
