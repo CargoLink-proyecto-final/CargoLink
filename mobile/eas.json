@@ -1,0 +1,43 @@
+{
+  "cli": {
+    "version": ">= 24.7.0",
+    "appVersionSource": "remote",
+    "requireCommit": true
+  },
+  "build": {
+    "simulator": {
+      "extends": "preview",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://dev.cargolink.com.ar/api"
+      },
+      "ios": {
+        "resourceClass": "medium"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://plataforma.cargolink.com.ar/api"
+      },
+      "ios": {
+        "resourceClass": "medium"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
