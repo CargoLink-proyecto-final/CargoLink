@@ -31,17 +31,19 @@ Claves a entender:
 | **dev** compartido | Recomendado salvo cambio 🟢 trivial (add column nullable, índice nuevo). |
 | **dev** local / efímero | No bloqueante — `npx prisma migrate reset` regenera todo + seed. |
 
-**Importante — gap conocido del setup:** en prod, `backend/docker-entrypoint.sh` corre **`npx prisma migrate deploy` automáticamente al startup**, antes de levantar el server. Es decir, **todo lo que esté en `prisma/migrations/` se aplica sin intervención manual** en el primer arranque post-deploy, y **no hay backup automático**. El mantenedor humano tiene que tomar el backup manualmente antes de mergear `develop → main` cuando hay migraciones 🟡/🔴 (ver `docs/deployment.md`).
+**Importante — cómo se aplica en prod:** `backend/docker-entrypoint.sh` corre **`npx prisma migrate deploy` automáticamente al startup**, antes de levantar el server. Es decir, **todo lo que esté en `prisma/migrations/` se aplica sin intervención manual** en el primer arranque post-deploy. En el VPS, el pipeline (`deploy/vps/deploy.sh`) corre `~/backups/backup.sh` **antes** de levantar la versión nueva de prod y aborta si el backup falla. Ese backup cubre la regla dura; para 🔴 igual hay que probar el restore antes (ver `docs/deployment.md`).
 
-Comandos de backup (de `docs/deployment.md`):
+Comandos de backup y restore en prod (VPS, ver `docs/deployment.md` § Backups / Restore):
 
 ```bash
-# dump (formato custom, recomendado)
-docker compose exec postgres pg_dump -U postgres -Fc cargolink > backup-$(date +%F-%H%M).dump
+# dump manual puntual de prod (formato custom, recomendado)
+docker exec cargolink-postgres-1 pg_dump -U postgres -Fc cargolink > ~/backups/manual-$(date +%F-%H%M).dump
 
-# restore
-docker compose exec -T postgres pg_restore -U postgres -d cargolink --clean --if-exists < backup.dump
+# restore (con el backend detenido)
+docker exec -i cargolink-postgres-1 pg_restore -U postgres -d cargolink --clean --if-exists < ~/backups/<dump>.dump
 ```
+
+En dev local con el compose de la raíz: `docker compose exec postgres pg_dump ...` / `docker compose exec -T postgres pg_restore ...`.
 
 Clasificación de riesgo:
 - 🟢 **bajo**: add column nullable, nuevo modelo/tabla, nuevo índice, agregar valor a un enum.
@@ -135,7 +137,7 @@ Archivo: `backend/prisma/seed.ts`. Es **idempotente**:
 - Users vía `prisma.user.upsert()` por email (no duplica).
 - Load demo vía `findFirst` por `(shipperId, title)` + `create` si no existe.
 
-Crea 3 cuentas (`admin@cargolink.com` ADMIN, `shipper@example.com` CARGO_GENERATOR, `carrier@example.com` TRANSPORTER; password `password123` hasheado bcrypt) y 1 load demo.
+Crea 12 cuentas demo (1 ADMIN, 1 CARGO_GENERATOR, 1 COMPANY_ADMIN y 9 TRANSPORTER — incluidos `profe1-3` y `transportista1-2`), la empresa "Flota Andina" con 2 choferes + 1 solicitud `PENDING`, y 1 load demo. Password `password123` hasheada con bcrypt, salvo la del admin, que sale de `ADMIN_PASSWORD` (si está seteada, se reescribe en cada corrida; si no, el fallback se aplica solo al crear).
 
 ```bash
 cd backend && npm run prisma:seed         # ts-node prisma/seed.ts

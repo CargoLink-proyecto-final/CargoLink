@@ -13,6 +13,7 @@ import { loadsApi, tripsApi, postulationsApi } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import {
   formatCurrency,
+  formatPrice,
   getSolicitudStageColor,
   getSolicitudStageLabel,
   getStatusLabel,
@@ -82,6 +83,16 @@ export default function LoadDetailScreen({ route, navigation }: any) {
   }, [navigation, fetchLoad]);
 
   const handlePostulate = async () => {
+    // Carga "a convenir": sin precio publicado no hay nada que aceptar en
+    // silencio, así que el backend exige una propuesta. Lo cortamos acá para no
+    // gastar el request.
+    if (load?.price == null && optionalNumber(proposedPrice) == null) {
+      Alert.alert(
+        'Falta el precio',
+        'Esta carga no tiene precio publicado: proponé el tuyo para postularte.',
+      );
+      return;
+    }
     setActionLoading(true);
     try {
       // El backend rechaza un precio menor o igual al listado: vacío significa
@@ -258,14 +269,8 @@ export default function LoadDetailScreen({ route, navigation }: any) {
           </View>
           <View style={styles.gridItem}>
             <Text style={styles.gridLabel}>Precio</Text>
-            <Text style={[styles.gridValue, { color: '#2563eb' }]}>{formatCurrency(load.price)}</Text>
+            <Text style={[styles.gridValue, { color: '#2563eb' }]}>{formatPrice(load.price)}</Text>
           </View>
-          {load.maxBudget != null && (
-            <View style={styles.gridItem}>
-              <Text style={styles.gridLabel}>Presupuesto máx.</Text>
-              <Text style={styles.gridValue}>{formatCurrency(load.maxBudget)}</Text>
-            </View>
-          )}
           {load.volume != null && (
             <View style={styles.gridItem}>
               <Text style={styles.gridLabel}>Volumen</Text>
@@ -337,16 +342,20 @@ export default function LoadDetailScreen({ route, navigation }: any) {
               placeholder="Ej., tengo camión refrigerado disponible"
               multiline
             />
-            <Text style={styles.gridLabel}>Precio propuesto (opcional)</Text>
+            <Text style={styles.gridLabel}>
+              {load.price == null ? 'Precio propuesto' : 'Precio propuesto (opcional)'}
+            </Text>
             <TextInput
               style={styles.input}
               value={proposedPrice}
               onChangeText={setProposedPrice}
-              placeholder={`Mayor a ${load.price}`}
+              placeholder={load.price == null ? 'Tu precio' : `Mayor a ${load.price}`}
               keyboardType="numeric"
             />
             <Text style={styles.helper}>
-              Dejalo vacío si aceptás el precio publicado de {formatCurrency(load.price)}.
+              {load.price == null
+                ? 'Esta carga sale a convenir: tu propuesta define el valor del viaje.'
+                : `Dejalo vacío si aceptás el precio publicado de ${formatCurrency(load.price)}.`}
             </Text>
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: '#22c55e', marginTop: 12 }]}

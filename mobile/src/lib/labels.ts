@@ -8,6 +8,16 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/**
+ * El precio de una carga es opcional: si el publicador no lo fija, sale
+ * "a convenir" y lo define la postulación del transportista.
+ */
+export const PRICE_TO_AGREE_LABEL = 'A convenir';
+
+export function formatPrice(amount?: number | null): string {
+  return amount == null ? PRICE_TO_AGREE_LABEL : formatCurrency(amount);
+}
+
 export function formatDate(date: string): string {
   return new Date(date).toLocaleDateString('es-AR', {
     year: 'numeric',

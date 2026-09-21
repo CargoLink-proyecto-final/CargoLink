@@ -10,7 +10,7 @@ import { loadsApi, postulationsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useRoute } from '@/lib/useRoute';
 import Link from 'next/link';
-import { formatCurrency, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
+import { formatCurrency, formatPrice, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import {
   MapPin,
   Package,
@@ -20,7 +20,6 @@ import {
   MessageSquare,
   Hand,
   Star,
-  Users,
 } from 'lucide-react';
 import PostulationsPanel from '@/components/postulations/PostulationsPanel';
 import PostulateModal from '@/components/postulations/PostulateModal';
@@ -340,17 +339,6 @@ export default function LoadDetailPage() {
           </div>
         )}
 
-        {isTransporter && (load.pendingPostulationsCount ?? 0) > 0 && load.status === 'PUBLISHED' && (
-          <div className="card p-4 flex items-center gap-2 bg-info-50 border-info-200 text-info-800">
-            <Users size={18} />
-            <span className="font-medium">
-              {load.pendingPostulationsCount === 1
-                ? 'Hay 1 transportista interesado en esta carga.'
-                : `Hay ${load.pendingPostulationsCount} transportistas interesados en esta carga.`}
-            </span>
-          </div>
-        )}
-
         {isTransporter && myPostulation?.status === 'ACCEPTED' && load.trip && load.trip.status === 'ACCEPTED' && (
           <div className="card p-4 flex items-center justify-between bg-success-50 border-success-200">
             <div className="flex items-center gap-2 text-success-800">
@@ -439,8 +427,7 @@ export default function LoadDetailPage() {
               {(load.heightCm != null || load.widthCm != null || load.lengthCm != null) && (
                 <div><span className="text-gray-500">Dimensiones:</span> <span className="font-medium">{[load.heightCm, load.widthCm, load.lengthCm].map((d) => (d != null ? d : '—')).join(' × ')} cm</span></div>
               )}
-              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatCurrency(load.price)}</span></div>
-              {load.maxBudget != null && <div><span className="text-gray-500">Presupuesto máx.:</span> <span className="font-medium">{formatCurrency(load.maxBudget)}</span></div>}
+              <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatPrice(load.price)}</span></div>
             </div>
           </div>
 

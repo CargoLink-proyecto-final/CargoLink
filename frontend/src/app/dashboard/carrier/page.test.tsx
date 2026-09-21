@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import CarrierDashboard from './page';
@@ -18,15 +18,11 @@ jest.mock('@/components/layout/Sidebar', () => ({
 
 jest.mock('@/lib/api', () => ({
   tripsApi: { getMy: jest.fn(), getMetrics: jest.fn() },
-  loadsApi: { getAvailable: jest.fn() },
-  postulationsApi: { getMy: jest.fn() },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { tripsApi, loadsApi, postulationsApi } = require('@/lib/api') as {
+const { tripsApi } = require('@/lib/api') as {
   tripsApi: Record<string, jest.Mock>;
-  loadsApi: Record<string, jest.Mock>;
-  postulationsApi: Record<string, jest.Mock>;
 };
 
 function mockAuth(state: Record<string, unknown>) {
@@ -68,16 +64,18 @@ describe('CarrierDashboard', () => {
         ],
       },
     });
-    loadsApi.getAvailable.mockResolvedValue({ data: { loads: [] } });
-    postulationsApi.getMy.mockResolvedValue({ data: [] });
     // null metrics to avoid colliding numeric text with the trip stat cards.
     tripsApi.getMetrics.mockResolvedValue({ data: null });
 
     renderWithClient(<CarrierDashboard />);
 
-    // Active trip appears in the "Mis viajes activos" list once trips resolve.
+    // The in-progress trip wins the hero slot (it's the most urgent one).
     expect(await screen.findByText('Trip A')).toBeInTheDocument();
-    expect(screen.getByText('Trip B')).toBeInTheDocument();
+    // The accepted trip is folded into the "ver todos" link, not repeated by name.
+    expect(screen.getByText(/1 viaje más en curso/)).toBeInTheDocument();
+    expect(screen.queryByText('Trip B')).not.toBeInTheDocument();
+    // A trip already IN_PROGRESS gets a tracking CTA, not a "start it" one.
+    expect(screen.getByRole('link', { name: /Ver seguimiento/ })).toHaveAttribute('href', '/trips/t1');
     // Total = 4 trips.
     expect(screen.getByText('4')).toBeInTheDocument();
     // One IN_PROGRESS + one ACCEPTED + two COMPLETED → "1" appears for active.
@@ -85,13 +83,43 @@ describe('CarrierDashboard', () => {
     expect(stat1s.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('shows the active trip as a full-width hero with route and a status-aware CTA', async () => {
+    tripsApi.getMy.mockResolvedValue({
+      data: {
+        trips: [
+          {
+            id: 't1',
+            status: 'ACCEPTED',
+            load: {
+              title: 'Trip A',
+              originAddress: 'Rosario',
+              destAddress: 'Cordoba',
+            },
+          },
+        ],
+      },
+    });
+    tripsApi.getMetrics.mockResolvedValue({ data: null });
+
+    renderWithClient(<CarrierDashboard />);
+
+    // Kept deliberately minimal — just enough to identify the trip and act on
+    // it. Cargo type, weight and price stay one click away in the trip detail.
+    expect(await screen.findByText('Trip A')).toBeInTheDocument();
+    expect(screen.getByText(/Rosario/)).toBeInTheDocument();
+    expect(screen.getByText(/Cordoba/)).toBeInTheDocument();
+    // A trip that hasn't started yet gets a "start it" CTA, not a tracking link.
+    expect(screen.getByRole('link', { name: /Iniciar viaje/ })).toHaveAttribute('href', '/trips/t1');
+  });
+
   it('renders performance metrics', async () => {
     tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
-    loadsApi.getAvailable.mockResolvedValue({ data: { loads: [] } });
-    postulationsApi.getMy.mockResolvedValue({ data: [] });
     tripsApi.getMetrics.mockResolvedValue({ data: metrics });
 
     renderWithClient(<CarrierDashboard />);
+
+    // Performance stats are collapsed behind a toggle by default to declutter the panel.
+    fireEvent.click(await screen.findByRole('button', { name: /Ver métricas/ }));
 
     expect(await screen.findByText('3.5 km/L')).toBeInTheDocument();
     expect(screen.getByText('200 L')).toBeInTheDocument();
@@ -99,62 +127,35 @@ describe('CarrierDashboard', () => {
     expect(screen.getByText('700 km recorridos')).toBeInTheDocument();
   });
 
-  it('renders available loads and my postulations', async () => {
-    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
-    loadsApi.getAvailable.mockResolvedValue({
-      data: {
-        loads: [
-          {
-            id: 'l1',
-            title: 'Available cargo',
-            originAddress: 'Rosario',
-            destAddress: 'Cordoba',
-            price: 1500,
-            weight: 1200,
-          },
-        ],
-      },
-    });
-    postulationsApi.getMy.mockResolvedValue({
-      data: [
-        {
-          id: 'p1',
-          loadId: 'l9',
-          status: 'PENDING',
-          proposedPrice: 900,
-          load: {
-            title: 'My postulated load',
-            originAddress: 'Salta',
-            destAddress: 'Jujuy',
-          },
-        },
-      ],
-    });
-    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
-
-    renderWithClient(<CarrierDashboard />);
-
-    expect(await screen.findByText('Available cargo')).toBeInTheDocument();
-    expect(screen.getByText('My postulated load')).toBeInTheDocument();
-    expect(screen.getByText(/Propusiste/)).toBeInTheDocument();
-  });
-
   it('shows empty states when nothing is available', async () => {
     tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
-    loadsApi.getAvailable.mockResolvedValue({ data: { loads: [] } });
-    postulationsApi.getMy.mockResolvedValue({ data: [] });
     tripsApi.getMetrics.mockResolvedValue({ data: metrics });
 
     renderWithClient(<CarrierDashboard />);
 
+    // No active trips → the hero collapses to a lightweight prompt instead of an empty list.
+    expect(await screen.findByText('Sin viajes activos')).toBeInTheDocument();
     expect(
-      await screen.findByText('Sin cargas disponibles ahora mismo.'),
+      screen.getByText('Postulate a una carga disponible para arrancar un viaje.'),
     ).toBeInTheDocument();
+  });
+
+  it('keeps available loads and postulations off the panel', async () => {
+    // Ambos listados tienen su propio ítem en el sidebar (/loads y /postulations);
+    // repetirlos acá duplicaba la misma lista a un scroll de distancia.
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+
+    renderWithClient(<CarrierDashboard />);
+
+    await screen.findByText('Sin viajes activos');
+    expect(screen.queryByText('Para tomar')).not.toBeInTheDocument();
     expect(
-      await screen.findByText('Sin viajes aún. Postulate a una carga para empezar.'),
-    ).toBeInTheDocument();
+      screen.queryByRole('heading', { name: 'Cargas disponibles' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Tus postulaciones')).not.toBeInTheDocument();
     expect(
-      await screen.findByText('No te postulaste a ninguna carga todavía.'),
-    ).toBeInTheDocument();
+      screen.queryByRole('heading', { name: /Mis postulaciones/ }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -138,8 +138,14 @@ print("1" if found else "0")
 # Si no es un git commit real, dejar pasar.
 [ "$IS_GIT_COMMIT" != "1" ] && exit 0
 
-# Rama actual.
-BRANCH="$(cd "$REPO" 2>/dev/null && git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+# Rama actual. Resolvemos desde el cwd del comando, NO desde CLAUDE_PROJECT_DIR:
+# en un worktree (`/worktree-new`, `git worktree add`) el project dir sigue
+# apuntando al checkout principal, que normalmente está parado en `develop`.
+# Mirar ahí daba un falso positivo que bloqueaba TODO commit hecho desde
+# cualquier worktree, aunque su rama fuera una feature perfectamente válida.
+# Fallback a $REPO por si el hook corriera fuera de un repo git.
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+[ -z "$BRANCH" ] && BRANCH="$(cd "$REPO" 2>/dev/null && git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 [ -z "$BRANCH" ] && exit 0
 
 # 1. Protección de rama.

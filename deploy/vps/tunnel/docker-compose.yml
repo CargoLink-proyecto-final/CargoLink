@@ -1,0 +1,23 @@
+# Cloudflare Tunnel del VPS (túnel `cargolink-vps`). Referencia versionada del
+# compose que corre en ~/tunnel; el token queda en ~/tunnel/.env (TUNNEL_TOKEN).
+#
+# Las rutas públicas (hostname → servicio) se configuran en el dashboard de
+# Cloudflare, no acá. Ver docs/deployment.md § Cloudflare Tunnel.
+#
+# La red `edge` se crea una sola vez con `docker network create edge`; prod y
+# dev se conectan a ella desde deploy/vps/compose.{prod,dev}.yml.
+name: tunnel
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set TUNNEL_TOKEN in .env}
+    networks:
+      - edge
+
+networks:
+  edge:
+    external: true

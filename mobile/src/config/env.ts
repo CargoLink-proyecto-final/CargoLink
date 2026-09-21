@@ -22,7 +22,7 @@ function metroHost(): string | null {
 }
 
 function resolveApiUrl(): string {
-  // 1. Override explícito — el que usás para apuntar a Cloud Run dev o prod.
+  // 1. Override explícito — el que usás para apuntar al dev o prod del VPS.
   const fromEnv = process.env.EXPO_PUBLIC_API_URL ?? Constants.expoConfig?.extra?.apiUrl;
   if (typeof fromEnv === 'string' && fromEnv.length > 0) {
     return fromEnv.replace(/\/+$/, '');

@@ -2,7 +2,6 @@ import React from 'react';
 import { render, fireEvent, waitFor, screen } from '@testing-library/react-native';
 import AvailableLoadsScreen from './AvailableLoadsScreen';
 import { loadsApi, usersApi } from '../../services/api';
-import { formatCurrency } from '../../lib/labels';
 
 jest.mock('../../services/api', () => ({
   loadsApi: { getAvailable: jest.fn() },
@@ -132,13 +131,12 @@ describe('AvailableLoadsScreen', () => {
     });
   });
 
-  it('shows the max budget, package count and interest on a card', async () => {
+  it('shows the package count and interest on a card', async () => {
     (loadsApi.getAvailable as jest.Mock).mockResolvedValue({
       data: {
         loads: [
           {
             ...mockLoads[0],
-            maxBudget: 180000,
             packageCount: 30,
             pendingPostulationsCount: 2,
           },
@@ -149,7 +147,6 @@ describe('AvailableLoadsScreen', () => {
     render(<AvailableLoadsScreen navigation={makeNav()} />);
 
     await waitFor(() => expect(screen.getByText('Granos a Rosario')).toBeTruthy());
-    expect(screen.getByText(`hasta ${formatCurrency(180000)}`)).toBeTruthy();
     expect(screen.getByText('30 bultos')).toBeTruthy();
     expect(screen.getByText('Ana Diaz - AgroSur')).toBeTruthy();
     expect(screen.getByText('2 transportistas ya se postularon')).toBeTruthy();

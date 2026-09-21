@@ -32,7 +32,7 @@ export interface RegisterItem {
   cargoType: string;
   weight: number;
   volume: number | null;
-  price: number;
+  price: number | null;
   originAddress: string;
   originLat: number;
   originLng: number;

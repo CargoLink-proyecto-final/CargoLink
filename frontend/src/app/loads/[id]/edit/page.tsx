@@ -9,6 +9,21 @@ import { loadsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import Link from 'next/link';
 
+// Debe reflejar exactamente la taxonomía fija que valida el backend
+// (@IsIn en CreateLoadDto) y que usan loads/new y loads (filtro) — un
+// cargoType fuera de esta lista queda invisible para cualquier filtro
+// de categoría y el backend lo rechaza al guardar.
+const CARGO_TYPES = [
+  'Electrónica y tecnología',
+  'Alimentos y bebidas',
+  'Materiales de construcción',
+  'Muebles y artículos del hogar',
+  'Ropa y textiles',
+  'Maquinaria e industria',
+  'Mercadería general',
+  'Otro',
+] as const;
+
 interface LoadForm {
   title: string;
   description?: string;
@@ -27,8 +42,7 @@ interface LoadForm {
   lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
-  price: number;
-  maxBudget?: number;
+  price?: number;
 }
 
 function toDatetimeLocal(iso: string | undefined | null): string {
@@ -72,14 +86,16 @@ export default function EditLoadPage() {
         lengthCm: load.lengthCm ?? undefined,
         pickupDate: toDatetimeLocal(load.pickupDate),
         deliveryDate: toDatetimeLocal(load.deliveryDate),
-        price: load.price,
-        maxBudget: load.maxBudget ?? undefined,
+        price: load.price ?? undefined,
       });
     }
   }, [load, reset]);
 
   const updateMutation = useMutation({
-    mutationFn: (payload: Partial<LoadForm>) => loadsApi.update(id, payload),
+    // `price: null` es un valor válido del payload: vacía el precio y devuelve
+    // la carga a "a convenir".
+    mutationFn: (payload: Partial<Omit<LoadForm, 'price'>> & { price?: number | null }) =>
+      loadsApi.update(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['load', id] });
       router.push(`/loads/${id}`);
@@ -90,6 +106,12 @@ export default function EditLoadPage() {
   // bloquean (solo título/descripción editables). En estados finales no se edita nada.
   const isLocked = load?.status === 'ASSIGNED' || load?.status === 'IN_TRANSIT';
   const isTerminal = load?.status === 'DELIVERED' || load?.status === 'CANCELLED';
+  // Cargas viejas pueden tener un cargoType fuera de la taxonomía actual (el
+  // backend antes aceptaba texto libre). Lo mostramos tal cual en vez de
+  // forzarlo silenciosamente a la primera opción del <select> — guardar sigue
+  // requiriendo elegir una categoría real, porque el backend la exige.
+  const isLegacyCargoType =
+    !!load?.cargoType && !(CARGO_TYPES as readonly string[]).includes(load.cargoType);
 
   const onSubmit = (data: LoadForm) => {
     if (isLocked) {
@@ -109,8 +131,8 @@ export default function EditLoadPage() {
       heightCm: data.heightCm ? Number(data.heightCm) : undefined,
       widthCm: data.widthCm ? Number(data.widthCm) : undefined,
       lengthCm: data.lengthCm ? Number(data.lengthCm) : undefined,
-      price: Number(data.price),
-      maxBudget: data.maxBudget ? Number(data.maxBudget) : undefined,
+      // Vaciar el campo devuelve la carga a "a convenir".
+      price: data.price ? Number(data.price) : null,
     });
   };
 
@@ -198,7 +220,15 @@ export default function EditLoadPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Carga <span className="text-red-500">*</span></label>
-                <input {...register('cargoType', { required: 'Requerido' })} disabled={isLocked} className={inputClass} placeholder="Ej., Electrónica" />
+                <select {...register('cargoType', { required: 'Requerido' })} disabled={isLocked} className={inputClass}>
+                  {isLegacyCargoType && <option value={load.cargoType}>{load.cargoType} (categoría antigua)</option>}
+                  {CARGO_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                {isLegacyCargoType && (
+                  <p className="text-amber-600 text-xs mt-1">
+                    Esta carga tiene un tipo fuera de las categorías actuales. Elegí una de la lista para poder guardar otros cambios.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg) <span className="text-red-500">*</span></label>
@@ -212,8 +242,9 @@ export default function EditLoadPage() {
                 <input type="number" step="0.1" {...register('volume')} disabled={isLocked} className={inputClass} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS) <span className="text-red-500">*</span></label>
-                <input type="number" {...register('price', { required: 'Requerido' })} disabled={isLocked} className={inputClass} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS, opcional)</label>
+                <input type="number" {...register('price')} disabled={isLocked} className={inputClass} />
+                <p className="text-gray-500 text-xs mt-1">Vacío = &quot;a convenir&quot;.</p>
               </div>
             </div>
 
@@ -221,10 +252,6 @@ export default function EditLoadPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad de bultos (opcional)</label>
                 <input type="number" step="1" {...register('packageCount')} disabled={isLocked} className={inputClass} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Presupuesto máximo (ARS, opcional)</label>
-                <input type="number" step="0.01" {...register('maxBudget')} disabled={isLocked} className={inputClass} />
               </div>
             </div>
 

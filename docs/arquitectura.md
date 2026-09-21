@@ -6,14 +6,13 @@ CargoLink es una plataforma multi-cliente con un backend único que sirve a tres
 
 ```
                         ┌──────────────────────────────┐
-                        │      Artifact Registry       │
-                        │  cargolink-backend:<tag>     │
-                        │  cargolink-frontend:<tag>    │
-                        └───────────┬──────────────────┘
-                                    │ gcloud run deploy
-                                    ▼
-   ┌────────────────────────────────────────────────────────────────┐
-   │                     GCP Cloud Run                              │
+                        │  Cloudflare (TLS + Tunnel)   │
+                        │  plataforma / dev .cargolink │
+                        └───────────▲──────────────────┘
+                                    │ túnel saliente (cloudflared)
+                                    │
+   ┌────────────────────────────────┴───────────────────────────────┐
+   │        VPS ubuntu-tesis01 — Docker Compose (prod y dev)        │
    │                                                                │
    │   ┌─────────────────┐      ┌─────────────────┐                 │
    │   │   Next.js 14    │      │   NestJS 10     │                 │
@@ -63,9 +62,9 @@ Bottom-tabs por rol (shipper/carrier) sobre stack de auth. Usa `react-native-map
 
 8 tablas (`users`, `companies`, `company_join_requests`, `loads`, `postulations`, `trips`, `messages`, `ratings`) más 5 enums. Migraciones gestionadas por Prisma; la imagen del backend corre `prisma migrate deploy` al arrancar. Detalle en [`base-de-datos.md`](./base-de-datos.md).
 
-### Infraestructura — Docker Compose (dev local) + GCP Cloud Run (prod)
+### Infraestructura — Docker Compose (dev local y VPS)
 
-`docker-compose.yml` orquesta los tres servicios solo para dev local. Producción corre en GCP Cloud Run + Cloud SQL (proyecto `cargo-link-2026`): las imágenes se buildean en GitHub Actions y se publican a Artifact Registry, y el deploy lo hace `gcloud run deploy` por entorno (`dev`/`prod`). Infra como código en `infra/gcp/` (Terraform). Detalle en [`docker.md`](./docker.md), [`ci-cd.md`](./ci-cd.md) e [`infra/gcp/README.md`](../infra/gcp/README.md).
+`docker-compose.yml` orquesta los tres servicios. En dev local se usa tal cual; en el VPS propio (`ubuntu-tesis01`) corren **prod** (rama `main`) y **dev** (rama `develop`) con ese mismo compose más un override por entorno (`deploy/vps/compose.{prod,dev}.yml`), publicados por Cloudflare Tunnel sin puertos abiertos. El deploy continuo lo hace GitHub Actions con un runner self-hosted en el VPS. Detalle en [`docker.md`](./docker.md), [`ci-cd.md`](./ci-cd.md), [`deployment.md`](./deployment.md) y [`decision-deploy-vps.md`](./decision-deploy-vps.md). El setup anterior en GCP (Cloud Run + Cloud SQL) se apagó el 2026-09-14.
 
 ## Roles del sistema
 
@@ -153,7 +152,7 @@ El rol **Company Admin** (`COMPANY_ADMIN`) opera sobre su propia flota (aprobar/
 - Backend bootstrap: [`../backend/src/main.ts`](../backend/src/main.ts).
 - Schema Prisma: [`../backend/prisma/schema.prisma`](../backend/prisma/schema.prisma).
 - Compose: [`../docker-compose.yml`](../docker-compose.yml).
-- Workflow CI/CD: [`../.github/workflows/deploy-gcp.yml`](../.github/workflows/deploy-gcp.yml).
+- Workflow CI/CD: [`../.github/workflows/deploy-vps.yml`](../.github/workflows/deploy-vps.yml) + [`../deploy/vps/deploy.sh`](../deploy/vps/deploy.sh).
 - WebSocket gateway: [`../backend/src/messages/messages.gateway.ts`](../backend/src/messages/messages.gateway.ts).
 - Frontend API client: [`../frontend/src/lib/api.ts`](../frontend/src/lib/api.ts).
 - Mobile API client: [`../mobile/src/services/api.ts`](../mobile/src/services/api.ts).

@@ -5,8 +5,8 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { loadsApi } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
-import { Package, TrendingUp, Clock, CheckCircle, Plus, ArrowRight, Inbox, Hand } from 'lucide-react';
+import { formatPrice } from '@/lib/utils';
+import { Package, TrendingUp, Clock, CheckCircle, ArrowRight, Inbox, Hand } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ShipperDashboard() {
@@ -27,19 +27,11 @@ export default function ShipperDashboard() {
     <DashboardLayout>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-          <div>
-            <p className="eyebrow">Panel del publicador</p>
-            <h1 className="mt-2 font-display text-[38px] leading-[1.05]">
-              Tu <span className="font-semibold text-primary-700">operación</span> de hoy
-            </h1>
-          </div>
-          <Link
-            href="/loads/new"
-            className="inline-flex items-center gap-2 bg-ink-900 hover:bg-ink-800 text-surface-raised px-4 py-2.5 rounded-lg text-[13.5px] font-medium transition shadow-card"
-          >
-            <Plus size={15} /> Nueva carga
-          </Link>
+        <div>
+          <p className="eyebrow">Panel del publicador</p>
+          <h1 className="mt-2 font-display text-[38px] leading-[1.05]">
+            Tu <span className="font-semibold text-primary-700">operación</span> de hoy
+          </h1>
         </div>
 
         {/* Stats */}
@@ -85,7 +77,7 @@ export default function ShipperDashboard() {
                         <Hand size={12} /> {load.pendingPostulationsCount} postulaci{load.pendingPostulationsCount === 1 ? 'ón' : 'ones'}
                       </span>
                     )}
-                    <span className="font-mono text-[13px] tabular-nums text-ink-700">{formatCurrency(load.price)}</span>
+                    <span className="font-mono text-[13px] tabular-nums text-ink-700">{formatPrice(load.price)}</span>
                     <StatusBadge status={load.status} kind="solicitud" />
                   </div>
                 </Link>
@@ -105,13 +97,15 @@ function EmptyShipper() {
         <Inbox size={18} className="text-ink-400" />
       </div>
       <p className="font-display text-[20px] text-ink-800">Aún no publicaste cargas</p>
-      <p className="mt-1 text-[13px] text-ink-500">Creá tu primera carga para que los transportistas la vean.</p>
-      <Link
-        href="/loads/new"
-        className="inline-flex items-center gap-2 mt-5 bg-primary-600 hover:bg-primary-700 text-surface-raised px-4 py-2 rounded-lg text-[13px] transition"
-      >
-        <Plus size={14} /> Crear primera carga
-      </Link>
+      {/* Publicar es una acción de "Mis Cargas": el panel solo señala el camino,
+          no duplica el acceso al formulario. */}
+      <p className="mt-1 text-[13px] text-ink-500">
+        Publicá tu primera carga desde{' '}
+        <Link href="/loads" className="text-primary-700 hover:underline">
+          Mis Cargas
+        </Link>{' '}
+        para que los transportistas la vean.
+      </p>
     </div>
   );
 }

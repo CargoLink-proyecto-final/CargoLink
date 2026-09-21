@@ -6,7 +6,7 @@ Mapa completo del repositorio CargoLink. Si llegaste acá sin contexto, esta pá
 
 ## Vista de 10 segundos
 
-CargoLink es una **plataforma de transporte de carga por carretera** que conecta dadores de carga (shippers) con transportistas (carriers), con un rol admin de plataforma y un rol admin de empresa (flotas). Un backend NestJS único sirve a tres superficies: **web** (Next.js), **mobile** (Expo) y **API REST** documentada con Swagger. El estado vive en **PostgreSQL** vía Prisma. Chat en tiempo real por **Socket.IO**. Deploy en **GCP Cloud Run**.
+CargoLink es una **plataforma de transporte de carga por carretera** que conecta dadores de carga (shippers) con transportistas (carriers), con un rol admin de plataforma y un rol admin de empresa (flotas). Un backend NestJS único sirve a tres superficies: **web** (Next.js), **mobile** (Expo) y **API REST** documentada con Swagger. El estado vive en **PostgreSQL** vía Prisma. Chat en tiempo real por **Socket.IO**. Deploy en un **VPS propio** con Docker Compose + Cloudflare Tunnel.
 
 El flujo central: shipper publica una `Load` → carriers se postulan (`Postulation`, con negociación de precio) → al aceptar se abre un `Trip` con tracking GPS y chat → al cerrarse, ambas partes se califican (`Rating`).
 
@@ -17,10 +17,10 @@ CargoLink-deploy/
 ├── backend/          API NestJS 10 + Prisma 5 (REST /api + WebSocket /chat)
 ├── frontend/         Web app Next.js 14 (App Router)
 ├── mobile/           App React Native + Expo SDK 50 (iOS/Android)
-├── infra/            Infraestructura como código (Terraform → GCP)
+├── deploy/vps/       Overrides compose, compose del túnel y script de deploy del VPS
 ├── docs/             Documentación técnica (este folder)
 ├── .claude/          Tooling de Claude Code (hooks, skills, agents, commands)
-├── .github/          GitHub Actions (CI/CD a Cloud Run)
+├── .github/          GitHub Actions (deploy al VPS con runner self-hosted)
 ├── .githooks/        Git hook opcional de validación de commits
 ├── docker-compose.yml   Stack de dev local (postgres + backend + frontend)
 ├── .env.example      Plantilla de variables de entorno
@@ -33,10 +33,10 @@ CargoLink-deploy/
 | `backend/` | Servidor NestJS: REST, WebSocket, Prisma, auth, mail | [`backend.md`](./backend.md), [`api.md`](./api.md) |
 | `frontend/` | Web app Next.js 14 App Router | [`frontend.md`](./frontend.md) |
 | `mobile/` | App Expo / React Native | [`mobile.md`](./mobile.md) |
-| `infra/gcp/` | Terraform de GCP (Cloud Run, Cloud SQL, Secret Manager, LB) | [`arquitectura-gcp.md`](./arquitectura-gcp.md), [`infra/gcp/README.md`](../infra/gcp/README.md) |
+| `deploy/vps/` | Overrides compose prod/dev, compose del túnel, `deploy.sh` | [`deployment.md`](./deployment.md), [`ci-cd.md`](./ci-cd.md) |
 | `docs/` | Documentación técnica | [`README.md`](./README.md) |
 | `.claude/` | Hooks, skills, agents y slash-commands de Claude Code | [`workflow-claude-code.md`](./workflow-claude-code.md) |
-| `.github/workflows/` | Pipeline de deploy a Cloud Run | [`ci-cd.md`](./ci-cd.md) |
+| `.github/workflows/` | Pipeline de deploy al VPS (runner self-hosted) | [`ci-cd.md`](./ci-cd.md) |
 | `docker-compose.yml` | Orquesta el stack de dev local | [`docker.md`](./docker.md) |
 
 ## Roles del sistema
@@ -153,8 +153,8 @@ Enums: `Role`, `JoinRequestStatus`, `LoadStatus`, `TripStatus`, `PostulationStat
 | Qué | Dónde | Doc |
 |---|---|---|
 | **Dev local** | `docker-compose.yml` (postgres :5432, backend :3001, frontend :3000) | [`docker.md`](./docker.md), [`primeros-pasos.md`](./primeros-pasos.md) |
-| **IaC GCP** | `infra/gcp/*.tf` (Cloud Run, Cloud SQL, Secret Manager, Artifact Registry, LB) | [`arquitectura-gcp.md`](./arquitectura-gcp.md), [`infra/gcp/README.md`](../infra/gcp/README.md) |
-| **CI/CD** | `.github/workflows/deploy-gcp.yml` (deploy keyless vía WIF a `dev`/`prod`) | [`ci-cd.md`](./ci-cd.md), [`deployment.md`](./deployment.md) |
+| **Hosting (VPS)** | `deploy/vps/` (overrides compose, túnel, `deploy.sh`); `.env` locales en el VPS | [`deployment.md`](./deployment.md), [`decision-deploy-vps.md`](./decision-deploy-vps.md) |
+| **CI/CD** | `.github/workflows/deploy-vps.yml` (runner self-hosted; `develop`→dev, `main`→prod) | [`ci-cd.md`](./ci-cd.md), [`deployment.md`](./deployment.md) |
 | **Validación de commits** | `.githooks/commit-msg` (opt-in) + hook `PreToolUse` de Claude | [`contribuir.md`](./contribuir.md) |
 | **Tooling Claude Code** | `.claude/` (hooks, skills, agents, slash-commands) | [`workflow-claude-code.md`](./workflow-claude-code.md), [`.claude/README.md`](../.claude/README.md) |
 
@@ -182,8 +182,6 @@ Endpoints locales: Frontend http://localhost:3000 · API http://localhost:3001/a
 ## Para profundizar
 
 - **Levantar el proyecto**: [`primeros-pasos.md`](./primeros-pasos.md).
-- **Arquitectura lógica**: [`arquitectura.md`](./arquitectura.md). **Física (GCP)**: [`arquitectura-gcp.md`](./arquitectura-gcp.md).
+- **Arquitectura lógica**: [`arquitectura.md`](./arquitectura.md). **Física (VPS)**: [`deployment.md`](./deployment.md).
 - **Contribuir** (gitflow, commits, PRs): [`contribuir.md`](./contribuir.md).
 - **Índice completo de docs**: [`README.md`](./README.md).
-</content>
-</invoke>

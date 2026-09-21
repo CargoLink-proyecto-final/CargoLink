@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
-import { messagesApi } from '@/lib/api';
+import { messagesApi, postulationsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { countAwaitingCarrierReply } from '@/lib/postulations';
+import type { PostulationWithLoad } from '@/types';
 import {
   LayoutDashboard,
   Package,
   Truck,
-  MapPin,
   MessageSquare,
   Users,
   LogOut,
@@ -20,6 +21,7 @@ import {
   Building2,
   UserCheck,
   UserCog,
+  Hand,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -27,16 +29,15 @@ const navItems = {
   CARGO_GENERATOR: [
     { href: '/dashboard/shipper', label: 'Panel', icon: LayoutDashboard },
     { href: '/loads', label: 'Mis Cargas', icon: Package },
-    { href: '/loads/new', label: 'Nueva Carga', icon: Truck },
     { href: '/trips', label: 'Viajes', icon: Truck },
-    { href: '/tracking', label: 'Seguimiento', icon: MapPin },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
     { href: '/register', label: 'Registro', icon: ClipboardList },
   ],
   TRANSPORTER: [
     { href: '/dashboard/carrier', label: 'Panel', icon: LayoutDashboard },
     { href: '/loads', label: 'Cargas Disponibles', icon: Package },
-    { href: '/tracking', label: 'Mis Viajes', icon: Truck },
+    { href: '/postulations', label: 'Mis Postulaciones', icon: Hand },
+    { href: '/trips', label: 'Mis Viajes', icon: Truck },
     { href: '/company', label: 'Mi Empresa', icon: Building2 },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
     { href: '/register', label: 'Registro', icon: ClipboardList },
@@ -50,7 +51,7 @@ const navItems = {
   ADMIN: [
     { href: '/dashboard/admin', label: 'Panel', icon: LayoutDashboard },
     { href: '/loads', label: 'Todas las Cargas', icon: Package },
-    { href: '/tracking', label: 'Seguimiento', icon: MapPin },
+    { href: '/trips', label: 'Viajes', icon: Truck },
     { href: '/users', label: 'Usuarios', icon: Users },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
     { href: '/register', label: 'Registro', icon: ClipboardList },
@@ -86,7 +87,21 @@ function SidebarContent({ user }: { user: AuthUser }) {
     refetchOnWindowFocus: true,
   });
 
+  // Solo el transportista tiene postulaciones propias; la ruta del backend está
+  // restringida a ese rol, así que no la consultamos para los demás.
+  const isTransporter = user.role === 'TRANSPORTER';
+  const { data: myPostulations } = useQuery({
+    queryKey: ['my-postulations'],
+    queryFn: () => postulationsApi.getMy().then((r) => r.data as PostulationWithLoad[]),
+    enabled: isTransporter,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
+
   const unreadCount = unreadData?.unreadCount || 0;
+  const postulationsAwaitingReply = countAwaitingCarrierReply(myPostulations ?? []);
+  // El burger de mobile resume todo lo que pide atención, porque el nav está oculto.
+  const pendingTotal = unreadCount + postulationsAwaitingReply;
   const items = navItems[user.role] || [];
   const handleLogout = () => { logout(); router.push('/auth/login'); };
   const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || '·';
@@ -100,9 +115,9 @@ function SidebarContent({ user }: { user: AuthUser }) {
         aria-label="Toggle navigation"
       >
         {open ? <X size={18} /> : <Menu size={18} />}
-        {!open && unreadCount > 0 && (
+        {!open && pendingTotal > 0 && (
           <span className="absolute -top-1 -right-1 bg-primary-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {pendingTotal > 99 ? '99+' : pendingTotal}
           </span>
         )}
       </button>
@@ -134,7 +149,12 @@ function SidebarContent({ user }: { user: AuthUser }) {
             {items.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
-              const isMessages = item.href === '/messages';
+              const badge =
+                item.href === '/messages'
+                  ? unreadCount
+                  : item.href === '/postulations'
+                    ? postulationsAwaitingReply
+                    : 0;
               return (
                 <Link
                   key={item.href}
@@ -152,9 +172,9 @@ function SidebarContent({ user }: { user: AuthUser }) {
                   )}
                   <Icon size={16} className={cn('shrink-0 transition', active ? 'text-primary-400' : 'text-ink-400 group-hover:text-ink-200')} />
                   <span className="flex-1">{item.label}</span>
-                  {isMessages && unreadCount > 0 && (
+                  {badge > 0 && (
                     <span className="bg-primary-500 text-white text-[10px] font-semibold rounded-full min-w-[20px] h-[18px] flex items-center justify-center px-1.5 tabular-nums">
-                      {unreadCount > 99 ? '99+' : unreadCount}
+                      {badge > 99 ? '99+' : badge}
                     </span>
                   )}
                 </Link>

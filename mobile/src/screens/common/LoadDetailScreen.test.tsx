@@ -92,11 +92,10 @@ describe('LoadDetailScreen', () => {
     expect(getByText('Creado')).toBeTruthy();
   });
 
-  it('renders the package details, max budget and shipper industry', async () => {
+  it('renders the package details and shipper industry', async () => {
     (loadsApi.getById as jest.Mock).mockResolvedValue({
       data: {
         ...baseLoad,
-        maxBudget: 65000,
         packageCount: 12,
         heightCm: 120,
         widthCm: 80,
@@ -111,7 +110,6 @@ describe('LoadDetailScreen', () => {
 
     await waitFor(() => expect(getByText('12')).toBeTruthy());
     expect(getByText('120 × 80 × 100 cm')).toBeTruthy();
-    expect(getByText('Presupuesto máx.')).toBeTruthy();
     expect(getByText('Rubro: Agroindustria')).toBeTruthy();
   });
 
@@ -137,7 +135,6 @@ describe('LoadDetailScreen', () => {
     await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
     expect(queryByText('Bultos')).toBeNull();
     expect(queryByText('Dimensiones')).toBeNull();
-    expect(queryByText('Presupuesto máx.')).toBeNull();
   });
 
   it('tells a transporter how many others are interested in a published load', async () => {
@@ -562,6 +559,20 @@ describe('LoadDetailScreen', () => {
       await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
       // El endpoint es TRANSPORTER-only: llamarlo como shipper daría 403.
       expect(postulationsApi.listMine).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('carga sin precio publicado ("a convenir")', () => {
+    it('renders "A convenir" instead of a formatted price', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, price: null },
+      });
+
+      const { getByText } = render(
+        <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
+      );
+
+      await waitFor(() => expect(getByText('A convenir')).toBeTruthy());
     });
   });
 });

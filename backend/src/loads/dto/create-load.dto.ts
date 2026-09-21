@@ -1,5 +1,6 @@
-import { IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { CARGO_TYPES } from '../cargo-types.constant';
 
 export class CreateLoadDto {
   @ApiProperty({ example: 'Electronics shipment to Buenos Aires' })
@@ -25,6 +26,13 @@ export class CreateLoadDto {
   @IsNumber({}, { message: 'La longitud de origen debe ser un número' })
   originLng: number;
 
+  @ApiPropertyOptional({
+    description: 'Id de la ciudad del padrón oficial. Si no viene, la carga queda sin ciudad hasta que el backfill la resuelva por dirección y coordenadas.',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'La ciudad de origen debe ser un id válido' })
+  originCityId?: string;
+
   @ApiProperty({ example: 'Av. San Martín 567, Córdoba' })
   @IsString({ message: 'La dirección de destino debe ser texto' })
   @IsNotEmpty({ message: 'La dirección de destino es obligatoria' })
@@ -38,9 +46,15 @@ export class CreateLoadDto {
   @IsNumber({}, { message: 'La longitud de destino debe ser un número' })
   destLng: number;
 
-  @ApiProperty({ example: 'Electronics' })
+  @ApiPropertyOptional({ description: 'Id de la ciudad de destino en el padrón oficial.' })
+  @IsOptional()
+  @IsUUID('4', { message: 'La ciudad de destino debe ser un id válido' })
+  destCityId?: string;
+
+  @ApiProperty({ example: 'Mercadería general', enum: CARGO_TYPES })
   @IsString({ message: 'El tipo de carga debe ser texto' })
   @IsNotEmpty({ message: 'El tipo de carga es obligatorio' })
+  @IsIn(CARGO_TYPES, { message: `El tipo de carga debe ser uno de: ${CARGO_TYPES.join(', ')}` })
   cargoType: string;
 
   @ApiProperty({ example: 5000 })
@@ -84,13 +98,13 @@ export class CreateLoadDto {
   @IsDateString({}, { message: 'La fecha de entrega debe ser una fecha válida' })
   deliveryDate: string;
 
-  @ApiProperty({ example: 150000 })
-  @IsNumber({}, { message: 'El precio debe ser un número' })
-  price: number;
-
-  @ApiProperty({ example: 180000, required: false, description: 'Presupuesto máximo opcional que el publicador está dispuesto a pagar' })
+  @ApiProperty({
+    example: 150000,
+    required: false,
+    description: 'Opcional. Si no se envía, la carga sale "a convenir" y el precio lo fija la postulación del transportista.',
+  })
   @IsOptional()
-  @IsNumber({}, { message: 'El presupuesto máximo debe ser un número' })
-  @Min(0, { message: 'El presupuesto máximo no puede ser negativo' })
-  maxBudget?: number;
+  @IsNumber({}, { message: 'El precio debe ser un número' })
+  @Min(0, { message: 'El precio no puede ser negativo' })
+  price?: number;
 }

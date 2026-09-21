@@ -110,7 +110,10 @@ export default function LocationPicker({ lat, lng, color = '#22c55e', onChange }
   // but not when the change echoes back our own drag/click.
   useEffect(() => {
     const le = lastEmitted.current;
-    if (le && Math.abs(le.lat - lat) < 1e-9 && Math.abs(le.lng - lng) < 1e-9) return;
+    // Tolerancia 1e-6 (~10 cm): el formulario redondea a 6 decimales lo que el
+    // pin emite, así que el valor que vuelve nunca es idéntico al emitido.
+    // Con una tolerancia más fina el mapa se recentraba tras cada arrastre.
+    if (le && Math.abs(le.lat - lat) < 1e-6 && Math.abs(le.lng - lng) < 1e-6) return;
     if (!mapRef.current || !markerRef.current) return;
     markerRef.current.setLatLng([lat, lng]);
     mapRef.current.setView([lat, lng], 16);

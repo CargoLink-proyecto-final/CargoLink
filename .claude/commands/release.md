@@ -91,7 +91,7 @@ El body = el informe completo del `release-engineer` **+ un pie con notas y disc
 
 Este PR fue **abierto por Claude Code** siguiendo el flujo `/release`. El merge a `main` es responsabilidad del mantenedor humano y **no se hace desde Claude Code** (regla dura del workflow).
 
-Al mergear a `main`, el CI buildea y pushea las imágenes `:prod` de backend y frontend a GHCR (ver `docs/ci-cd.md`). **No hay deploy automático**: levantar las imágenes nuevas en el server es un paso manual (ver `docs/deployment.md`). El backend corre `prisma migrate deploy` al arrancar el contenedor, así que las migraciones listadas arriba se aplican al primer arranque post-deploy, sin backup automático. Revisá las 🔴 y 🟡 y tomá backup antes del merge si corresponde.
+Al mergear a `main`, el workflow `deploy-vps.yml` deploya **automáticamente a prod** en el VPS (runner self-hosted): build de las imágenes, backup de la DB de prod, `docker compose up -d` y healthcheck (ver `docs/ci-cd.md`). El backend corre `prisma migrate deploy` al arrancar el contenedor, así que las migraciones listadas arriba se aplican en ese deploy, inmediatamente después del backup automático. Revisá las 🔴 y 🟡 antes de mergear y, si hay 🔴, probá el restore en dev. Rollback: `docs/deployment.md` § Rollback.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```

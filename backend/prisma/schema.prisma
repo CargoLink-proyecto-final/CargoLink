@@ -156,6 +156,13 @@ model Load {
   destAddress   String     @map("dest_address")
   destLat       Float      @map("dest_lat")
   destLng       Float      @map("dest_lng")
+  // Ciudad del padrón oficial. Opcional: las cargas anteriores al padrón (y las
+  // que llegan desde mobile con dirección libre) se resuelven por backfill best
+  // effort y pueden quedar en null.
+  originCityId  String?    @map("origin_city_id")
+  originCity    City?      @relation("LoadOriginCity", fields: [originCityId], references: [id])
+  destCityId    String?    @map("dest_city_id")
+  destCity      City?      @relation("LoadDestCity", fields: [destCityId], references: [id])
   cargoType     String     @map("cargo_type")
   weight        Float
   volume        Float?
@@ -167,9 +174,12 @@ model Load {
   lengthCm      Float?     @map("length_cm")
   pickupDate    DateTime   @map("pickup_date")
   deliveryDate  DateTime?  @map("delivery_date")
-  price         Float
-  // Monto máximo opcional que el publicador está dispuesto a pagar;
-  // visible para los transportistas al postularse.
+  // Opcional: si el publicador no fija precio, la carga sale "a convenir" y el
+  // precio lo define la postulación del transportista (proposedPrice, que en ese
+  // caso pasa a ser obligatorio).
+  price         Float?
+  // Columna retirada del producto: ya no se lee ni se escribe desde ninguna capa.
+  // Se deja para no correr una migración destructiva sobre datos existentes.
   maxBudget     Float?     @map("max_budget")
   status        LoadStatus @default(PUBLISHED)
   createdAt     DateTime   @default(now()) @map("created_at")
@@ -181,6 +191,8 @@ model Load {
   @@index([shipperId])
   @@index([status])
   @@index([pickupDate])
+  @@index([originCityId])
+  @@index([destCityId])
   @@index([originLat, originLng])
   @@index([destLat, destLng])
   @@map("loads")
@@ -282,4 +294,65 @@ model RoleChangeLog {
 
   @@index([userId])
   @@map("role_change_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Padrón geográfico oficial (Servicio de Normalización de Datos Geográficos,
+// IGN/INDEC vía datos.gob.ar). Son tablas de catálogo: se cargan desde
+// prisma/data/argentina-geo.json en el seed y no las edita el usuario.
+// ---------------------------------------------------------------------------
+
+model Province {
+  id      String  @id @default(uuid())
+  // Código oficial INDEC de 2 dígitos (ej. "06" Buenos Aires). Es la clave
+  // natural del registro: por acá se hace upsert idempotente del seed.
+  code    String  @unique
+  name    String  @unique
+  // ISO 3166-2 (ej. "AR-B"). Útil para integraciones externas.
+  iso     String?
+  // El padrón es nacional; queda explícito para autocompletar el formulario y
+  // por si algún día entra otro país.
+  country String  @default("Argentina")
+
+  cities City[]
+
+  @@map("provinces")
+}
+
+model City {
+  id         String  @id @default(uuid())
+  // ID oficial de localidad censal, 8 dígitos (ej. "06035010").
+  code       String  @unique
+  name       String
+  // Departamento/partido al que pertenece. No se modela como tabla propia
+  // porque solo se usa para desambiguar: hay 68 pares (nombre, provincia)
+  // repetidos en el padrón que únicamente se distinguen por departamento.
+  // Nullable: CABA es la única localidad del padrón sin departamento.
+  department String? @map("department")
+  // CPA orientativo (fuente GeoNames). Una ciudad grande tiene muchos: se
+  // guarda el más cercano al centroide. Null cuando no hubo match confiable.
+  postalCode String? @map("postal_code")
+  // Centroide de la localidad — habilita ordenar por cercanía sin geocodificar.
+  lat        Float
+  lng        Float
+  // `name` normalizado (sin acentos, minúsculas, sin invisibles) para el
+  // type-ahead: ILIKE en Postgres ignora mayúsculas pero NO acentos, así que
+  // "cordoba" nunca matcheaba "Córdoba". Lo llena el seed con
+  // `normalizeSearchText` — no se expone por la API, es solo clave de búsqueda.
+  // Sin índice a propósito: la búsqueda es LIKE 'prefijo%', que un btree con la
+  // collation del server no puede servir, y `text_pattern_ops` no sobrevive la
+  // introspección de Prisma 5 (deja drift fantasma en cada migrate dev). Sobre
+  // 4.027 filas estáticas el seq scan es sub-milisegundo; si el padrón creciera
+  // en un orden de magnitud, el próximo paso es un GIN con pg_trgm.
+  searchName String  @default("") @map("search_name")
+
+  provinceId String   @map("province_id")
+  province   Province @relation(fields: [provinceId], references: [id])
+
+  originLoads Load[] @relation("LoadOriginCity")
+  destLoads   Load[] @relation("LoadDestCity")
+
+  @@index([provinceId])
+  @@index([name])
+  @@map("cities")
 }

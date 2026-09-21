@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadsApi } from '../../services/api';
 import {
-  formatCurrency,
+  formatPrice,
   getSolicitudStageColor,
   getSolicitudStageLabel,
 } from '../../lib/labels';
@@ -108,7 +108,7 @@ export default function ShipperDashboard({ navigation }: any) {
               {item.originAddress} → {item.destAddress}
             </Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardPrice}>{formatCurrency(item.price)}</Text>
+              <Text style={styles.cardPrice}>{formatPrice(item.price)}</Text>
               <Text style={styles.cardWeight}>{item.weight} kg</Text>
             </View>
           </TouchableOpacity>

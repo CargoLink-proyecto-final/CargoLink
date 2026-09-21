@@ -58,6 +58,21 @@ describe('CreateLoadScreen', () => {
     expect(screen.getByText('Crear Carga')).toBeTruthy();
   });
 
+  it('creates a load without a price ("a convenir") omitting the field', async () => {
+    mockedLoadsApi.create.mockResolvedValue({ data: { id: 'new-load' } } as any);
+
+    render(<CreateLoadScreen navigation={navigation} />);
+    fillAllRequired();
+    // Vaciar el precio: la carga sale a convenir y la definen las postulaciones.
+    fireEvent.changeText(screen.getByPlaceholderText('150000'), '');
+
+    fireEvent.press(screen.getByText('Crear Carga'));
+
+    await waitFor(() => expect(mockedLoadsApi.create).toHaveBeenCalledTimes(1));
+    // undefined, no 0: un 0 sería un precio declarado de cero.
+    expect(mockedLoadsApi.create.mock.calls[0][0].price).toBeUndefined();
+  });
+
   it('submits a new load with parsed numeric + ISO date values', async () => {
     mockedLoadsApi.create.mockResolvedValue({ data: { id: 'new-load' } } as any);
 
@@ -161,19 +176,6 @@ describe('CreateLoadScreen', () => {
 
     await waitFor(() => expect(mockedLoadsApi.create).toHaveBeenCalled());
     expect(mockedLoadsApi.create.mock.calls[0][0].volume).toBe(20);
-  });
-
-  it('sends the optional max budget', async () => {
-    mockedLoadsApi.create.mockResolvedValue({ data: {} } as any);
-
-    render(<CreateLoadScreen navigation={navigation} />);
-    fillAllRequired();
-    fireEvent.changeText(screen.getByPlaceholderText('180000'), '300000');
-
-    fireEvent.press(screen.getByText('Crear Carga'));
-
-    await waitFor(() => expect(mockedLoadsApi.create).toHaveBeenCalled());
-    expect(mockedLoadsApi.create.mock.calls[0][0].maxBudget).toBe(300000);
   });
 
   describe('form dinámico — información del bulto', () => {

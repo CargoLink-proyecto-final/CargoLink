@@ -3,9 +3,11 @@
 import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import ProvinceCombobox from '@/components/geo/ProvinceCombobox';
+import CityCombobox, { City } from '@/components/geo/CityCombobox';
 import { loadsApi } from '@/lib/api';
 import { geocodeStructured, reverseGeocode, type NominatimAddressDetail } from '@/lib/routing';
 
@@ -123,6 +125,19 @@ function computeMismatches(
   return mismatches;
 }
 
+// Un par lat/lng solo se puede dibujar si ambos son números dentro de rango.
+// Ojo con el vacío: Number('') es 0, así que se descarta antes de convertir —
+// si no, un campo en blanco pasaría como una coordenada válida en (0, 0).
+function toCoordsPin(lat: unknown, lng: unknown): { lat: number; lng: number } | null {
+  if (lat === undefined || lat === null || lat === '') return null;
+  if (lng === undefined || lng === null || lng === '') return null;
+  const latN = Number(lat);
+  const lngN = Number(lng);
+  if (!Number.isFinite(latN) || !Number.isFinite(lngN)) return null;
+  if (latN < -90 || latN > 90 || lngN < -180 || lngN > 180) return null;
+  return { lat: latN, lng: lngN };
+}
+
 interface LoadForm {
   title: string;
   description?: string;
@@ -156,8 +171,7 @@ interface LoadForm {
   lengthCm?: number;
   pickupDate: string;
   deliveryDate?: string;
-  price: number;
-  maxBudget?: number;
+  price?: number;
 }
 
 type LocationMode = 'address' | 'coords';
@@ -200,17 +214,108 @@ export default function NewLoadPage() {
   // the exact spot even where OSM has no house-number data.
   const [originPin, setOriginPin] = useState<{ lat: number; lng: number } | null>(null);
   const [destPin, setDestPin] = useState<{ lat: number; lng: number } | null>(null);
+  // Verificación del modo Coordenadas: reverse-geocode del punto ingresado para
+  // que el usuario confirme a qué lugar corresponde antes de crear la carga.
+  const [originCoordsVerification, setOriginCoordsVerification] = useState<VerificationState>({ status: 'idle' });
+  const [destCoordsVerification, setDestCoordsVerification] = useState<VerificationState>({ status: 'idle' });
   // Mismatches surfaced at submit time. They hard-block creation: pressing
   // "Crear" with any mismatch opens a modal asking the user to fix the address.
   const [submitMismatches, setSubmitMismatches] = useState<string[]>([]);
+
+  // Cualquier cambio de dirección invalida la verificación previa contra
+  // Nominatim. Elegir del desplegable no dispara onInput, así que los combos
+  // llaman a esto explícitamente.
+  const resetOriginVerification = () => {
+    setOriginVerification({ status: 'idle' });
+    setOriginPin(null);
+    setSubmitMismatches([]);
+  };
+  const resetDestVerification = () => {
+    setDestVerification({ status: 'idle' });
+    setDestPin(null);
+    setSubmitMismatches([]);
+  };
+  // Cambiar de pestaña deja obsoleta la verificación del otro modo.
+  const resetOriginModeState = () => {
+    resetOriginVerification();
+    setOriginCoordsVerification({ status: 'idle' });
+  };
+  const resetDestModeState = () => {
+    resetDestVerification();
+    setDestCoordsVerification({ status: 'idle' });
+  };
   const [showMismatchModal, setShowMismatchModal] = useState(false);
 
   const minPickup = useMemo(() => toLocalDatetimeString(new Date()), []);
 
-  const { register, handleSubmit, watch, getValues, formState: { errors } } = useForm<LoadForm>();
+  const { register, handleSubmit, watch, setValue, getValues, control, formState: { errors } } = useForm<LoadForm>();
+  // La provincia elegida acota el combo de ciudades. El formulario sigue
+  // guardando el nombre (contrato intacto); el id vive solo acá, para la búsqueda.
+  const [originProvinceId, setOriginProvinceId] = useState<string | undefined>();
+  const [destProvinceId, setDestProvinceId] = useState<string | undefined>();
+  // La ciudad elegida se manda como FK: es lo que después permite filtrar por
+  // ciudad sin adivinar sobre el texto de la dirección.
+  const [originCity, setOriginCity] = useState<City | undefined>();
+  const [destCity, setDestCity] = useState<City | undefined>();
 
   const pickupDateValue = watch('pickupDate');
   const cargoTypeValue = watch('cargoType');
+
+  // El mapa del modo Coordenadas se dibuja apenas el par lat/lng es válido:
+  // el usuario ve dónde cae el punto sin tener que apretar nada.
+  const originLatValue = watch('originLat');
+  const originLngValue = watch('originLng');
+  const destLatValue = watch('destLat');
+  const destLngValue = watch('destLng');
+  const originCoordsPin = useMemo(
+    () => toCoordsPin(originLatValue, originLngValue),
+    [originLatValue, originLngValue],
+  );
+  const destCoordsPin = useMemo(
+    () => toCoordsPin(destLatValue, destLngValue),
+    [destLatValue, destLngValue],
+  );
+
+  // El pin manda: arrastrarlo (o tocar el mapa) reescribe los inputs.
+  // 6 decimales ≈ 10 cm, suficiente para una dirección y legible en el campo.
+  const applyCoordsPin = (prefix: 'origin' | 'dest') => (lat: number, lng: number) => {
+    const round = (n: number) => Number(n.toFixed(6));
+    if (prefix === 'origin') {
+      setValue('originLat', round(lat), { shouldValidate: true });
+      setValue('originLng', round(lng), { shouldValidate: true });
+      setOriginCoordsVerification({ status: 'idle' });
+    } else {
+      setValue('destLat', round(lat), { shouldValidate: true });
+      setValue('destLng', round(lng), { shouldValidate: true });
+      setDestCoordsVerification({ status: 'idle' });
+    }
+  };
+
+  const verifyCoords = async (
+    prefix: 'origin' | 'dest',
+    setVerification: React.Dispatch<React.SetStateAction<VerificationState>>,
+  ) => {
+    const v = getValues();
+    const pin = prefix === 'origin'
+      ? toCoordsPin(v.originLat, v.originLng)
+      : toCoordsPin(v.destLat, v.destLng);
+    if (!pin) {
+      setVerification({ status: 'error' });
+      return;
+    }
+    setVerification({ status: 'loading' });
+    try {
+      const resolved = await reverseGeocode(pin.lat, pin.lng);
+      // Un punto válido sin dirección conocida (campo, ruta, agua) igual sirve:
+      // al crear la carga se guarda como "Coordenadas: lat, lng".
+      setVerification({
+        status: 'ok',
+        displayName: resolved ?? `Sin dirección conocida para ${pin.lat}, ${pin.lng}`,
+      });
+    } catch {
+      setVerification({ status: 'error' });
+    }
+  };
 
   const verifyAddress = async (
     prefix: 'origin' | 'dest',
@@ -265,6 +370,9 @@ export default function NewLoadPage() {
       const lngN = Number(lng);
       if (lat === undefined || lng === undefined || Number.isNaN(latN) || Number.isNaN(lngN)) {
         return { error: 'Latitud y longitud son obligatorias en modo Coordenadas' };
+      }
+      if (latN < -90 || latN > 90 || lngN < -180 || lngN > 180) {
+        return { error: 'Latitud debe estar entre -90 y 90, y longitud entre -180 y 180' };
       }
       const resolved = await reverseGeocode(latN, lngN);
       const label = coordsLabel?.trim();
@@ -344,14 +452,18 @@ export default function NewLoadPage() {
         lengthCm: pkg && data.lengthCm ? Number(data.lengthCm) : undefined,
         pickupDate: data.pickupDate,
         deliveryDate: data.deliveryDate,
-        price: Number(data.price),
-        maxBudget: data.maxBudget ? Number(data.maxBudget) : undefined,
+        // Vacío = "a convenir": no mandamos el campo en vez de un 0 engañoso.
+        price: data.price ? Number(data.price) : undefined,
         originAddress: origin.address,
         originLat: origin.lat,
         originLng: origin.lng,
+        // Solo en modo Dirección hay ciudad elegida del padrón; en modo
+        // Coordenadas la resuelve el backfill a partir del punto.
+        originCityId: originMode === 'address' ? originCity?.id : undefined,
         destAddress: dest.address,
         destLat: dest.lat,
         destLng: dest.lng,
+        destCityId: destMode === 'address' ? destCity?.id : undefined,
       });
       router.push('/dashboard/shipper');
     } catch (err) {
@@ -425,17 +537,11 @@ export default function NewLoadPage() {
                 {errors.volume && <p className="text-red-500 text-xs mt-1">{errors.volume.message}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS) <span className="text-red-500">*</span></label>
-                <input type="number" step="0.01" {...register('price', { required: 'Requerido', min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (ARS, opcional)</label>
+                <input type="number" step="0.01" {...register('price', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
+                <p className="text-gray-500 text-xs mt-1">Si lo dejás vacío, la carga sale &quot;a convenir&quot; y el precio lo proponen los transportistas al postularse.</p>
                 {errors.price && <p className="text-red-500 text-xs mt-1">{errors.price.message}</p>}
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Presupuesto máximo (ARS, opcional)</label>
-              <input type="number" step="0.01" {...register('maxBudget', { min: { value: 0, message: 'No puede ser negativo' } })} className={inputClass} />
-              <p className="text-gray-500 text-xs mt-1">Monto máximo que estás dispuesto a pagar; visible para los transportistas.</p>
-              {errors.maxBudget && <p className="text-red-500 text-xs mt-1">{errors.maxBudget.message}</p>}
             </div>
 
             {/* Form dinámico (P6): la info del bulto solo se pide para cargas en
@@ -470,60 +576,193 @@ export default function NewLoadPage() {
             )}
           </div>
 
+          {/* Los inputs de cada modo se construyen solo cuando su pestaña está
+              activa: react-hook-form da el campo por montado apenas se llama a
+              register(), aunque el <input> nunca llegue al DOM. Pasarlos siempre
+              hacía que las reglas del modo inactivo (CP requerido, lat/lng
+              requeridas) bloquearan el submit con errores invisibles.
+              Los <Controller> no necesitan el guard: useController solo registra
+              al montarse, y LocationCard ya no monta la pestaña inactiva. */}
           {/* Origen */}
           <LocationCard
             title="Origen"
             mode={originMode}
-            onModeChange={(m) => { setOriginMode(m); setOriginVerification({ status: 'idle' }); setOriginPin(null); setSubmitMismatches([]); }}
+            onModeChange={(m) => { setOriginMode(m); resetOriginModeState(); }}
             verification={originVerification}
             onVerify={() => verifyAddress('origin', setOriginVerification, setOriginPin)}
-            onFieldChange={() => { setOriginVerification({ status: 'idle' }); setOriginPin(null); setSubmitMismatches([]); }}
+            onFieldChange={resetOriginVerification}
             pin={originPin}
             pinColor="#22c55e"
             onPinChange={(lat, lng) => setOriginPin({ lat, lng })}
-            streetInput={<input {...register('originStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. Corrientes" />}
+            streetInput={originMode === 'address' ? <input {...register('originStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. Corrientes" /> : null}
             streetError={errors.originStreet?.message}
-            streetNumberInput={<input {...register('originStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 1234" />}
+            streetNumberInput={originMode === 'address' ? <input {...register('originStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 1234" /> : null}
             streetNumberError={errors.originStreetNumber?.message}
-            cityInput={<input {...register('originCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Buenos Aires" />}
+            cityInput={
+              <Controller
+                name="originCity"
+                control={control}
+                rules={{ required: 'Requerido', pattern: { value: PLACE_PATTERN, message: PLACE_MSG } }}
+                render={({ field }) => (
+                  <CityCombobox
+                    aria-label="Ciudad"
+                    value={field.value ?? ''}
+                    selectedId={originCity?.id}
+                    provinceId={originProvinceId}
+                    onChange={(name, city) => {
+                      field.onChange(name);
+                      setOriginCity(city);
+                      // La ciudad del padrón arrastra provincia, país y CP:
+                      // completarlos evita combinaciones que no existen.
+                      if (city) {
+                        setValue('originState', city.provinceName, { shouldValidate: true });
+                        setValue('originCountry', city.country, { shouldValidate: true });
+                        setOriginProvinceId(city.provinceId);
+                        // El CP es orientativo y no todas las ciudades tienen:
+                        // se completa solo si el padrón trae uno.
+                        if (city.postalCode) {
+                          setValue('originPostalCode', city.postalCode, { shouldValidate: true });
+                        }
+                      }
+                      resetOriginVerification();
+                    }}
+                    inputClassName={inputClass}
+                    placeholder="Ej., Pilar"
+                  />
+                )}
+              />
+            }
             cityError={errors.originCity?.message}
-            stateInput={<input {...register('originState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., CABA" />}
+            stateInput={
+              <Controller
+                name="originState"
+                control={control}
+                rules={{ required: 'Requerido', pattern: { value: PLACE_PATTERN, message: PLACE_MSG } }}
+                render={({ field }) => (
+                  <ProvinceCombobox
+                    aria-label="Provincia"
+                    value={field.value ?? ''}
+                    onChange={(name, province) => {
+                      field.onChange(name);
+                      setOriginProvinceId(province?.id);
+                      if (province) {
+                        setValue('originCountry', province.country, { shouldValidate: true });
+                      }
+                      // Cambiar de provincia invalida la ciudad elegida antes.
+                      if (getValues('originCity')) setValue('originCity', '');
+                      setOriginCity(undefined);
+                      resetOriginVerification();
+                    }}
+                    inputClassName={inputClass}
+                  />
+                )}
+              />
+            }
             stateError={errors.originState?.message}
-            countryInput={<input {...register('originCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
+            countryInput={originMode === 'address' ? <input {...register('originCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" /> : null}
             countryError={errors.originCountry?.message}
-            postalCodeInput={<input {...register('originPostalCode', { required: 'Requerido', pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 1043 o C1043AAU' } })} className={inputClass} placeholder="Ej., 1043 o C1043AAU" />}
+            postalCodeInput={originMode === 'address' ? <input {...register('originPostalCode', { required: 'Requerido', pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 1043 o C1043AAU' } })} className={inputClass} placeholder="Ej., 1043 o C1043AAU" /> : null}
             postalCodeError={errors.originPostalCode?.message}
-            latInput={<input type="number" step="any" {...register('originLat')} className={inputClass} placeholder="-34.6037" />}
-            lngInput={<input type="number" step="any" {...register('originLng')} className={inputClass} placeholder="-58.3816" />}
-            coordsLabelInput={<input {...register('originCoordsLabel')} className={inputClass} placeholder="Ej., Depósito central, Planta industrial..." />}
+            latInput={originMode === 'coords' ? <input type="number" step="any" {...register('originLat', { valueAsNumber: true, required: 'Requerido', min: { value: -90, message: 'Debe estar entre -90 y 90' }, max: { value: 90, message: 'Debe estar entre -90 y 90' } })} className={inputClass} placeholder="-34.6037" /> : null}
+            latError={errors.originLat?.message}
+            lngInput={originMode === 'coords' ? <input type="number" step="any" {...register('originLng', { valueAsNumber: true, required: 'Requerido', min: { value: -180, message: 'Debe estar entre -180 y 180' }, max: { value: 180, message: 'Debe estar entre -180 y 180' } })} className={inputClass} placeholder="-58.3816" /> : null}
+            lngError={errors.originLng?.message}
+            coordsLabelInput={originMode === 'coords' ? <input {...register('originCoordsLabel')} className={inputClass} placeholder="Ej., Depósito central, Planta industrial..." /> : null}
+            coordsPin={originCoordsPin}
+            coordsVerification={originCoordsVerification}
+            onVerifyCoords={() => verifyCoords('origin', setOriginCoordsVerification)}
+            onCoordsPinChange={applyCoordsPin('origin')}
           />
 
           {/* Destino */}
           <LocationCard
             title="Destino"
             mode={destMode}
-            onModeChange={(m) => { setDestMode(m); setDestVerification({ status: 'idle' }); setDestPin(null); setSubmitMismatches([]); }}
+            onModeChange={(m) => { setDestMode(m); resetDestModeState(); }}
             verification={destVerification}
             onVerify={() => verifyAddress('dest', setDestVerification, setDestPin)}
-            onFieldChange={() => { setDestVerification({ status: 'idle' }); setDestPin(null); setSubmitMismatches([]); }}
+            onFieldChange={resetDestVerification}
             pin={destPin}
             pinColor="#ef4444"
             onPinChange={(lat, lng) => setDestPin({ lat, lng })}
-            streetInput={<input {...register('destStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. San Martín" />}
+            streetInput={destMode === 'address' ? <input {...register('destStreet', { pattern: { value: STREET_PATTERN, message: STREET_MSG } })} className={inputClass} placeholder="Ej., Av. San Martín" /> : null}
             streetError={errors.destStreet?.message}
-            streetNumberInput={<input {...register('destStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 567" />}
+            streetNumberInput={destMode === 'address' ? <input {...register('destStreetNumber', { pattern: { value: /^[a-zA-Z0-9\-/]+$/, message: 'Solo letras y números' } })} className={inputClass} placeholder="Ej., 567" /> : null}
             streetNumberError={errors.destStreetNumber?.message}
-            cityInput={<input {...register('destCity', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Córdoba" />}
+            cityInput={
+              <Controller
+                name="destCity"
+                control={control}
+                rules={{ required: 'Requerido', pattern: { value: PLACE_PATTERN, message: PLACE_MSG } }}
+                render={({ field }) => (
+                  <CityCombobox
+                    aria-label="Ciudad"
+                    value={field.value ?? ''}
+                    selectedId={destCity?.id}
+                    provinceId={destProvinceId}
+                    onChange={(name, city) => {
+                      field.onChange(name);
+                      setDestCity(city);
+                      // La ciudad del padrón arrastra provincia, país y CP:
+                      // completarlos evita combinaciones que no existen.
+                      if (city) {
+                        setValue('destState', city.provinceName, { shouldValidate: true });
+                        setValue('destCountry', city.country, { shouldValidate: true });
+                        setDestProvinceId(city.provinceId);
+                        // El CP es orientativo y no todas las ciudades tienen:
+                        // se completa solo si el padrón trae uno.
+                        if (city.postalCode) {
+                          setValue('destPostalCode', city.postalCode, { shouldValidate: true });
+                        }
+                      }
+                      resetDestVerification();
+                    }}
+                    inputClassName={inputClass}
+                    placeholder="Ej., Córdoba"
+                  />
+                )}
+              />
+            }
             cityError={errors.destCity?.message}
-            stateInput={<input {...register('destState', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Córdoba" />}
+            stateInput={
+              <Controller
+                name="destState"
+                control={control}
+                rules={{ required: 'Requerido', pattern: { value: PLACE_PATTERN, message: PLACE_MSG } }}
+                render={({ field }) => (
+                  <ProvinceCombobox
+                    aria-label="Provincia"
+                    value={field.value ?? ''}
+                    onChange={(name, province) => {
+                      field.onChange(name);
+                      setDestProvinceId(province?.id);
+                      if (province) {
+                        setValue('destCountry', province.country, { shouldValidate: true });
+                      }
+                      // Cambiar de provincia invalida la ciudad elegida antes.
+                      if (getValues('destCity')) setValue('destCity', '');
+                      setDestCity(undefined);
+                      resetDestVerification();
+                    }}
+                    inputClassName={inputClass}
+                  />
+                )}
+              />
+            }
             stateError={errors.destState?.message}
-            countryInput={<input {...register('destCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" />}
+            countryInput={destMode === 'address' ? <input {...register('destCountry', { pattern: { value: PLACE_PATTERN, message: PLACE_MSG } })} className={inputClass} placeholder="Ej., Argentina" /> : null}
             countryError={errors.destCountry?.message}
-            postalCodeInput={<input {...register('destPostalCode', { required: 'Requerido', pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 5000 o X5000AAA' } })} className={inputClass} placeholder="Ej., 5000 o X5000AAA" />}
+            postalCodeInput={destMode === 'address' ? <input {...register('destPostalCode', { required: 'Requerido', pattern: { value: /^[A-Za-z]?\d{4}([A-Za-z]{3})?$/, message: 'Formato inválido. Ej: 5000 o X5000AAA' } })} className={inputClass} placeholder="Ej., 5000 o X5000AAA" /> : null}
             postalCodeError={errors.destPostalCode?.message}
-            latInput={<input type="number" step="any" {...register('destLat')} className={inputClass} placeholder="-31.4201" />}
-            lngInput={<input type="number" step="any" {...register('destLng')} className={inputClass} placeholder="-64.1888" />}
-            coordsLabelInput={<input {...register('destCoordsLabel')} className={inputClass} placeholder="Ej., Centro de distribución, Cliente final..." />}
+            latInput={destMode === 'coords' ? <input type="number" step="any" {...register('destLat', { valueAsNumber: true, required: 'Requerido', min: { value: -90, message: 'Debe estar entre -90 y 90' }, max: { value: 90, message: 'Debe estar entre -90 y 90' } })} className={inputClass} placeholder="-31.4201" /> : null}
+            latError={errors.destLat?.message}
+            lngInput={destMode === 'coords' ? <input type="number" step="any" {...register('destLng', { valueAsNumber: true, required: 'Requerido', min: { value: -180, message: 'Debe estar entre -180 y 180' }, max: { value: 180, message: 'Debe estar entre -180 y 180' } })} className={inputClass} placeholder="-64.1888" /> : null}
+            lngError={errors.destLng?.message}
+            coordsLabelInput={destMode === 'coords' ? <input {...register('destCoordsLabel')} className={inputClass} placeholder="Ej., Centro de distribución, Cliente final..." /> : null}
+            coordsPin={destCoordsPin}
+            coordsVerification={destCoordsVerification}
+            onVerifyCoords={() => verifyCoords('dest', setDestCoordsVerification)}
+            onCoordsPinChange={applyCoordsPin('dest')}
           />
 
           {/* Fechas */}
@@ -621,7 +860,8 @@ function LocationCard({
   stateInput, stateError,
   countryInput, countryError,
   postalCodeInput, postalCodeError,
-  latInput, lngInput, coordsLabelInput,
+  latInput, latError, lngInput, lngError, coordsLabelInput,
+  coordsPin, coordsVerification, onVerifyCoords, onCoordsPinChange,
 }: {
   title: string;
   mode: LocationMode;
@@ -645,8 +885,14 @@ function LocationCard({
   postalCodeInput: React.ReactNode;
   postalCodeError?: string;
   latInput: React.ReactNode;
+  latError?: string;
   lngInput: React.ReactNode;
+  lngError?: string;
   coordsLabelInput: React.ReactNode;
+  coordsPin: { lat: number; lng: number } | null;
+  coordsVerification: VerificationState;
+  onVerifyCoords: () => void;
+  onCoordsPinChange: (lat: number, lng: number) => void;
 }) {
   const tabClass = (active: boolean) =>
     `flex-1 text-sm py-2 rounded-md transition ${active ? 'bg-white text-primary-700 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`;
@@ -661,8 +907,13 @@ function LocationCard({
         </div>
       </div>
 
-      {/* Address mode */}
-      <div className="space-y-3" style={{ display: mode === 'address' ? 'block' : 'none' }} onInput={onFieldChange}>
+      {/* Address mode — se desmonta al cambiar de pestaña en vez de ocultarse
+          con CSS: react-hook-form valida todo campo montado, así que dejar los
+          requeridos de Dirección escondidos con display:none bloqueaba el
+          submit en modo Coordenadas con errores que el usuario no podía ver.
+          Los valores sobreviven al desmontaje (shouldUnregister queda en false). */}
+      {mode === 'address' && (
+      <div className="space-y-3" onInput={onFieldChange}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Calle <span className="text-red-500">*</span></label>
@@ -754,24 +1005,72 @@ function LocationCard({
           </div>
         )}
       </div>
+      )}
 
       {/* Coords mode */}
-      <div className="space-y-3" style={{ display: mode === 'coords' ? 'block' : 'none' }}>
+      {mode === 'coords' && (
+      <div className="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Latitud <span className="text-red-500">*</span></label>
             {latInput}
+            {latError && <p className="text-red-500 text-xs mt-1">{latError}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Longitud <span className="text-red-500">*</span></label>
             {lngInput}
+            {lngError && <p className="text-red-500 text-xs mt-1">{lngError}</p>}
           </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Descripción de la ubicación (opcional)</label>
           {coordsLabelInput}
         </div>
+
+        {/* Verificación — reverse-geocode del punto, espejo del botón de Dirección. */}
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={onVerifyCoords}
+            disabled={coordsVerification.status === 'loading'}
+            className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg border border-primary-300 text-primary-700 hover:bg-primary-50 transition disabled:opacity-50"
+          >
+            {coordsVerification.status === 'loading' && <Loader2 size={14} className="animate-spin" />}
+            Verificar coordenadas
+          </button>
+
+          {coordsVerification.status === 'ok' && (
+            <div className="mt-2 flex items-start gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+              <CheckCircle size={16} className="mt-0.5 shrink-0" />
+              <span><span className="font-medium">Punto verificado:</span> {coordsVerification.displayName}</span>
+            </div>
+          )}
+          {coordsVerification.status === 'error' && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+              <XCircle size={16} className="shrink-0" />
+              No pudimos verificar el punto. La latitud va de -90 a 90 y la longitud de -180 a 180.
+            </div>
+          )}
+          {coordsVerification.status === 'idle' && (
+            <p className="mt-1 text-xs text-gray-500">
+              Verificá para ver a qué dirección corresponde el punto ingresado.
+            </p>
+          )}
+        </div>
+
+        {/* Mapa — aparece apenas el par lat/lng es válido, sin esperar a verificar. */}
+        {coordsPin ? (
+          <div className="pt-1 space-y-1">
+            <p className="text-xs text-gray-500">
+              Arrastrá el pin o tocá el mapa: la latitud y la longitud se actualizan solas.
+            </p>
+            <LocationPicker lat={coordsPin.lat} lng={coordsPin.lng} color={pinColor} onChange={onCoordsPinChange} />
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500">Ingresá una latitud y una longitud válidas para ver el mapa.</p>
+        )}
       </div>
+      )}
     </div>
   );
 }

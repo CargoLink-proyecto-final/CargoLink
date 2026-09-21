@@ -34,6 +34,7 @@ Variables de entorno inyectadas al contenedor:
 |---|---|---|
 | `DATABASE_URL` | `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public` | construida |
 | `JWT_SECRET` | `${JWT_SECRET}` | **requerido**, falla si vacío |
+| `ADMIN_PASSWORD` | `${ADMIN_PASSWORD:-}` | password de `admin@cargolink.com`; vacío = fallback del seed |
 | `JWT_EXPIRATION` | `${JWT_EXPIRATION:-7d}` | `7d` |
 | `PORT` | `3001` | hardcoded |
 | `CORS_ORIGIN` | `${CORS_ORIGIN:-http://localhost:3000}` | `http://localhost:3000` |
@@ -198,6 +199,7 @@ CMD ["node", "server.js"]
 | `POSTGRES_DB` | postgres + backend | No | `cargolink` | Nombre de la DB |
 | `DATABASE_URL` | backend | Sí (construida) | de las 3 anteriores | Connection string para Prisma |
 | `JWT_SECRET` | backend | **Sí** | — | Secret para firmar JWTs |
+| `ADMIN_PASSWORD` | backend | No | fallback del seed | Password de `admin@cargolink.com`. Si está seteada, el seed la reescribe en cada arranque |
 | `JWT_EXPIRATION` | backend | No | `7d` | Lifetime de los tokens |
 | `PORT` | backend | No | `3001` | Puerto del server |
 | `CORS_ORIGIN` | backend | No | `http://localhost:3000` | Origen permitido por CORS |
@@ -271,10 +273,10 @@ docker compose up -d
 
 - **No hay volúmenes de código bind-mounteados en compose**. Los Dockerfiles copian el código al build; un cambio en `backend/src/*.ts` requiere `docker compose up -d --build backend`. Para iteración rápida usar dev local (ver [`primeros-pasos.md`](./primeros-pasos.md) opción B).
 - **No hay healthcheck del backend**. `depends_on` del frontend es simple, no espera `service_healthy`. Si el backend tarda en arrancar (p.ej. migración pesada), el frontend ya está sirviendo pero sus llamadas van a fallar con `ECONNREFUSED` los primeros segundos.
-- **Sin backup automático de la DB en compose**. Es desarrollo, los datos son descartables. Para prod ver [`deployment.md`](./deployment.md).
+- **Sin backup automático de la DB en el compose local**. Es desarrollo, los datos son descartables. En el VPS los backups los hace un cron del host y el pipeline antes de cada deploy a prod (ver [`deployment.md`](./deployment.md)).
 - **Prisma Studio no está expuesto**. Si lo abrís con `docker compose exec backend npx prisma studio`, escucha en `0.0.0.0:5555` dentro del contenedor pero no hay port mapping. Para usarlo, agregalo a `docker-compose.yml` temporalmente o corré `npx prisma studio` desde el host con `DATABASE_URL` apuntando a `localhost:5432`.
 - **Puerto del frontend en dev local vs Docker**. `npm run dev` levanta en **3003** (definido en `frontend/package.json`); la imagen runtime escucha en **3000**. Es intencional para que las dos cosas puedan correr juntas si querés.
 
 ## CI/CD relacionado
 
-Las imágenes para deploy se buildean en GitHub Actions (no en Compose local), se publican a Artifact Registry y se deployan a Cloud Run: entorno `dev` (push a `develop`) y `prod` (push a `main`). Detalle en [`ci-cd.md`](./ci-cd.md).
+En el VPS, prod y dev usan este mismo `docker-compose.yml` con un override por entorno (`deploy/vps/compose.{prod,dev}.yml`) que quita los `ports:` y conecta backend/frontend a la red `edge` del Cloudflare Tunnel. El runner self-hosted buildea las imágenes ahí mismo en cada push a `develop` (dev) o `main` (prod). Detalle en [`ci-cd.md`](./ci-cd.md) y [`deployment.md`](./deployment.md).

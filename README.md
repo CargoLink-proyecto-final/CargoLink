@@ -36,14 +36,22 @@ Endpoints:
 - Swagger: http://localhost:3001/api/docs
 - PostgreSQL: localhost:5432
 
-Cuentas demo (password `password123`):
+Cuentas demo (password `password123`, salvo el admin):
 
 | Email | Rol |
 |---|---|
-| `admin@cargolink.com` | ADMIN |
+| `admin@cargolink.com` | ADMIN — password aparte, ver abajo |
 | `shipper@example.com` | CARGO_GENERATOR |
 | `carrier@example.com` | TRANSPORTER |
 | `empresa@example.com` | COMPANY_ADMIN |
+| `profe1@cargolink.com` … `profe3@cargolink.com` | TRANSPORTER |
+| `transportista1@cargolink.com`, `transportista2@cargolink.com` | TRANSPORTER |
+
+La password del admin sale de la env var `ADMIN_PASSWORD`; si no la seteás, el
+seed usa un fallback (ver `.env.example`). Con la variable seteada, el seed la
+reescribe en cada arranque — es la fuente de verdad de esa credencial. Sin la
+variable, solo se aplica al crear la cuenta y el seed no pisa una password ya
+cambiada.
 
 Para dev local sin Docker, mobile, o cualquier detalle más allá del happy path: [`docs/primeros-pasos.md`](./docs/primeros-pasos.md).
 
@@ -55,7 +63,6 @@ Toda la documentación técnica vive bajo [`docs/`](./docs/). Índice en [`docs/
 |---|---|
 | [`resumen.md`](./docs/resumen.md) | Mapa general del repo: estructura, dónde vive cada feature, índice. |
 | [`arquitectura.md`](./docs/arquitectura.md) | Overview técnico, diagrama, flujo end-to-end. |
-| [`arquitectura-gcp.md`](./docs/arquitectura-gcp.md) | Arquitectura física en GCP. |
 | [`primeros-pasos.md`](./docs/primeros-pasos.md) | Setup Docker + dev local, troubleshooting. |
 | [`docker.md`](./docs/docker.md) | Compose, Dockerfiles, env vars. |
 | [`backend.md`](./docs/backend.md) | NestJS: módulos, guards, mail service. |
@@ -66,8 +73,9 @@ Toda la documentación técnica vive bajo [`docs/`](./docs/). Índice en [`docs/
 | [`autenticacion.md`](./docs/autenticacion.md) | JWT, guards, roles, password reset. |
 | [`frontend.md`](./docs/frontend.md) | Next.js, componentes, estado. |
 | [`mobile.md`](./docs/mobile.md) | Expo, screens, GPS, push. |
-| [`ci-cd.md`](./docs/ci-cd.md) | GitHub Actions → Cloud Run. |
-| [`deployment.md`](./docs/deployment.md) | Producción, backups, rollback. |
+| [`ci-cd.md`](./docs/ci-cd.md) | GitHub Actions (runner self-hosted) → VPS. |
+| [`deployment.md`](./docs/deployment.md) | Producción en el VPS, túnel, backups, rollback. |
+| [`decision-deploy-vps.md`](./docs/decision-deploy-vps.md) | Por qué VPS + runner self-hosted. |
 | [`workflow-claude-code.md`](./docs/workflow-claude-code.md) | `.claude/` tooling. |
 | [`contribuir.md`](./docs/contribuir.md) | Branches, commits, PRs, secretos. |
 
