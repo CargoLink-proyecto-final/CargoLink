@@ -44,6 +44,32 @@ enum PostulationStatus {
   WITHDRAWN
 }
 
+enum DocumentType {
+  DNI_FRONT
+  DNI_BACK
+  LICENSE_FRONT
+  LICENSE_BACK
+  AFIP_CONSTANCIA
+  VEHICLE_CARD
+  INSURANCE
+  VTV
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum VehicleType {
+  CAMION
+  CAMIONETA
+  FURGON
+  SEMIRREMOLQUE
+  BATEA
+  OTRO
+}
+
 model User {
   id                        String    @id @default(uuid())
   email                     String    @unique
@@ -67,6 +93,16 @@ model User {
   // usuario: el último dispositivo que se registró gana. Soportar varios
   // dispositivos a la vez requeriría una tabla aparte.
   expoPushToken             String?   @map("expo_push_token")
+  // Perfil de transportista (P13): documentación de identidad/habilitación +
+  // vehículo. CUIT/CUIL y datos de la licencia son atributos del conductor
+  // (no del archivo escaneado que los respalda, ver model Document). La
+  // declaración jurada se registra con versión + timestamp para poder
+  // demostrar qué texto exacto aceptó cada usuario si hace falta más adelante.
+  cuit                      String?   @map("cuit")
+  licenseCategory           String?   @map("license_category")
+  licenseExpiresAt          DateTime? @map("license_expires_at")
+  termsAcceptedAt           DateTime? @map("terms_accepted_at")
+  termsAcceptedVersion      String?   @map("terms_accepted_version")
   isActive                  Boolean   @default(true) @map("is_active")
   resetToken                String?   @map("reset_token")
   resetTokenExp             DateTime? @map("reset_token_exp")
@@ -106,6 +142,10 @@ model User {
   // Role-change audit (who changed this user's role / changes this user made as admin)
   roleChangesReceived RoleChangeLog[] @relation("RoleChangeTarget")
   roleChangesMade     RoleChangeLog[] @relation("RoleChangeAuthor")
+
+  // Perfil de transportista: vehículo propio + documentos subidos
+  vehicle   Vehicle?
+  documents Document[]
 
   @@index([companyId])
   // Cada registro de dispositivo desasocia el token de su dueño anterior con un
@@ -297,6 +337,65 @@ model RoleChangeLog {
 
   @@index([userId])
   @@map("role_change_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Perfil de transportista (P13): vehículo + documentación de identidad y
+// habilitación. Mientras un TRANSPORTER no complete esto no puede postularse
+// a una carga (ver ProfileCompleteGuard) — pero el resto de la app queda
+// accesible igual.
+// ---------------------------------------------------------------------------
+
+model Vehicle {
+  id     String @id @default(uuid())
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  plate String      @unique
+  brand String
+  model String
+  year  Int
+  type  VehicleType
+
+  maxWeightKg Float  @map("max_weight_kg")
+  maxVolumeM3 Float? @map("max_volume_m3")
+  heightCm    Float? @map("height_cm")
+  widthCm     Float? @map("width_cm")
+  lengthCm    Float? @map("length_cm")
+
+  refrigerated       Boolean @default(false)
+  hazardousMaterials Boolean @default(false) @map("hazardous_materials")
+  bulkLiquid         Boolean @default(false) @map("bulk_liquid")
+
+  // Vencimientos del vehículo (no del archivo escaneado): atributos propios
+  // del vehículo, independientes de si el Document de tipo INSURANCE/VTV que
+  // lo respalda está PENDING/APPROVED/REJECTED.
+  insuranceExpiresAt DateTime? @map("insurance_expires_at")
+  vtvExpiresAt       DateTime? @map("vtv_expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("vehicles")
+}
+
+model Document {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  type    DocumentType
+  fileUrl String         @map("file_url")
+  status  DocumentStatus @default(PENDING)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Un solo documento vigente por tipo y usuario — volver a subir el mismo
+  // tipo reemplaza (upsert), no acumula versiones.
+  @@unique([userId, type])
+  @@index([userId])
+  @@map("documents")
 }
 
 // ---------------------------------------------------------------------------

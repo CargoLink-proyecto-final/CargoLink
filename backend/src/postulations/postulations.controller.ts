@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PostulationStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { ProfileCompleteGuard } from '../common/guards/profile-complete.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PostulationsService } from './postulations.service';
@@ -26,9 +27,9 @@ export class PostulationsController {
   constructor(private postulationsService: PostulationsService) {}
 
   @Post('loads/:loadId/postulations')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, ProfileCompleteGuard)
   @Roles('TRANSPORTER')
-  @ApiOperation({ summary: 'Postulate to a load (Transporter only)' })
+  @ApiOperation({ summary: 'Postulate to a load (Transporter only, requires a complete profile)' })
   create(
     @Param('loadId') loadId: string,
     @CurrentUser('id') userId: string,

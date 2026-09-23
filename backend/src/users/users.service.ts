@@ -56,6 +56,10 @@ export const PUBLIC_USER_SELECT = {
   zoneLat: true,
   zoneLng: true,
   zoneRadiusKm: true,
+  cuit: true,
+  licenseCategory: true,
+  licenseExpiresAt: true,
+  termsAcceptedAt: true,
   isActive: true,
   emailVerified: true,
   companyId: true,
@@ -117,10 +121,16 @@ export class UsersService {
     return { users, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async update(id: string, data: Partial<{ firstName: string; lastName: string; phone: string; companyName: string; industry: string; zoneLat: number; zoneLng: number; zoneRadiusKm: number }>) {
+  async update(id: string, data: Partial<{ firstName: string; lastName: string; phone: string; companyName: string; industry: string; zoneLat: number; zoneLng: number; zoneRadiusKm: number; cuit: string; licenseCategory: string; licenseExpiresAt: string }>) {
+    // Prisma exige un DateTime ISO completo; el DTO solo valida "es una fecha"
+    // (acepta "2028-01-01" sin hora), así que lo normalizamos acá.
+    const { licenseExpiresAt, ...rest } = data;
     return this.prisma.user.update({
       where: { id },
-      data,
+      data: {
+        ...rest,
+        ...(licenseExpiresAt !== undefined ? { licenseExpiresAt: new Date(licenseExpiresAt) } : {}),
+      },
       select: PUBLIC_USER_SELECT,
     });
   }
