@@ -7,7 +7,8 @@ import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { tripsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { Truck, Package, Clock, CheckCircle, ArrowRight, Gauge, Fuel, Timer, AlertTriangle, Star, ChevronDown } from 'lucide-react';
+import { useProfileStatus } from '@/lib/transporterProfile';
+import { Truck, Package, Clock, CheckCircle, ArrowRight, Gauge, Fuel, Timer, AlertTriangle, Star, ChevronDown, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
 import type { CarrierMetrics, Rating } from '@/types';
 
@@ -18,6 +19,8 @@ interface MyRatingSummary {
 }
 
 export default function CarrierDashboard() {
+  const { data: profileStatus } = useProfileStatus();
+
   const { data: tripsData, isLoading: tripsLoading } = useQuery({
     queryKey: ['my-trips'],
     queryFn: () => tripsApi.getMy().then((r) => r.data),
@@ -67,6 +70,26 @@ export default function CarrierDashboard() {
             Tus <span className="font-semibold text-primary-700">viajes</span> y oportunidades
           </h1>
         </div>
+
+        {profileStatus && !profileStatus.complete && (
+          <section className="card px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-warning-50 border-warning-600/20">
+            <div className="flex items-center gap-3">
+              <ClipboardCheck size={20} className="text-warning-700 shrink-0" />
+              <div>
+                <p className="text-[13.5px] font-medium text-warning-700">Completá tu perfil</p>
+                <p className="text-[12.5px] text-ink-600 mt-0.5">
+                  Documentos, vehículo y declaración jurada — sin esto no podés postularte a cargas.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/profile/complete"
+              className="shrink-0 inline-flex items-center gap-1.5 text-[13px] font-medium text-primary-700 hover:underline"
+            >
+              Completar ahora <ArrowRight size={14} />
+            </Link>
+          </section>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard label="Total de viajes" value={stats.total} icon={Truck} tone="ink" />

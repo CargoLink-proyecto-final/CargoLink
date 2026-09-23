@@ -1,9 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Sidebar from './Sidebar';
 import { useAuthStore } from '@/store/auth';
-import { messagesApi, postulationsApi } from '@/lib/api';
+import { messagesApi, postulationsApi, transporterProfileApi } from '@/lib/api';
 
 const push = jest.fn();
 const logout = jest.fn();
@@ -19,6 +19,7 @@ jest.mock('@/store/auth', () => ({ useAuthStore: jest.fn() }));
 jest.mock('@/lib/api', () => ({
   messagesApi: { getUnreadCount: jest.fn() },
   postulationsApi: { getMy: jest.fn() },
+  transporterProfileApi: { getStatus: jest.fn() },
 }));
 
 const SHIPPER = {
@@ -54,6 +55,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   (messagesApi.getUnreadCount as jest.Mock).mockResolvedValue({ data: { unreadCount: 0 } });
   (postulationsApi.getMy as jest.Mock).mockResolvedValue({ data: [] });
+  (transporterProfileApi.getStatus as jest.Mock).mockResolvedValue({
+    data: { complete: true, missing: [] },
+  });
 });
 
 // Una postulación que dejó la pelota del lado del transportista.
@@ -85,8 +89,39 @@ describe('Sidebar', () => {
     expect(screen.getByText('Cargas Disponibles')).toBeInTheDocument();
     expect(screen.getByText('Mis Postulaciones')).toBeInTheDocument();
     expect(screen.getByText('Mi Empresa')).toBeInTheDocument();
+    // "Completar perfil" no es un ítem propio del nav — vive dentro de "Mi
+    // perfil" (ver los tests de más abajo), para no sumar una pestaña más.
+    expect(screen.queryByText('Completar perfil')).not.toBeInTheDocument();
     // shipper-only label should not appear
     expect(screen.queryByText('Mis Cargas')).not.toBeInTheDocument();
+  });
+
+  it('badges "Mi perfil" when the transporter profile is incomplete', async () => {
+    (transporterProfileApi.getStatus as jest.Mock).mockResolvedValue({
+      data: { complete: false, missing: ['vehicle'] },
+    });
+    mockAuth({ user: TRANSPORTER, logout });
+    renderSidebar();
+
+    await waitFor(() => {
+      const link = screen.getByText('Mi perfil').closest('a');
+      expect(link?.textContent).toContain('!');
+    });
+  });
+
+  it('does not badge "Mi perfil" when the profile is already complete', async () => {
+    mockAuth({ user: TRANSPORTER, logout });
+    renderSidebar();
+
+    await waitFor(() => expect(transporterProfileApi.getStatus).toHaveBeenCalled());
+    expect(screen.getByText('Mi perfil').closest('a')?.textContent).toBe('Mi perfil');
+  });
+
+  it('shipper does not query the transporter profile status', () => {
+    mockAuth({ user: SHIPPER, logout });
+    renderSidebar();
+    expect(transporterProfileApi.getStatus).not.toHaveBeenCalled();
+    expect(screen.getByText('Mi perfil').closest('a')?.textContent).toBe('Mi perfil');
   });
 
   it('only the transporter gets the postulations entry', () => {

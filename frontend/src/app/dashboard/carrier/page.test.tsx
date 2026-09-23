@@ -18,11 +18,15 @@ jest.mock('@/components/layout/Sidebar', () => ({
 
 jest.mock('@/lib/api', () => ({
   tripsApi: { getMy: jest.fn(), getMetrics: jest.fn() },
+  ratingsApi: { getUserRatings: jest.fn() },
+  transporterProfileApi: { getStatus: jest.fn() },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { tripsApi } = require('@/lib/api') as {
+const { tripsApi, ratingsApi, transporterProfileApi } = require('@/lib/api') as {
   tripsApi: Record<string, jest.Mock>;
+  ratingsApi: Record<string, jest.Mock>;
+  transporterProfileApi: Record<string, jest.Mock>;
 };
 
 function mockAuth(state: Record<string, unknown>) {
@@ -50,6 +54,8 @@ const metrics = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockAuth({ isAuthenticated: true, user: { id: 'c1', role: 'TRANSPORTER' } });
+  ratingsApi.getUserRatings.mockResolvedValue({ data: { ratings: [], averageScore: 0, totalRatings: 0 } });
+  transporterProfileApi.getStatus.mockResolvedValue({ data: { complete: true, missing: [] } });
 });
 
 describe('CarrierDashboard', () => {
@@ -157,5 +163,31 @@ describe('CarrierDashboard', () => {
     expect(
       screen.queryByRole('heading', { name: /Mis postulaciones/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows a banner prompting to complete the profile when it is incomplete', async () => {
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+    transporterProfileApi.getStatus.mockResolvedValue({
+      data: { complete: false, missing: ['vehicle'] },
+    });
+
+    renderWithClient(<CarrierDashboard />);
+
+    expect(await screen.findByText('Completá tu perfil')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Completar ahora/ })).toHaveAttribute(
+      'href',
+      '/profile/complete',
+    );
+  });
+
+  it('hides the profile banner once the profile is complete', async () => {
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+
+    renderWithClient(<CarrierDashboard />);
+
+    await screen.findByText('Sin viajes activos');
+    expect(screen.queryByText('Completá tu perfil')).not.toBeInTheDocument();
   });
 });

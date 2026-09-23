@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth';
 import { messagesApi, postulationsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { countAwaitingCarrierReply } from '@/lib/postulations';
+import { useProfileStatus } from '@/lib/transporterProfile';
 import type { PostulationWithLoad } from '@/types';
 import {
   LayoutDashboard,
@@ -98,10 +99,13 @@ function SidebarContent({ user }: { user: AuthUser }) {
     refetchOnWindowFocus: true,
   });
 
+  const { data: profileStatus } = useProfileStatus();
+  const profileIncomplete = isTransporter && profileStatus ? !profileStatus.complete : false;
+
   const unreadCount = unreadData?.unreadCount || 0;
   const postulationsAwaitingReply = countAwaitingCarrierReply(myPostulations ?? []);
   // El burger de mobile resume todo lo que pide atención, porque el nav está oculto.
-  const pendingTotal = unreadCount + postulationsAwaitingReply;
+  const pendingTotal = unreadCount + postulationsAwaitingReply + (profileIncomplete ? 1 : 0);
   const items = navItems[user.role] || [];
   const handleLogout = () => { logout(); router.push('/auth/login'); };
   const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || '·';
@@ -206,7 +210,15 @@ function SidebarContent({ user }: { user: AuthUser }) {
               )}
             >
               <UserCog size={15} />
-              Mi perfil
+              <span className="flex-1">Mi perfil</span>
+              {profileIncomplete && (
+                <span
+                  className="bg-primary-500 text-white text-[10px] font-semibold rounded-full min-w-[20px] h-[18px] flex items-center justify-center px-1.5"
+                  aria-label="Perfil incompleto"
+                >
+                  !
+                </span>
+              )}
             </Link>
             <button
               onClick={handleLogout}

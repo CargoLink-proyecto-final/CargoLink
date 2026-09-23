@@ -1,12 +1,17 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
+import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
 
 interface Props {
   /** `null` = carga "a convenir": el precio lo pone el transportista y es obligatorio. */
   listedPrice: number | null;
   submitting: boolean;
+  /** Mensaje de error del último intento (ej. perfil incompleto), si lo hay. */
+  error?: string;
+  /** El error es por perfil incompleto: ofrecemos el link directo a completarlo. */
+  showCompleteProfileLink?: boolean;
   onSubmit: (data: { message?: string; proposedPrice?: number }) => void;
   onClose: () => void;
 }
@@ -14,6 +19,8 @@ interface Props {
 export default function PostulateModal({
   listedPrice,
   submitting,
+  error,
+  showCompleteProfileLink,
   onSubmit,
   onClose,
 }: Props) {
@@ -118,6 +125,17 @@ export default function PostulateModal({
             </p>
           )}
         </div>
+
+        {error && (
+          <div className="rounded-lg bg-danger-50 border border-danger-600/20 p-3 text-sm text-danger-700">
+            <p>{error}</p>
+            {showCompleteProfileLink && (
+              <Link href="/profile/complete" className="font-medium underline">
+                Completar perfil
+              </Link>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-2 pt-2">
           <button

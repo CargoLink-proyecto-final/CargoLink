@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { usersApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { User as UserIcon, Check } from 'lucide-react';
+import { useProfileStatus } from '@/lib/transporterProfile';
+import { User as UserIcon, Check, ClipboardCheck, ArrowRight } from 'lucide-react';
 import type { User } from '@/types';
 import ZonePicker from '@/components/maps/ZonePicker';
 
@@ -27,6 +29,7 @@ export default function ProfilePage() {
   const isCompany = role === 'COMPANY_ADMIN';
   const showCompanyName = role === 'CARGO_GENERATOR';
   const showZone = role === 'TRANSPORTER';
+  const { data: profileStatus } = useProfileStatus();
 
   const { data: profile } = useQuery<User>({
     queryKey: ['profile'],
@@ -99,7 +102,7 @@ export default function ProfilePage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-2xl space-y-8">
+      <div className="max-w-2xl mx-auto space-y-8">
         <div>
           <p className="eyebrow">Cuenta</p>
           <h1 className="mt-1 font-display text-[28px] leading-tight flex items-center gap-2">
@@ -109,6 +112,33 @@ export default function ProfilePage() {
             Mantené actualizada tu información de contacto.
           </p>
         </div>
+
+        {showZone && (
+          <Link
+            href="/profile/complete"
+            className={`block rounded-xl border p-4 transition hover:shadow-sm ${
+              profileStatus && !profileStatus.complete
+                ? 'bg-warning-50 border-warning-600/20'
+                : 'bg-surface-raised border-ink-100'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <ClipboardCheck
+                size={20}
+                className={profileStatus && !profileStatus.complete ? 'text-warning-700' : 'text-ink-500'}
+              />
+              <div className="flex-1">
+                <p className="text-[13.5px] font-medium text-ink-800">Perfil de transportista</p>
+                <p className="text-[12.5px] text-ink-500 mt-0.5">
+                  {profileStatus && !profileStatus.complete
+                    ? 'Documentos, vehículo y declaración jurada — sin esto no podés postularte a cargas.'
+                    : 'Documentos, vehículo y declaración jurada.'}
+                </p>
+              </div>
+              <ArrowRight size={16} className="text-ink-400 shrink-0" />
+            </div>
+          </Link>
+        )}
 
         <section className="bg-surface-raised rounded-xl shadow-sm border border-ink-100 p-6">
           <h2 className="font-medium text-[15px] mb-1">

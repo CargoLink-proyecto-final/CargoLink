@@ -6,6 +6,18 @@ export type LoadStatus = 'PUBLISHED' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' |
 export type TripStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type PostulationStatus = 'PENDING' | 'NEGOTIATING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
 
+export type DocumentType =
+  | 'DNI_FRONT'
+  | 'DNI_BACK'
+  | 'LICENSE_FRONT'
+  | 'LICENSE_BACK'
+  | 'AFIP_CONSTANCIA'
+  | 'VEHICLE_CARD'
+  | 'INSURANCE'
+  | 'VTV';
+export type DocumentStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type VehicleType = 'CAMION' | 'CAMIONETA' | 'FURGON' | 'SEMIRREMOLQUE' | 'BATEA' | 'OTRO';
+
 export interface User {
   id: string;
   email: string;
@@ -19,8 +31,48 @@ export interface User {
   zoneLat?: number;
   zoneLng?: number;
   zoneRadiusKm?: number;
+  // Perfil de transportista (P13)
+  cuit?: string;
+  licenseCategory?: string;
+  licenseExpiresAt?: string;
+  termsAcceptedAt?: string;
   isActive: boolean;
   createdAt: string;
+}
+
+export interface TransporterDocument {
+  id: string;
+  type: DocumentType;
+  status: DocumentStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Vehicle {
+  id: string;
+  userId: string;
+  plate: string;
+  brand: string;
+  model: string;
+  year: number;
+  type: VehicleType;
+  maxWeightKg: number;
+  maxVolumeM3?: number | null;
+  heightCm?: number | null;
+  widthCm?: number | null;
+  lengthCm?: number | null;
+  refrigerated: boolean;
+  hazardousMaterials: boolean;
+  bulkLiquid: boolean;
+  insuranceExpiresAt?: string | null;
+  vtvExpiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProfileStatus {
+  complete: boolean;
+  missing: string[];
 }
 
 export interface Load {
