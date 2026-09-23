@@ -1,15 +1,21 @@
 import React from 'react';
 import { render, fireEvent, waitFor, screen } from '@testing-library/react-native';
 import CarrierDashboard from './DashboardScreen';
-import { tripsApi } from '../../services/api';
+import { tripsApi, transporterProfileApi } from '../../services/api';
+
+jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }));
 
 jest.mock('../../services/api', () => ({
   tripsApi: {
     getMy: jest.fn(),
   },
+  transporterProfileApi: {
+    getStatus: jest.fn(),
+  },
 }));
 
 const mockedTripsApi = tripsApi as jest.Mocked<typeof tripsApi>;
+const mockedTransporterProfileApi = transporterProfileApi as jest.Mocked<typeof transporterProfileApi>;
 
 const makeTrip = (over: Partial<any> = {}) => ({
   id: 'trip-1',
@@ -31,6 +37,9 @@ const navigation = { navigate: jest.fn(), goBack: jest.fn(), reset: jest.fn() };
 beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, 'error').mockImplementation(() => {});
+  mockedTransporterProfileApi.getStatus.mockResolvedValue({
+    data: { complete: true, missing: [] },
+  } as any);
 });
 
 afterEach(() => {
@@ -95,5 +104,27 @@ describe('CarrierDashboard', () => {
 
     await waitFor(() => expect(mockedTripsApi.getMy).toHaveBeenCalled());
     expect(screen.getByText('Mis Viajes')).toBeTruthy();
+  });
+
+  it('shows a banner prompting to complete the profile when it is incomplete', async () => {
+    mockedTripsApi.getMy.mockResolvedValue({ data: { trips: [] } } as any);
+    mockedTransporterProfileApi.getStatus.mockResolvedValue({
+      data: { complete: false, missing: ['vehicle'] },
+    } as any);
+
+    render(<CarrierDashboard navigation={navigation} />);
+
+    expect(await screen.findByText('Completá tu perfil')).toBeTruthy();
+    fireEvent.press(screen.getByText('Completá tu perfil'));
+    expect(navigation.navigate).toHaveBeenCalledWith('CompleteProfile');
+  });
+
+  it('hides the profile banner once the profile is complete', async () => {
+    mockedTripsApi.getMy.mockResolvedValue({ data: { trips: [] } } as any);
+
+    render(<CarrierDashboard navigation={navigation} />);
+
+    await waitFor(() => expect(mockedTransporterProfileApi.getStatus).toHaveBeenCalled());
+    expect(screen.queryByText('Completá tu perfil')).toBeNull();
   });
 });

@@ -59,7 +59,7 @@ function optionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }: any) {
   const { user, logout } = useAuthStore();
   const [profile, setProfile] = useState<User | null>(null);
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
@@ -260,6 +260,19 @@ export default function ProfileScreen() {
               <Row label="Rubro" value={shown.industry} />
             )}
           </View>
+        )}
+
+        {isTransporter && (
+          <TouchableOpacity
+            style={styles.section}
+            onPress={() => navigation.navigate('CompleteProfile')}
+          >
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Perfil de transportista</Text>
+              <Text style={styles.link}>Ver</Text>
+            </View>
+            <Text style={styles.helper}>Documentos, vehículo y declaración jurada.</Text>
+          </TouchableOpacity>
         )}
 
         {isTransporter && (
