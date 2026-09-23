@@ -125,7 +125,10 @@ Source: [`../backend/src/users/users.controller.ts`](../backend/src/users/users.
   "firstName": "...",       // todos opcionales
   "lastName": "...",
   "phone": "...",
-  "companyName": "..."
+  "companyName": "...",
+  "cuit": "20-12345678-3",         // perfil de transportista (P13)
+  "licenseCategory": "E1",
+  "licenseExpiresAt": "2028-01-01"
 }
 ```
 
@@ -258,6 +261,8 @@ Source: [`../backend/src/postulations/postulations.controller.ts`](../backend/sr
 }
 ```
 
+Requiere perfil de transportista completo (`ProfileCompleteGuard`, ver [`backend.md`](./backend.md)) — si falta algo, `403 Forbidden` con `{ message, missing: string[] }`, ej. `missing: ["vehicle", "document:DNI_FRONT"]`. Usá `GET /transporter-profile/status` para saber de antemano qué falta.
+
 Si `proposedPrice` se envía y es <= `load.price`, falla con 400 (regla: el carrier ofrece subir el precio si quiere atraer; la baja se negocia por counter-offer).
 
 Crea postulación con `status=PENDING`. La unique compuesta `(loadId, transporterId)` previene duplicados.
@@ -293,6 +298,72 @@ El transporter acepta la contraoferta vigente. Equivale al flujo de `accept` per
 ### DELETE `/postulations/:id`
 
 El transporter retira. Postulation → `WITHDRAWN`. No libera la unique compuesta — el mismo carrier no puede volver a postularse al mismo load.
+
+## Transporter Profile
+
+Source: [`../backend/src/transporter-profile/transporter-profile.controller.ts`](../backend/src/transporter-profile/transporter-profile.controller.ts). Documentos de identidad/habilitación, vehículo y declaración jurada de un `TRANSPORTER` (P13). Ver el modelo de datos en [`base-de-datos.md`](./base-de-datos.md#vehicle-tabla-vehicles).
+
+| Método | Path | Roles | Descripción |
+|---|---|---|---|
+| POST | `/transporter-profile/documents` | `TRANSPORTER` | Sube/reemplaza un documento (`multipart/form-data`) |
+| GET | `/transporter-profile/documents` | `TRANSPORTER` | Lista mis documentos con su estado |
+| GET | `/transporter-profile/documents/:id/file` | dueño o `ADMIN` | Descarga el archivo (nunca público/estático) |
+| DELETE | `/transporter-profile/documents/:id` | `TRANSPORTER` (dueño) | Borra un documento propio |
+| PUT | `/transporter-profile/vehicle` | `TRANSPORTER` | Crea/reemplaza mi vehículo |
+| GET | `/transporter-profile/vehicle` | `TRANSPORTER` | Mi vehículo o `null` |
+| POST | `/transporter-profile/terms` | `TRANSPORTER` | Acepta la declaración jurada |
+| GET | `/transporter-profile/status` | `TRANSPORTER` | `{ complete, missing }` — completitud del perfil |
+
+### POST `/transporter-profile/documents`
+
+`multipart/form-data` con dos campos: `type` (uno de `DocumentType`, ver abajo) y `file` (JPG/PNG/PDF, ≤5MB). Guarda en disco bajo `UPLOAD_DIR/<userId>/<type>.<ext>` y hace upsert del `Document` — volver a subir el mismo `type` reemplaza al anterior (no acumula versiones) y lo vuelve a dejar en `status=PENDING`.
+
+`DocumentType`: `DNI_FRONT`, `DNI_BACK`, `LICENSE_FRONT`, `LICENSE_BACK`, `AFIP_CONSTANCIA`, `VEHICLE_CARD`, `INSURANCE`, `VTV`. Los 8 son obligatorios para que el perfil cuente como completo.
+
+### GET `/transporter-profile/documents/:id/file`
+
+Sirve el archivo con su `Content-Type`. Nunca es un link estático: exige JWT y valida que quien pide sea el dueño del documento o `ADMIN` — son DNI y licencias.
+
+### PUT `/transporter-profile/vehicle`
+
+```jsonc
+{
+  "plate": "AB123CD",
+  "brand": "Mercedes-Benz",
+  "model": "Actros",
+  "year": 2019,
+  "type": "CAMION",              // CAMION | CAMIONETA | FURGON | SEMIRREMOLQUE | BATEA | OTRO
+  "maxWeightKg": 12000,
+  "maxVolumeM3": 40,              // opcional, espeja Load.volume
+  "heightCm": 250, "widthCm": 240, "lengthCm": 600,  // opcionales, espejan Load.*Cm
+  "refrigerated": false,
+  "hazardousMaterials": false,
+  "bulkLiquid": false,
+  "insuranceExpiresAt": "2027-01-01",  // opcional
+  "vtvExpiresAt": "2027-01-01"          // opcional
+}
+```
+
+Semántica de reemplazo completo (no parcial). `plate` es único global — `409 Conflict` si ya está registrado por otro transportista.
+
+### POST `/transporter-profile/terms`
+
+```jsonc
+{ "version": "2026-09-22" }   // versión del texto de la declaración jurada aceptado
+```
+
+Setea `User.termsAcceptedAt = now()` y `termsAcceptedVersion = version` — queda guardado qué versión exacta aceptó cada usuario.
+
+### GET `/transporter-profile/status`
+
+```jsonc
+{
+  "complete": false,
+  "missing": ["cuit", "vehicle", "document:VTV"]
+}
+```
+
+Misma lógica (`computeProfileStatus`) que usa el `ProfileCompleteGuard` de `POST /loads/:loadId/postulations` — lo consumen los frontends para el checklist de "completar perfil".
 
 ## Trips
 

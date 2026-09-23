@@ -18,6 +18,9 @@ enum JoinRequestStatus { PENDING  APPROVED  REJECTED }
 enum LoadStatus        { PUBLISHED  ASSIGNED  IN_TRANSIT  DELIVERED  CANCELLED }
 enum TripStatus        { PENDING  ACCEPTED  IN_PROGRESS  COMPLETED  CANCELLED }
 enum PostulationStatus { PENDING  NEGOTIATING  ACCEPTED  REJECTED  WITHDRAWN }
+enum DocumentType      { DNI_FRONT  DNI_BACK  LICENSE_FRONT  LICENSE_BACK  AFIP_CONSTANCIA  VEHICLE_CARD  INSURANCE  VTV }
+enum DocumentStatus    { PENDING  APPROVED  REJECTED }
+enum VehicleType       { CAMION  CAMIONETA  FURGON  SEMIRREMOLQUE  BATEA  OTRO }
 ```
 
 Estados manejados desde la capa de servicio — Prisma no enforced transitions.
@@ -42,6 +45,10 @@ Estados manejados desde la capa de servicio — Prisma no enforced transitions.
 | `emailVerificationToken` | `String? @unique` | |
 | `emailVerificationTokenExp` | `DateTime?` | |
 | `companyId` | `String?` | `company_id`; empresa a la que pertenece (chofer). `null` = independiente |
+| `cuit` | `String?` | CUIT/CUIL del transportista (P13) |
+| `licenseCategory` | `String?` | `license_category`; categoría de la licencia de conducir |
+| `licenseExpiresAt` | `DateTime?` | `license_expires_at` |
+| `termsAcceptedAt` / `termsAcceptedVersion` | `DateTime?` / `String?` | `terms_accepted_at` / `terms_accepted_version`; declaración jurada del transportista, versionada |
 | `createdAt` / `updatedAt` | `DateTime` | |
 
 Relaciones:
@@ -53,6 +60,8 @@ Relaciones:
 - `company` — empresa a la que pertenece como chofer (`CompanyMembers`, vía `companyId`).
 - `ownedCompany` — empresa que administra como `COMPANY_ADMIN` (`CompanyOwner`, 1:1).
 - `companyJoinRequests` — solicitudes enviadas como chofer (`DriverRequests`).
+- `vehicle` — vehículo propio, 1:1 hoy vía `Vehicle.userId @unique` (ver `Vehicle` abajo).
+- `documents` — documentos de identidad/habilitación subidos (`Document[]`).
 
 Índice: `@@index([companyId])`.
 
@@ -196,6 +205,44 @@ Constraints:
 - `@@unique([tripId, fromUserId])` — una rating por trip por persona.
 - `@@index([toUserId])` — para consultar ratings recibidas.
 
+### `Vehicle` (tabla `vehicles`)
+
+Perfil de transportista (P13): vehículo propio. Un `TRANSPORTER` sin `Vehicle` +
+documentos completos + declaración jurada aceptada no puede postularse a una
+carga — ver `ProfileCompleteGuard` en [`backend.md`](./backend.md).
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | |
+| `userId` | `String @unique` → `User.id` | `user_id`; 1:1 hoy — sacar el `@unique` habilita flota (varios vehículos) sin reescribir el modelo |
+| `plate` | `String @unique` | dominio/patente |
+| `brand` / `model` / `year` | `String` / `String` / `Int` | |
+| `type` | `VehicleType` | |
+| `maxWeightKg` | `Float` | `max_weight_kg` |
+| `maxVolumeM3` / `heightCm` / `widthCm` / `lengthCm` | `Float?` | espejan los campos logísticos de `Load` a propósito, para cruzar capacidad de vehículo contra carga a futuro |
+| `refrigerated` / `hazardousMaterials` / `bulkLiquid` | `Boolean` default `false` | `hazardous_materials` / `bulk_liquid` |
+| `insuranceExpiresAt` / `vtvExpiresAt` | `DateTime?` | `insurance_expires_at` / `vtv_expires_at`; atributos del vehículo, no del archivo escaneado que los respalda (ver `Document`) |
+| `createdAt` / `updatedAt` | | |
+
+### `Document` (tabla `documents`)
+
+Archivos subidos por el transportista (DNI, licencia, seguro, etc.). Genérico
+por diseño — un enum de tipo, no una tabla por documento — para poder sumar un
+tipo nuevo (ej. RUTA/CNRT) con una migración chica.
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | |
+| `userId` → `User.id` | | `user_id` |
+| `type` | `DocumentType` | |
+| `fileUrl` | `String` | `file_url`; ruta relativa a `UPLOAD_DIR` (ver [`docker.md`](./docker.md)) — **nunca servida como estática pública**, solo vía `GET /transporter-profile/documents/:id/file` (dueño o `ADMIN`) |
+| `status` | `DocumentStatus` default `PENDING` | la revisión manual por un admin (`APPROVED`/`REJECTED`) todavía no está implementada — el estado existe pero hoy no bloquea nada |
+| `createdAt` / `updatedAt` | | |
+
+Constraints e índices:
+- `@@unique([userId, type])` — un solo documento vigente por tipo y usuario; volver a subir el mismo tipo reemplaza (upsert), no acumula versiones.
+- `@@index([userId])`
+
 ## Diagrama de relaciones
 
 ```
@@ -246,6 +293,7 @@ Folder: [`../backend/prisma/migrations/`](../backend/prisma/migrations/).
 | `20260520000000_add_price_negotiation` | Columnas `counterOfferPrice`, `lastOfferBy` para negociación |
 | `20260606214458_add_company_admin` | Rol `COMPANY_ADMIN`, tablas `companies` y `company_join_requests`, `companyId` en `users` |
 | `20260606233212_add_trip_fuel_and_distance` | Columnas `fuelLiters`, `distanceKm` en `trips` |
+| `20260922223646_add_transporter_profile` | Tablas `vehicles` y `documents`; columnas `cuit`, `licenseCategory`, `licenseExpiresAt`, `termsAcceptedAt`, `termsAcceptedVersion` en `users` |
 
 `migration_lock.toml` registra el provider (`postgresql`) — no editarlo.
 
