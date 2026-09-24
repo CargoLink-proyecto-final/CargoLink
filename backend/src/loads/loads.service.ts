@@ -9,7 +9,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateLoadDto } from './dto/create-load.dto';
 import { UpdateLoadDto } from './dto/update-load.dto';
 import { RegisterQueryDto } from './dto/register-query.dto';
-import { LoadStatus, Prisma } from '@prisma/client';
+import { LoadStatus, Prisma, PostulationStatus, TripStatus } from '@prisma/client';
+import {
+  computeFuelAndDeliveryMetrics,
+  computeMoneyMetrics,
+  round1,
+  round2,
+} from '../common/metrics';
 
 type AuthUser = { id: string; role: string };
 
@@ -430,6 +436,178 @@ export class LoadsService {
         },
       },
     });
+  }
+
+  /**
+   * Métricas del dador de carga logueado: estado de sus cargas, qué tan rápido
+   * consiguen transportista, puntualidad de las entregas que recibió y cuánto
+   * gastó en fletes. Alimenta el panel del shipper.
+   */
+  async getShipperMetrics(shipperId: string) {
+    const now = new Date();
+
+    const loads = await this.prisma.load.findMany({
+      where: { shipperId },
+      select: {
+        status: true,
+        price: true,
+        cargoType: true,
+        createdAt: true,
+        deliveryDate: true,
+        _count: { select: { postulations: true } },
+        // El precio pactado vive acá, no en load.price — ver resolveTripPrice().
+        postulations: {
+          where: { status: PostulationStatus.ACCEPTED },
+          select: { proposedPrice: true },
+          take: 1,
+        },
+        trip: {
+          select: {
+            status: true,
+            createdAt: true,
+            completedAt: true,
+            distanceKm: true,
+            carrier: {
+              select: { id: true, firstName: true, lastName: true, companyName: true },
+            },
+          },
+        },
+      },
+    });
+
+    // Los helpers puros de common/metrics trabajan sobre viajes, así que
+    // reconstruimos esa forma desde las cargas (que es como consultamos acá).
+    const trips = loads.flatMap((l) =>
+      l.trip
+        ? [
+            {
+              status: l.trip.status,
+              completedAt: l.trip.completedAt,
+              distanceKm: l.trip.distanceKm,
+              fuelLiters: null,
+              load: {
+                deliveryDate: l.deliveryDate,
+                price: l.price,
+                postulations: l.postulations,
+              },
+            },
+          ]
+        : [],
+    );
+
+    const byStatus = (status: LoadStatus) =>
+      loads.filter((l) => l.status === status).length;
+
+    // La tasa de asignación mide cuántas cargas consiguieron transportista.
+    // Las canceladas no entran: el dador las bajó, no es que el mercado no
+    // las tomó.
+    const assignable = loads.filter((l) => l.status !== LoadStatus.CANCELLED);
+    const assigned = assignable.filter((l) => l.trip);
+
+    const assignmentHours = assigned.flatMap((l) =>
+      l.trip ? [(l.trip.createdAt.getTime() - l.createdAt.getTime()) / 3_600_000] : [],
+    );
+    const avgHoursToAssignment = assignmentHours.length
+      ? round1(assignmentHours.reduce((a, b) => a + b, 0) / assignmentHours.length)
+      : null;
+
+    const totalPostulations = loads.reduce((sum, l) => sum + l._count.postulations, 0);
+
+    // Cuánto se corrió el precio pactado respecto del publicado. Solo mide las
+    // cargas que salieron con precio: en las "a convenir" no hay referencia.
+    const negotiationDeltas = loads.flatMap((l) => {
+      const agreed = l.postulations[0]?.proposedPrice;
+      if (l.price == null || l.price <= 0 || agreed == null) return [];
+      return [(agreed - l.price) / l.price];
+    });
+    const avgNegotiationDelta = negotiationDeltas.length
+      ? negotiationDeltas.reduce((a, b) => a + b, 0) / negotiationDeltas.length
+      : null;
+
+    const { onTimeDeliveries, lateDeliveries, onTimeRate, totalDistanceKm } =
+      computeFuelAndDeliveryMetrics(trips, now);
+    const money = computeMoneyMetrics(trips, now);
+
+    // Ranking de transportistas: con quiénes viene trabajando y cuánto les pagó.
+    const carriers = new Map<
+      string,
+      { id: string; name: string; completedTrips: number; totalSpend: number; avgRating: number | null }
+    >();
+    for (const l of loads) {
+      if (!l.trip || l.trip.status !== TripStatus.COMPLETED || !l.trip.carrier) continue;
+      const c = l.trip.carrier;
+      const entry = carriers.get(c.id) ?? {
+        id: c.id,
+        name: c.companyName || `${c.firstName} ${c.lastName}`,
+        completedTrips: 0,
+        totalSpend: 0,
+        avgRating: null,
+      };
+      entry.completedTrips += 1;
+      entry.totalSpend += l.postulations[0]?.proposedPrice ?? l.price ?? 0;
+      carriers.set(c.id, entry);
+    }
+
+    // Calificación que este dador le puso a cada transportista, para que el
+    // ranking no sea solo volumen.
+    if (carriers.size) {
+      const ratings = await this.prisma.rating.groupBy({
+        by: ['toUserId'],
+        where: { fromUserId: shipperId, toUserId: { in: [...carriers.keys()] } },
+        _avg: { score: true },
+      });
+      for (const r of ratings) {
+        const entry = carriers.get(r.toUserId);
+        if (entry) entry.avgRating = r._avg.score;
+      }
+    }
+
+    const topCarriers = [...carriers.values()]
+      .map((c) => ({ ...c, totalSpend: round2(c.totalSpend) }))
+      .sort((a, b) => b.completedTrips - a.completedTrips || b.totalSpend - a.totalSpend)
+      .slice(0, 5);
+
+    // En qué tipo de carga se le va el presupuesto.
+    const byCargoType = new Map<string, { cargoType: string; trips: number; amount: number }>();
+    for (const l of loads) {
+      if (!l.trip || l.trip.status !== TripStatus.COMPLETED) continue;
+      const entry = byCargoType.get(l.cargoType) ?? {
+        cargoType: l.cargoType,
+        trips: 0,
+        amount: 0,
+      };
+      entry.trips += 1;
+      entry.amount += l.postulations[0]?.proposedPrice ?? l.price ?? 0;
+      byCargoType.set(l.cargoType, entry);
+    }
+    const spendByCargoType = [...byCargoType.values()]
+      .map((c) => ({ ...c, amount: round2(c.amount) }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+
+    return {
+      totalLoads: loads.length,
+      publishedLoads: byStatus(LoadStatus.PUBLISHED),
+      assignedLoads: byStatus(LoadStatus.ASSIGNED),
+      inTransitLoads: byStatus(LoadStatus.IN_TRANSIT),
+      deliveredLoads: byStatus(LoadStatus.DELIVERED),
+      cancelledLoads: byStatus(LoadStatus.CANCELLED),
+      // null cuando todavía no publicó nada medible, para no mostrar 0%.
+      assignmentRate: assignable.length ? assigned.length / assignable.length : null,
+      avgHoursToAssignment,
+      avgPostulationsPerLoad: loads.length
+        ? round1(totalPostulations / loads.length)
+        : null,
+      onTimeDeliveries,
+      lateDeliveries,
+      onTimeRate,
+      totalDistanceKm,
+      avgNegotiationDelta,
+      negotiatedLoads: negotiationDeltas.length,
+      ...money,
+      topCarriers,
+      spendByCargoType,
+    };
   }
 
   private shapeRegisterItem(load: any) {

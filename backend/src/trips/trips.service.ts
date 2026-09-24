@@ -5,9 +5,9 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TripStatus, LoadStatus } from '@prisma/client';
+import { TripStatus, LoadStatus, PostulationStatus } from '@prisma/client';
 import { fetchRouteDistanceKm } from '../common/routing';
-import { computeFuelAndDeliveryMetrics } from '../common/metrics';
+import { computeFuelAndDeliveryMetrics, computeMoneyMetrics } from '../common/metrics';
 
 @Injectable()
 export class TripsService {
@@ -154,26 +154,72 @@ export class TripsService {
     ]);
   }
 
-  /** Métricas de combustible y puntualidad del transportista logueado. */
+  /**
+   * Métricas del transportista logueado: combustible, puntualidad, ingresos y
+   * conversión de postulaciones. Alimenta el panel de rendimiento.
+   */
   async getCarrierMetrics(carrierId: string) {
-    const trips = await this.prisma.trip.findMany({
-      where: { carrierId },
-      select: {
-        status: true,
-        completedAt: true,
-        fuelLiters: true,
-        distanceKm: true,
-        load: { select: { deliveryDate: true } },
-      },
-    });
+    const [trips, postulationsByStatus, ratingAgg] = await Promise.all([
+      this.prisma.trip.findMany({
+        where: { carrierId },
+        select: {
+          status: true,
+          completedAt: true,
+          fuelLiters: true,
+          distanceKm: true,
+          load: {
+            select: {
+              deliveryDate: true,
+              price: true,
+              // El precio pactado vive en la postulación aceptada — ver
+              // resolveTripPrice() en common/metrics.
+              postulations: {
+                where: { status: PostulationStatus.ACCEPTED },
+                select: { proposedPrice: true },
+                take: 1,
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.postulation.groupBy({
+        by: ['status'],
+        where: { transporterId: carrierId },
+        _count: { _all: true },
+      }),
+      this.prisma.rating.aggregate({
+        where: { toUserId: carrierId },
+        _avg: { score: true },
+        _count: { score: true },
+      }),
+    ]);
 
+    const now = new Date();
     const completedTrips = trips.filter(
       (t) => t.status === TripStatus.COMPLETED,
     ).length;
 
+    const postulationsSent = postulationsByStatus.reduce(
+      (sum, row) => sum + row._count._all,
+      0,
+    );
+    const postulationsAccepted =
+      postulationsByStatus.find((row) => row.status === PostulationStatus.ACCEPTED)
+        ?._count._all ?? 0;
+
     return {
       completedTrips,
-      ...computeFuelAndDeliveryMetrics(trips, new Date()),
+      ...computeFuelAndDeliveryMetrics(trips, now),
+      ...computeMoneyMetrics(trips, now),
+      postulationsSent,
+      postulationsAccepted,
+      // Cuántas de las postulaciones enviadas terminaron en viaje. null si
+      // todavía no se postuló a nada, para no mostrar un 0% engañoso.
+      postulationAcceptanceRate: postulationsSent
+        ? postulationsAccepted / postulationsSent
+        : null,
+      avgRating: ratingAgg._avg.score,
+      ratingsCount: ratingAgg._count.score,
     };
   }
 

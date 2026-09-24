@@ -27,7 +27,7 @@ describe('CompaniesService', () => {
       count: jest.Mock;
     };
     trip: { findMany: jest.Mock; count: jest.Mock };
-    rating: { aggregate: jest.Mock };
+    rating: { aggregate: jest.Mock; groupBy: jest.Mock };
     $transaction: jest.Mock;
   };
 
@@ -51,7 +51,7 @@ describe('CompaniesService', () => {
         count: jest.fn(),
       },
       trip: { findMany: jest.fn(), count: jest.fn() },
-      rating: { aggregate: jest.fn() },
+      rating: { aggregate: jest.fn(), groupBy: jest.fn().mockResolvedValue([]) },
       // Default: execute the callback with a tx that mirrors prisma.
       $transaction: jest.fn(async (cb) => cb(prisma)),
     };
@@ -787,6 +787,114 @@ describe('CompaniesService', () => {
       });
 
       await expect(service.getDriverStats('owner-1', 'd1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // getCompanyMetrics
+  // ------------------------------------------------------------------
+  describe('getCompanyMetrics', () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 24 * 3_600_000);
+
+    const driver = (id: string, firstName: string) => ({
+      id,
+      firstName,
+      lastName: 'Perez',
+      email: `${id}@x.com`,
+      phone: null,
+      avatarUrl: null,
+    });
+
+    it('returns an empty report when the company has no drivers', async () => {
+      prisma.company.findUnique.mockResolvedValue(company);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      const result = await service.getCompanyMetrics('owner-1');
+
+      expect(result.driverCount).toBe(0);
+      expect(result.utilizationRate).toBeNull();
+      expect(result.totalAmount).toBe(0);
+      expect(result.driverRanking).toEqual([]);
+      expect(result.monthly).toHaveLength(12);
+      // Sin conductores no vale la pena ir a buscar viajes ni calificaciones.
+      expect(prisma.trip.findMany).not.toHaveBeenCalled();
+    });
+
+    it('aggregates the fleet and ranks drivers by revenue', async () => {
+      prisma.company.findUnique.mockResolvedValue(company);
+      prisma.user.findMany.mockResolvedValue([driver('d1', 'Ana'), driver('d2', 'Beto')]);
+      prisma.trip.findMany.mockResolvedValue([
+        {
+          carrierId: 'd1',
+          status: TripStatus.COMPLETED,
+          completedAt: daysAgo(2),
+          fuelLiters: 100,
+          distanceKm: 500,
+          load: {
+            deliveryDate: daysAgo(1), // entregó antes de la fecha comprometida
+            price: 1000,
+            postulations: [{ proposedPrice: 2000 }],
+          },
+        },
+        {
+          carrierId: 'd1',
+          status: TripStatus.IN_PROGRESS,
+          completedAt: null,
+          fuelLiters: null,
+          distanceKm: null,
+          load: { deliveryDate: null, price: 900, postulations: [] },
+        },
+        // d2 no maneja hace más de un mes: flota subutilizada.
+        {
+          carrierId: 'd2',
+          status: TripStatus.COMPLETED,
+          completedAt: daysAgo(60),
+          fuelLiters: 20,
+          distanceKm: 100,
+          load: { deliveryDate: null, price: 500, postulations: [] },
+        },
+      ]);
+      prisma.rating.groupBy.mockResolvedValue([
+        { toUserId: 'd1', _avg: { score: 4.5 }, _count: { score: 8 } },
+      ]);
+
+      const result = await service.getCompanyMetrics('owner-1');
+
+      expect(result.driverCount).toBe(2);
+      expect(result.totalTrips).toBe(3);
+      expect(result.completedTrips).toBe(2);
+      expect(result.activeTrips).toBe(1);
+      // 2000 (precio pactado en la postulación) + 500 (precio publicado).
+      expect(result.totalAmount).toBe(2500);
+      expect(result.totalDistanceKm).toBe(600);
+      expect(result.avgKmPerLiter).toBe(5); // 600 km / 120 L
+      expect(result.activeDriverCount).toBe(1);
+      expect(result.utilizationRate).toBe(0.5);
+      expect(result.idleDriverCount).toBe(1);
+
+      const [top, second] = result.driverRanking;
+      expect(top.id).toBe('d1');
+      expect(top.name).toBe('Ana Perez');
+      expect(top.totalAmount).toBe(2000);
+      expect(top.activeTrips).toBe(1);
+      expect(top.onTimeRate).toBe(1);
+      expect(top.avgRating).toBe(4.5);
+      expect(top.ratingsCount).toBe(8);
+      expect(top.idle).toBe(false);
+
+      expect(second.id).toBe('d2');
+      expect(second.totalAmount).toBe(500);
+      expect(second.avgRating).toBeNull();
+      expect(second.ratingsCount).toBe(0);
+      expect(second.idle).toBe(true);
+    });
+
+    it('throws NotFoundException when the user owns no company', async () => {
+      prisma.company.findUnique.mockResolvedValue(null);
+
+      await expect(service.getCompanyMetrics('owner-1')).rejects.toThrow(
         NotFoundException,
       );
     });

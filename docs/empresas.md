@@ -115,7 +115,16 @@ Devuelve, para el chofer indicado (debe pertenecer a la empresa del admin):
 }
 ```
 
-El cómputo de combustible/puntualidad reutiliza `computeFuelAndDeliveryMetrics` de [`../backend/src/common/metrics.ts`](../backend/src/common/metrics.ts) — el **mismo** que alimenta el dashboard del transportista (`GET /trips/metrics`). Ver [`api.md`](./api.md) § Trips.
+El cómputo de combustible/puntualidad reutiliza `computeFuelAndDeliveryMetrics` de [`../backend/src/common/metrics.ts`](../backend/src/common/metrics.ts) — el **mismo** que alimenta el dashboard del transportista (`GET /trips/metrics`). Ver [`api.md`](./api.md) § Trips. `totalRevenue` sale de `resolveTripPrice`: el precio pactado vive en la postulación aceptada, no en `load.price`.
+
+### GET `/companies/me/metrics`
+
+Métricas **agregadas de la flota** para el panel del admin de empresa, con los mismos helpers puros que el panel del transportista (un chofer y su empresa nunca ven números distintos del mismo viaje):
+
+- Facturación: `totalAmount`, `amountThisMonth`, `avgAmountPerTrip`, `amountPerKm`, `monthly` (12 meses).
+- Operación: `avgKmPerLiter` y puntualidad de toda la flota, `totalTrips` / `completedTrips` / `activeTrips`.
+- Utilización: `activeDriverCount`, `utilizationRate`, `idleDriverCount` (sin viaje en curso ni entregas en 30 días).
+- `driverRanking`: un registro por chofer (facturación, km, km/L, puntualidad, rating, `idle`), ordenado por facturación.
 
 ## Frontend
 

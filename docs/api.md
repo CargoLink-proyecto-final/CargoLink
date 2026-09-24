@@ -139,6 +139,7 @@ Source: [`../backend/src/loads/loads.controller.ts`](../backend/src/loads/loads.
 | GET | `/loads` | cualquier rol | Listar con filtros |
 | GET | `/loads/available` | cualquier rol | Listar `PUBLISHED` (filtros) |
 | GET | `/loads/my` | `CARGO_GENERATOR` | Loads propios |
+| GET | `/loads/metrics` | `CARGO_GENERATOR` | Métricas de cargas, entregas y gasto del shipper logueado |
 | GET | `/loads/register` | cualquier rol | Registro de loads `DELIVERED`/`CANCELLED` (filtrado por rol) |
 | GET | `/loads/register/export` | cualquier rol | ZIP con `loads.csv` + `messages.csv` |
 | GET | `/loads/:id` | cualquier rol | Detalle |
@@ -194,6 +195,16 @@ Response:
   "limit": 50
 }
 ```
+
+### GET `/loads/metrics`
+
+Métricas del dador de carga logueado, para su panel. Tres bloques:
+
+- **Cargas**: conteos por estado, `assignmentRate` (cuántas de las no canceladas consiguieron transportista), `avgHoursToAssignment` y `avgPostulationsPerLoad`.
+- **Entregas**: `onTimeDeliveries` / `lateDeliveries` / `onTimeRate`, con el mismo `computeFuelAndDeliveryMetrics` que usa el transportista.
+- **Dinero**: `totalAmount`, `amountThisMonth`, `avgAmountPerTrip`, `amountPerKm` y `monthly` (12 meses, incluidos los vacíos), más `avgNegotiationDelta` (desvío promedio entre precio publicado y pactado), `topCarriers` y `spendByCargoType`.
+
+El precio de cada viaje sale de `resolveTripPrice` ([`../backend/src/common/metrics.ts`](../backend/src/common/metrics.ts)): la postulación aceptada manda, y si no hubo, el precio publicado.
 
 ### GET `/loads/register`
 
@@ -303,7 +314,7 @@ Source: [`../backend/src/trips/trips.controller.ts`](../backend/src/trips/trips.
 | POST | `/trips/accept/:loadId` | `ADMIN` | Override: crea trip sin postulación |
 | GET | `/trips` | `ADMIN` | Listar todos los trips |
 | GET | `/trips/my` | `TRANSPORTER` | Trips propios (carrier) |
-| GET | `/trips/metrics` | `TRANSPORTER` | Métricas de combustible + puntualidad del carrier logueado |
+| GET | `/trips/metrics` | `TRANSPORTER` | Métricas de combustible, puntualidad, ingresos y postulaciones del carrier |
 | GET | `/trips/my-loads` | `CARGO_GENERATOR` | Trips de mis loads (shipper) |
 | GET | `/trips/:id` | cualquier rol | Detalle |
 | PATCH | `/trips/:id/start` | `TRANSPORTER` (dueño) | `PENDING` → `IN_PROGRESS`, set `startedAt` |
@@ -324,7 +335,13 @@ Marca el trip `COMPLETED`, setea `completedAt`, guarda `fuelLiters` y calcula `d
 
 ### GET `/trips/metrics`
 
-Devuelve las métricas agregadas del transportista logueado, calculadas con `computeFuelAndDeliveryMetrics` ([`../backend/src/common/metrics.ts`](../backend/src/common/metrics.ts)): tasa de entregas a tiempo (solo trips con `deliveryDate`), eficiencia km/litro y resúmenes mensuales de combustible/distancia. Las mismas métricas, por chofer, las consume el admin de empresa (ver [`empresas.md`](./empresas.md)).
+Métricas agregadas del transportista logueado ([`../backend/src/common/metrics.ts`](../backend/src/common/metrics.ts)):
+
+- `computeFuelAndDeliveryMetrics`: tasa de entregas a tiempo (solo trips con `deliveryDate`), eficiencia km/litro y resúmenes mensuales de combustible/distancia.
+- `computeMoneyMetrics`: `totalAmount`, `amountThisMonth`, `avgAmountPerTrip`, `amountPerKm` y la serie `monthly` de 12 meses. El precio de cada viaje lo resuelve `resolveTripPrice` (postulación aceptada > precio publicado).
+- Conversión de postulaciones: `postulationsSent`, `postulationsAccepted`, `postulationAcceptanceRate` (null si nunca se postuló), más `avgRating` / `ratingsCount`.
+
+Las mismas métricas, por chofer y agregadas de flota, las consume el admin de empresa (ver [`empresas.md`](./empresas.md)).
 
 ### PATCH `/trips/:id/location`
 
@@ -408,6 +425,7 @@ Source: [`../backend/src/companies/companies.controller.ts`](../backend/src/comp
 | DELETE | `/companies/join-requests/:requestId` | `TRANSPORTER` | Cancelar solicitud pendiente propia |
 | POST | `/companies/leave` | `TRANSPORTER` | Salir de la empresa actual |
 | GET | `/companies/me` | `COMPANY_ADMIN` | Overview de mi empresa (`memberCount`, `pendingRequests`) |
+| GET | `/companies/me/metrics` | `COMPANY_ADMIN` | Métricas agregadas de flota + ranking de conductores |
 | GET | `/companies/me/drivers` | `COMPANY_ADMIN` | Listar choferes de mi flota |
 | GET | `/companies/me/drivers/:driverId/stats` | `COMPANY_ADMIN` | Métricas de un chofer |
 | DELETE | `/companies/me/drivers/:driverId` | `COMPANY_ADMIN` | Remover chofer de la flota |
