@@ -5,9 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
+import ChartCard from '@/components/charts/ChartCard';
+import MonthlyTrendChart from '@/components/charts/MonthlyTrendChart';
+import FuelMarginCard from '@/components/metrics/FuelMarginCard';
 import { tripsApi, ratingsApi } from '@/lib/api';
+import { formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
-import { Truck, Package, Clock, CheckCircle, ArrowRight, Gauge, Fuel, Timer, AlertTriangle, Star, ChevronDown } from 'lucide-react';
+import { Truck, Package, Clock, CheckCircle, ArrowRight, Gauge, Fuel, Timer, AlertTriangle, Star, ChevronDown, Wallet, Coins, Route, Hand } from 'lucide-react';
 import Link from 'next/link';
 import type { CarrierMetrics, Rating } from '@/types';
 
@@ -58,6 +62,10 @@ export default function CarrierDashboard() {
     });
   const [activeTrip, ...otherActiveTrips] = activeTrips;
 
+  // El último punto de la serie es siempre el mes en curso.
+  const monthly = metrics?.monthly ?? [];
+  const tripsThisMonth = monthly.length ? monthly[monthly.length - 1].trips : 0;
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -86,6 +94,69 @@ export default function CarrierDashboard() {
           />
         </div>
 
+        {/* Lo que facturaste: visible sin desplegar nada, es la razón de manejar. */}
+        <section className="space-y-4">
+          <p className="eyebrow">Tus ingresos</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              label="Ingresos totales"
+              value={metrics ? formatCurrency(metrics.totalAmount) : '—'}
+              icon={Wallet}
+              tone="ink"
+              hint="Sobre viajes completados"
+            />
+            <StatCard
+              label="Ingresos del mes"
+              value={metrics ? formatCurrency(metrics.amountThisMonth) : '—'}
+              icon={Coins}
+              tone="success"
+              hint={
+                metrics
+                  ? `${tripsThisMonth} viaje${tripsThisMonth === 1 ? '' : 's'} cerrado${tripsThisMonth === 1 ? '' : 's'}`
+                  : undefined
+              }
+            />
+            <StatCard
+              label="Promedio por viaje"
+              value={metrics?.avgAmountPerTrip != null ? formatCurrency(metrics.avgAmountPerTrip) : '—'}
+              icon={Truck}
+              tone="info"
+            />
+            <StatCard
+              label="Tarifa media por km"
+              value={metrics?.amountPerKm != null ? formatCurrency(metrics.amountPerKm) : '—'}
+              icon={Route}
+              tone="primary"
+              hint="Con qué comparar una carga nueva antes de postularte"
+            />
+          </div>
+
+          <ChartCard
+            eyebrow="Últimos 12 meses"
+            title="Ingresos mensuales"
+            aside={
+              metrics?.postulationAcceptanceRate != null ? (
+                <>
+                  <p className="eyebrow">Postulaciones ganadas</p>
+                  <p className="mt-1 font-mono text-[15px] tabular-nums text-ink-900">
+                    {Math.round(metrics.postulationAcceptanceRate * 100)}%
+                  </p>
+                  <p className="text-[11.5px] text-ink-500">
+                    {metrics.postulationsAccepted} de {metrics.postulationsSent}
+                  </p>
+                </>
+              ) : undefined
+            }
+          >
+            <MonthlyTrendChart
+              data={metrics?.monthly ?? []}
+              tone="success"
+              valueLabel="Ingresos"
+              emptyMessage="Cuando completes tu primer viaje vas a ver acá cuánto facturaste mes a mes."
+            />
+          </ChartCard>
+        </section>
+
         <div>
           <button
             type="button"
@@ -100,39 +171,68 @@ export default function CarrierDashboard() {
             </span>
           </button>
           {showPerformance && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard
-                label="Consumo promedio"
-                value={metrics?.avgKmPerLiter != null ? `${metrics.avgKmPerLiter} km/L` : '—'}
-                icon={Gauge}
-                tone="info"
-                hint="Sobre viajes con litros cargados"
-              />
-              <StatCard
-                label="Combustible del mes"
-                value={metrics ? `${metrics.litersThisMonth} L` : '—'}
-                icon={Fuel}
-                tone="primary"
-                hint={metrics ? `${metrics.kmThisMonth} km recorridos` : undefined}
-              />
-              <StatCard
-                label="Entregas a tiempo"
-                value={metrics?.onTimeDeliveries ?? '—'}
-                icon={Timer}
-                tone="success"
-                hint={
-                  metrics?.onTimeRate != null
-                    ? `${Math.round(metrics.onTimeRate * 100)}% de las medibles`
-                    : 'Sin fechas comprometidas aún'
-                }
-              />
-              <StatCard
-                label="Entregas demoradas"
-                value={metrics?.lateDeliveries ?? '—'}
-                icon={AlertTriangle}
-                tone={metrics && metrics.lateDeliveries > 0 ? 'danger' : 'ink'}
-                hint="Llegaron después de la fecha comprometida"
-              />
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard
+                  label="Consumo promedio"
+                  value={metrics?.avgKmPerLiter != null ? `${metrics.avgKmPerLiter} km/L` : '—'}
+                  icon={Gauge}
+                  tone="info"
+                  hint="Sobre viajes con litros cargados"
+                />
+                <StatCard
+                  label="Combustible del mes"
+                  value={metrics ? `${metrics.litersThisMonth} L` : '—'}
+                  icon={Fuel}
+                  tone="primary"
+                  hint={metrics ? `${metrics.kmThisMonth} km recorridos` : undefined}
+                />
+                <StatCard
+                  label="Entregas a tiempo"
+                  value={metrics?.onTimeDeliveries ?? '—'}
+                  icon={Timer}
+                  tone="success"
+                  hint={
+                    metrics?.onTimeRate != null
+                      ? `${Math.round(metrics.onTimeRate * 100)}% de las medibles`
+                      : 'Sin fechas comprometidas aún'
+                  }
+                />
+                <StatCard
+                  label="Entregas demoradas"
+                  value={metrics?.lateDeliveries ?? '—'}
+                  icon={AlertTriangle}
+                  tone={metrics && metrics.lateDeliveries > 0 ? 'danger' : 'ink'}
+                  hint="Llegaron después de la fecha comprometida"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <FuelMarginCard
+                  totalAmount={metrics?.totalAmount ?? 0}
+                  totalFuelLiters={metrics?.totalFuelLiters ?? 0}
+                  totalDistanceKm={metrics?.totalDistanceKm ?? 0}
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
+                  <StatCard
+                    label="Postulaciones enviadas"
+                    value={metrics?.postulationsSent ?? '—'}
+                    icon={Hand}
+                    tone="ink"
+                  />
+                  <StatCard
+                    label="Postulaciones ganadas"
+                    value={metrics?.postulationsAccepted ?? '—'}
+                    icon={CheckCircle}
+                    tone="success"
+                    hint={
+                      metrics?.postulationAcceptanceRate != null
+                        ? `${Math.round(metrics.postulationAcceptanceRate * 100)}% de conversión`
+                        : 'Todavía no te postulaste'
+                    }
+                  />
+                </div>
+              </div>
             </div>
           )}
         </div>

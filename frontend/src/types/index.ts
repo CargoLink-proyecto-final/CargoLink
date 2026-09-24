@@ -84,8 +84,95 @@ export interface FleetMetrics {
   monthLabel: string;
 }
 
-export interface CarrierMetrics extends FleetMetrics {
+
+// Un mes de la serie histórica de dinero. El backend devuelve siempre 12,
+// incluidos los meses sin actividad, para que el gráfico no tenga huecos.
+export interface MoneyMonthPoint {
+  /** Mes en formato YYYY-MM. */
+  month: string;
+  amount: number;
+  trips: number;
+  km: number;
+}
+
+// Métricas de dinero — mismo cómputo para ingresos del transportista, gasto
+// del dador de carga y facturación de la empresa.
+export interface MoneyMetrics {
+  totalAmount: number;
+  amountThisMonth: number;
+  avgAmountPerTrip: number | null;
+  amountPerKm: number | null;
+  monthly: MoneyMonthPoint[];
+}
+
+export interface CarrierMetrics extends FleetMetrics, MoneyMetrics {
   completedTrips: number;
+  postulationsSent: number;
+  postulationsAccepted: number;
+  /** null cuando el transportista todavía no se postuló a nada. */
+  postulationAcceptanceRate: number | null;
+  avgRating: number | null;
+  ratingsCount: number;
+}
+
+export interface ShipperMetrics extends MoneyMetrics {
+  totalLoads: number;
+  publishedLoads: number;
+  assignedLoads: number;
+  inTransitLoads: number;
+  deliveredLoads: number;
+  cancelledLoads: number;
+  /** Cargas que consiguieron transportista sobre las no canceladas. */
+  assignmentRate: number | null;
+  avgHoursToAssignment: number | null;
+  avgPostulationsPerLoad: number | null;
+  onTimeDeliveries: number;
+  lateDeliveries: number;
+  onTimeRate: number | null;
+  totalDistanceKm: number;
+  /** Desvío promedio entre el precio publicado y el pactado (0.2 = pagó 20% más). */
+  avgNegotiationDelta: number | null;
+  negotiatedLoads: number;
+  topCarriers: {
+    id: string;
+    name: string;
+    completedTrips: number;
+    totalSpend: number;
+    avgRating: number | null;
+  }[];
+  spendByCargoType: { cargoType: string; trips: number; amount: number }[];
+}
+
+export interface CompanyDriverMetrics {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  totalTrips: number;
+  completedTrips: number;
+  activeTrips: number;
+  totalAmount: number;
+  amountThisMonth: number;
+  amountPerKm: number | null;
+  totalDistanceKm: number;
+  avgKmPerLiter: number | null;
+  onTimeRate: number | null;
+  lateDeliveries: number;
+  avgRating: number | null;
+  ratingsCount: number;
+  lastCompletedAt: string | null;
+  /** Sin viaje en curso ni entregas en los últimos 30 días. */
+  idle: boolean;
+}
+
+export interface CompanyMetrics extends FleetMetrics, MoneyMetrics {
+  driverCount: number;
+  activeDriverCount: number;
+  idleDriverCount: number;
+  utilizationRate: number | null;
+  totalTrips: number;
+  completedTrips: number;
+  activeTrips: number;
+  driverRanking: CompanyDriverMetrics[];
 }
 
 export interface Message {
