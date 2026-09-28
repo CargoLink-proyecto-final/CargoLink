@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 const LAST_UPDATED = '28 de septiembre de 2026';
-const CONTACT_EMAIL = 'privacidad@cargolink.com.ar';
+const CONTACT_EMAIL = 'soportecargolink@gmail.com';
 
 interface SectionProps {
   title: string;
@@ -71,11 +71,12 @@ export default function PrivacyPolicyPage() {
           </p>
           <p>
             <strong className="font-medium text-ink-800">Ubicación:</strong> si sos transportista,
-            la app toma tu ubicación mientras tenés un viaje en curso, para que quien publicó la
-            carga pueda seguirlo. Fuera de un viaje activo no registramos tu ubicación. Podés
-            revocar el permiso desde los ajustes del teléfono en cualquier momento; el viaje sigue
-            existiendo, pero deja de actualizar la posición. Los transportistas pueden además
-            declarar una zona de trabajo habitual, que es un dato que cargás vos, no una medición.
+            durante un viaje en curso la app reporta tu posición para que quien publicó la carga
+            pueda seguirlo. Fuera de un viaje, sólo leemos tu ubicación si vos tocás{' '}
+            <em>usar mi ubicación actual</em> para fijar el centro de tu zona de trabajo habitual —
+            esas coordenadas también las podés escribir a mano. Podés revocar el permiso desde los
+            ajustes del teléfono en cualquier momento; el viaje sigue existiendo, pero deja de
+            actualizar la posición.
           </p>
           <p>
             <strong className="font-medium text-ink-800">Del dispositivo:</strong> si activás las
@@ -109,9 +110,15 @@ export default function PrivacyPolicyPage() {
           <p>
             <strong className="font-medium text-ink-800">Con proveedores</strong>, sólo lo mínimo
             que cada uno necesita: el servicio de notificaciones de Expo (para entregar los avisos
-            al teléfono), un servidor de correo (para los emails de la cuenta), y los servicios de
-            mapas y de cálculo de rutas basados en OpenStreetMap, que reciben coordenadas para
-            dibujar el mapa pero no reciben tu identidad.
+            al teléfono) y un servidor de correo (para los emails de la cuenta).
+          </p>
+          <p>
+            <strong className="font-medium text-ink-800">Con OpenStreetMap.</strong> Cuando escribís
+            una dirección de origen o destino, ese texto se manda al geocodificador de
+            OpenStreetMap para convertirlo en coordenadas, y el cálculo de la ruta se hace contra un
+            servidor de OSRM. Los mapas también se dibujan con imágenes que tu navegador o tu
+            teléfono piden directamente a esos servidores, así que ellos ven tu dirección IP. No
+            reciben tu nombre, tu correo ni ningún dato de tu cuenta.
           </p>
           <p>
             Y ante un requerimiento legal de una autoridad competente, cuando corresponda.
@@ -134,10 +141,12 @@ export default function PrivacyPolicyPage() {
             hay alguien esperando esa operación.
           </p>
           <p>
-            Al eliminarla borramos tu nombre, tu correo, tu teléfono, los datos de tu empresa, tu
-            zona de trabajo y el identificador de notificaciones, y tu contraseña queda inservible.
-            La cuenta no se puede recuperar y tu correo vuelve a quedar libre para registrarte de
-            nuevo si algún día querés volver.
+            Al eliminarla borramos tu nombre, tu correo, tu teléfono, el nombre y el rubro que
+            declaraste, tu zona de trabajo y el identificador de notificaciones, y tu contraseña
+            queda inservible. Tus postulaciones abiertas se retiran. Si administrabas una empresa en
+            la plataforma, también se borra su nombre y sus integrantes quedan desvinculados. La
+            cuenta no se puede recuperar —ni vos ni un administrador— y tu correo vuelve a quedar
+            libre para registrarte de nuevo si algún día querés volver.
           </p>
           <p>
             Lo que <strong className="font-medium text-ink-800">no</strong> borramos son los viajes,
