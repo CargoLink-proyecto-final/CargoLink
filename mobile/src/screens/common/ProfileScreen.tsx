@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,14 @@ import { usersApi } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import { getRoleLabel } from '../../lib/labels';
 import { User } from '../../types';
+
+/**
+ * La política vive en el web y es la misma URL que declaramos en App Store
+ * Connect: una sola fuente, y la revisión de Apple espera encontrarla también
+ * desde la app. Apunta a prod incluso en builds de dev, porque el texto legal no
+ * cambia por entorno.
+ */
+const PRIVACY_POLICY_URL = 'https://plataforma.cargolink.com.ar/privacidad';
 
 /** Campos del form como strings — los inputs de RN sólo manejan texto. */
 interface ProfileForm {
@@ -66,6 +75,7 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [locating, setLocating] = useState(false);
 
   const isTransporter = (profile?.role ?? user?.role) === 'TRANSPORTER';
@@ -153,6 +163,51 @@ export default function ProfileScreen() {
       { text: 'Cancelar' },
       { text: 'Cerrar Sesión', style: 'destructive', onPress: () => logout() },
     ]);
+  };
+
+  const openPrivacyPolicy = () => {
+    Linking.openURL(PRIVACY_POLICY_URL).catch(() =>
+      Alert.alert('No pudimos abrir el navegador', PRIVACY_POLICY_URL),
+    );
+  };
+
+  // Dos confirmaciones porque la acción es irreversible: el backend anonimiza la
+  // fila y no hay forma de recuperar la cuenta.
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Eliminar cuenta',
+      'Se van a borrar tus datos personales y no vas a poder recuperar la cuenta. ' +
+        'Tus viajes y calificaciones quedan en el historial de la otra parte, sin tu nombre.',
+      [
+        { text: 'Cancelar' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () =>
+            Alert.alert('¿Seguro?', 'Esta acción no se puede deshacer.', [
+              { text: 'Cancelar' },
+              { text: 'Eliminar mi cuenta', style: 'destructive', onPress: deleteAccount },
+            ]),
+        },
+      ],
+    );
+  };
+
+  const deleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await usersApi.deleteMe();
+      // El logout limpia el token local; la sesión del server ya quedó muerta
+      // porque la cuenta pasó a inactiva.
+      await logout();
+    } catch (err: any) {
+      Alert.alert(
+        'No pudimos eliminar la cuenta',
+        err.response?.data?.message || 'Intentá de nuevo en un rato.',
+      );
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) {
@@ -346,6 +401,26 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Cerrar Sesión</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.linkBtn} onPress={openPrivacyPolicy}>
+          <Ionicons name="shield-checkmark-outline" size={18} color="#6b7280" />
+          <Text style={styles.linkText}>Política de privacidad</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={handleDeleteAccount}
+          disabled={deleting}
+        >
+          {deleting ? (
+            <ActivityIndicator color="#ef4444" />
+          ) : (
+            <>
+              <Ionicons name="trash-outline" size={20} color="#ef4444" />
+              <Text style={styles.deleteText}>Eliminar mi cuenta</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
         <Text style={styles.version}>CargoLink v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
@@ -407,5 +482,17 @@ const styles = StyleSheet.create({
     padding: 16, marginTop: 16, backgroundColor: '#fff', borderRadius: 12, gap: 8,
   },
   logoutText: { fontSize: 16, fontWeight: '600', color: '#ef4444' },
+  // Sin fondo blanco ni peso fuerte: la baja de cuenta no compite visualmente
+  // con cerrar sesión, que es la acción que la gente busca acá.
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    padding: 16, marginTop: 8, gap: 8,
+  },
+  deleteText: { fontSize: 14, color: '#ef4444' },
+  linkBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    padding: 16, marginTop: 8, gap: 8,
+  },
+  linkText: { fontSize: 14, color: '#6b7280' },
   version: { textAlign: 'center', color: '#9ca3af', fontSize: 12, marginTop: 16, marginBottom: 32 },
 });

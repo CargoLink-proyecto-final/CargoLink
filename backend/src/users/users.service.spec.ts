@@ -341,6 +341,84 @@ describe('UsersService', () => {
     });
   });
 
+  // Requisito de la App Store: la baja la pide el usuario y no se puede recuperar.
+  // Lo que se verifica acá es que no quede ningún dato personal en la fila.
+  describe('deleteOwnAccount', () => {
+    const deleteData = async () => {
+      await service.deleteOwnAccount('user-1');
+      return prisma.user.update.mock.calls[0][0].data;
+    };
+
+    beforeEach(() => {
+      prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: true });
+      prisma.load.count.mockResolvedValue(0);
+      prisma.trip.count.mockResolvedValue(0);
+      prisma.user.update.mockResolvedValue({ ...baseUser, isActive: false });
+    });
+
+    it('anonymizes every personal field', async () => {
+      const data = await deleteData();
+
+      expect(data.firstName).toBe('Usuario');
+      expect(data.lastName).toBe('eliminado');
+      expect(data.phone).toBeNull();
+      expect(data.companyName).toBeNull();
+      expect(data.industry).toBeNull();
+      expect(data.avatarUrl).toBeNull();
+      expect(data.zoneLat).toBeNull();
+      expect(data.zoneLng).toBeNull();
+      expect(data.zoneRadiusKm).toBeNull();
+    });
+
+    it('frees the real email and keeps the column unique', async () => {
+      const data = await deleteData();
+
+      expect(data.email).toBe('deleted-user-1@cargolink.invalid');
+      expect(data.email).not.toContain(baseUser.email);
+    });
+
+    it('leaves a password hash that no known value can match', async () => {
+      const data = await deleteData();
+
+      expect(data.password).not.toBe(baseUser.password);
+      // bcrypt, no un string vacío ni el hash original.
+      expect(data.password).toMatch(/^\$2[aby]\$/);
+    });
+
+    it('cuts live sessions and stops push', async () => {
+      const data = await deleteData();
+
+      // El guard revalida contra la DB en cada request y rechaza !isActive, así
+      // que esto invalida los JWT vivos sin esperar a que expiren.
+      expect(data.isActive).toBe(false);
+      expect(data.deletedAt).toBeInstanceOf(Date);
+      expect(data.expoPushToken).toBeNull();
+      expect(data.companyId).toBeNull();
+    });
+
+    it('clears the reset and verification tokens', async () => {
+      const data = await deleteData();
+
+      expect(data.resetToken).toBeNull();
+      expect(data.resetTokenExp).toBeNull();
+      expect(data.emailVerificationToken).toBeNull();
+      expect(data.emailVerificationTokenExp).toBeNull();
+      expect(data.emailVerified).toBe(false);
+    });
+
+    it('refuses while the account has active operations', async () => {
+      prisma.load.count.mockResolvedValue(1);
+
+      await expect(service.deleteOwnAccount('user-1')).rejects.toThrow(ConflictException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the user does not exist', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(service.deleteOwnAccount('missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('reactivate', () => {
     it('sets isActive=true', async () => {
       prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: false });

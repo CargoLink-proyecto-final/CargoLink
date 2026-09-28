@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { hash } from 'bcrypt';
 import { LoadStatus, Role, TripStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
@@ -30,6 +31,11 @@ const ACTIVE_TRIP_STATUSES: TripStatus[] = [
 // Roles que el admin puede asignar desde el panel. COMPANY_ADMIN queda afuera: implica
 // titularidad de una Company (ownership) y se gestiona por su propio flujo.
 const ASSIGNABLE_ROLES: Role[] = [Role.CARGO_GENERATOR, Role.TRANSPORTER, Role.ADMIN];
+
+// Nombre con el que queda una cuenta dada de baja. La contraparte sigue viendo
+// el viaje y la calificación, atribuidos a alguien que ya no está.
+export const DELETED_USER_FIRST_NAME = 'Usuario';
+export const DELETED_USER_LAST_NAME = 'eliminado';
 
 /**
  * Campos de `User` que pueden salir por HTTP.
@@ -161,6 +167,63 @@ export class UsersService {
       data: { isActive: true },
       select: PUBLIC_USER_SELECT,
     });
+  }
+
+  /**
+   * Baja definitiva pedida por el propio usuario, requisito de la App Store para
+   * toda app con registro (guideline 5.1.1(v)).
+   *
+   * No borra la fila: la anonimiza. Un `delete` en cascada se llevaría cargas,
+   * viajes, mensajes y calificaciones que también son de la contraparte — el
+   * transportista perdería su historial y sus calificaciones porque el dador se
+   * dio de baja. Lo que se borra es todo dato personal; lo que sobrevive es el
+   * registro operativo, atribuido a un "Usuario eliminado".
+   *
+   * El email se reescribe a un placeholder único en el dominio reservado
+   * `.invalid` (RFC 2606) por dos razones: la columna es `@unique`, y así la
+   * dirección real queda libre para registrarse de nuevo.
+   */
+  async deleteOwnAccount(id: string) {
+    const user = await this.findById(id);
+    if (await this.hasActiveOperations(id)) {
+      throw new ConflictException(
+        'No se puede eliminar la cuenta: tiene cargas o viajes activos. Cerralos primero.',
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        email: `deleted-${id}@cargolink.invalid`,
+        // Hash de un valor aleatorio que nadie conoce: deja la columna con un
+        // hash válido en vez de un string vacío, así ningún `compare` acierta.
+        password: await hash(randomBytes(32).toString('hex'), 10),
+        firstName: DELETED_USER_FIRST_NAME,
+        lastName: DELETED_USER_LAST_NAME,
+        phone: null,
+        companyName: null,
+        industry: null,
+        avatarUrl: null,
+        zoneLat: null,
+        zoneLng: null,
+        zoneRadiusKm: null,
+        // Corta las push al dispositivo y lo desvincula de la empresa.
+        expoPushToken: null,
+        companyId: null,
+        resetToken: null,
+        resetTokenExp: null,
+        emailVerificationToken: null,
+        emailVerificationTokenExp: null,
+        emailVerified: false,
+        isActive: false,
+        deletedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Cuenta ${id} eliminada y anonimizada a pedido del usuario`);
+    // No devuelve el usuario: ya no hay nada que el cliente pueda mostrar, y el
+    // JWT que hizo la request queda apuntando a una cuenta que no puede loguear.
+    return { deleted: true, email: user.email };
   }
 
   // Cambio de email por un admin. Como el email es el identificador, exige revalidación:
