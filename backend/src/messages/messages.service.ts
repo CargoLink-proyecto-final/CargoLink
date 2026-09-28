@@ -1,12 +1,14 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
+import { ChatBroadcaster } from './chat-broadcaster';
 
 @Injectable()
 export class MessagesService {
   constructor(
     private prisma: PrismaService,
     private push: PushService,
+    private broadcaster: ChatBroadcaster,
   ) {}
 
   private async validateTripParticipant(tripId: string, userId: string) {
@@ -45,6 +47,12 @@ export class MessagesService {
         sender: { select: { id: true, firstName: true, lastName: true } },
       },
     });
+
+    // Difusión en vivo a quien tenga la conversación abierta. Va acá por lo
+    // mismo que la push: los mensajes del web entran por REST y no pasan por el
+    // gateway, así que emitir desde el handler del socket dejaba la conversación
+    // congelada del otro lado.
+    this.broadcaster.emitNewMessage(tripId, message);
 
     // Acá y no en el gateway porque los mensajes también entran por REST, que no
     // pasa por el socket. `notify` se saltea solo a quien tiene la app abierta.
