@@ -7,6 +7,7 @@ import { PushService } from '../push/push.service';
 describe('MessagesService', () => {
   let service: MessagesService;
   let prisma: {
+    user: { findUnique: jest.Mock };
     trip: { findUnique: jest.Mock; findMany: jest.Mock };
     message: {
       create: jest.Mock;
@@ -31,6 +32,9 @@ describe('MessagesService', () => {
 
   beforeEach(async () => {
     prisma = {
+      // `validateTripParticipant` chequea que la cuenta siga activa: el gateway
+      // de sockets no valida JWT, así que ese corte vive acá.
+      user: { findUnique: jest.fn().mockResolvedValue({ isActive: true }) },
       trip: { findUnique: jest.fn(), findMany: jest.fn() },
       message: {
         create: jest.fn(),
@@ -103,6 +107,18 @@ describe('MessagesService', () => {
     it('throws ForbiddenException when sender is not a participant', async () => {
       prisma.trip.findUnique.mockResolvedValue(baseTrip);
       await expect(service.create('stranger', tripId, 'x')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    // El gateway de sockets no valida JWT — toma el userId del handshake — así
+    // que una cuenta eliminada seguía escribiendo en la room del viaje.
+    it('throws ForbiddenException when the sender account is no longer active', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      prisma.user.findUnique.mockResolvedValue({ isActive: false });
+
+      await expect(service.create(carrierId, tripId, 'x')).rejects.toThrow(
         ForbiddenException,
       );
       expect(prisma.message.create).not.toHaveBeenCalled();
