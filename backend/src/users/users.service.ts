@@ -172,11 +172,11 @@ export class UsersService {
     // `deletedAt` no viaja en PUBLIC_USER_SELECT, así que hay que leerla aparte.
     // Sin este chequeo un admin podía revivir una cuenta dada de baja por su
     // titular: los datos personales ya no están, pero la fila volvía a operar.
-    const { deletedAt } = (await this.prisma.user.findUnique({
+    const row = await this.prisma.user.findUnique({
       where: { id },
       select: { deletedAt: true },
-    }))!;
-    if (deletedAt) {
+    });
+    if (row?.deletedAt) {
       throw new ConflictException(
         'La cuenta fue eliminada por su titular y no puede reactivarse.',
       );
@@ -204,21 +204,31 @@ export class UsersService {
    */
   async deleteOwnAccount(id: string) {
     const user = await this.findById(id);
-    if (await this.hasActiveOperations(id)) {
-      throw new ConflictException(
-        'No se puede eliminar la cuenta: tiene cargas o viajes activos. Cerralos primero.',
-      );
-    }
 
     // Hash por fuera de la transacción: bcrypt con cost 10 tarda ~100ms y no
     // hay razón para tener la transacción abierta mientras corre.
     const unusablePassword = await hash(randomBytes(32).toString('hex'), 10);
+    // `ownerId` es @unique y la titularidad sólo se crea en el registro, así que
+    // esta lectura no puede quedar desactualizada respecto de la transacción.
     const ownedCompany = await this.prisma.company.findUnique({
       where: { ownerId: id },
       select: { id: true },
     });
 
     await this.prisma.$transaction(async (tx) => {
+      // El chequeo va adentro: con dos sesiones abiertas del mismo usuario
+      // (publicar una carga desde el web mientras se borra desde el celular),
+      // hacerlo afuera dejaba una carga PUBLISHED de un "Usuario eliminado".
+      const [activeLoads, activeTrips] = await Promise.all([
+        tx.load.count({ where: { shipperId: id, status: { in: ACTIVE_LOAD_STATUSES } } }),
+        tx.trip.count({ where: { carrierId: id, status: { in: ACTIVE_TRIP_STATUSES } } }),
+      ]);
+      if (activeLoads > 0 || activeTrips > 0) {
+        throw new ConflictException(
+          'No se puede eliminar la cuenta: tiene cargas o viajes activos. Cerralos primero.',
+        );
+      }
+
       await tx.user.update({
         where: { id },
         data: {
