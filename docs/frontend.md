@@ -60,11 +60,13 @@ src/app/
 │   └── check-email/page.tsx                # /auth/check-email  (paso intermedio post-register)
 ├── dashboard/
 │   ├── admin/page.tsx                      # /dashboard/admin
+│   ├── admin/assistant-flow/page.tsx       # /dashboard/admin/assistant-flow — editar el flujo del chatbot
 │   ├── carrier/page.tsx                    # /dashboard/carrier
 │   └── shipper/page.tsx                    # /dashboard/shipper
 ├── loads/
 │   ├── page.tsx                            # /loads — listado
-│   ├── new/page.tsx                        # /loads/new — crear
+│   ├── new/page.tsx                        # /loads/new — crear (wizard)
+│   ├── new/chat/page.tsx                   # /loads/new/chat — crear conversando con el asistente
 │   └── [id]/
 │       ├── page.tsx                        # /loads/[id] — detalle + postulations
 │       └── edit/page.tsx                   # /loads/[id]/edit

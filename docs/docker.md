@@ -45,6 +45,10 @@ Variables de entorno inyectadas al contenedor:
 | `SMTP_USER` | `${SMTP_USER:-}` | vacío |
 | `SMTP_PASSWORD` | `${SMTP_PASSWORD:-}` | vacío |
 | `SMTP_FROM` | `${SMTP_FROM:-}` | vacío → `CargoLink <no-reply@cargolink.local>` (hardcoded en `MailService`) |
+| `GEMINI_API_KEY` | `${GEMINI_API_KEY:-}` | vacío → el asistente de carga saltea Gemini |
+| `GEMINI_MODEL` | `${GEMINI_MODEL:-gemini-2.5-flash}` | `gemini-2.5-flash` |
+| `GROQ_API_KEY` | `${GROQ_API_KEY:-}` | vacío → sin respaldo; sin ninguna key el asistente va en modo básico |
+| `GROQ_MODEL` | `${GROQ_MODEL:-llama-3.3-70b-versatile}` | `llama-3.3-70b-versatile` |
 
 `POSTGRES_PASSWORD` y `JWT_SECRET` están marcados con `:?` — Compose aborta si están vacíos.
 
@@ -210,6 +214,11 @@ CMD ["node", "server.js"]
 | `SMTP_USER` | backend | No | vacío | Usuario SMTP; **si `SMTP_HOST` está set pero `SMTP_USER` vacío, también cae a Ethereal** |
 | `SMTP_PASSWORD` | backend | No | vacío | Password SMTP |
 | `SMTP_FROM` | backend | No | `CargoLink <no-reply@cargolink.local>` | Header From |
+| `GEMINI_API_KEY` | backend | No | vacío | Key de Google AI Studio para el [asistente de carga](./asistente-carga.md); vacía = se saltea Gemini |
+| `GEMINI_MODEL` | backend | No | `gemini-2.5-flash` | Modelo de Gemini |
+| `GROQ_API_KEY` | backend | No | vacío | Key de Groq, respaldo del asistente. **Sin `GEMINI_API_KEY` ni `GROQ_API_KEY` el asistente sigue andando en modo básico (sin IA)** |
+| `GROQ_MODEL` | backend | No | `llama-3.3-70b-versatile` | Modelo de Groq |
+| `ASSISTANT_FLOW_CONFIG_PATH` | backend | No | `assistant-flow.config.json` junto al proceso | Archivo donde el panel admin persiste el flujo del asistente. No se pasa por compose |
 | `NEXT_PUBLIC_API_URL` | frontend (build) | No | `http://localhost:3001/api` | Base URL que el bundle JS usa para llamar al backend |
 
 ## Comandos comunes

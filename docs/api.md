@@ -235,6 +235,44 @@ Solo el shipper dueño puede actualizar. Si el load ya tiene Trip asignado, suel
 
 Cancela (no borra). Pone `status=CANCELLED`. Solo el shipper dueño.
 
+## Loads Assistant (chatbot)
+
+Source: [`../backend/src/loads-assistant/loads-assistant.controller.ts`](../backend/src/loads-assistant/loads-assistant.controller.ts). Todos requieren JWT. Detalle completo en [`asistente-carga.md`](./asistente-carga.md).
+
+| Método | Path | Roles | Descripción |
+|---|---|---|---|
+| GET | `/loads/assistant/flow` | `CARGO_GENERATOR`, `ADMIN` | Config del flujo conversacional + estado del asistente |
+| POST | `/loads/assistant/message` | `CARGO_GENERATOR` | Un turno de conversación; devuelve el borrador actualizado |
+| PUT | `/loads/assistant/flow` | `ADMIN` | Editar la config del flujo |
+
+El asistente **no crea la carga**: solo devuelve un borrador. La creación la hace el frontend con `POST /loads` cuando `readyToConfirm` es `true`.
+
+### POST `/loads/assistant/message`
+
+El backend es stateless: el cliente manda el historial completo y el borrador acumulado.
+
+```jsonc
+{
+  "messages": [
+    { "role": "assistant", "content": "¡Hola! Te ayudo a publicar tu carga…" },
+    { "role": "user", "content": "Mando electrónica de Córdoba a Rosario, 800 kilos" }
+  ],
+  "draft": { "title": "Electrónica a Rosario" }   // opcional
+}
+```
+
+Response:
+
+```jsonc
+{
+  "assistantMessage": "¿Qué día querés que se retire la carga?",
+  "draft": { "title": "…", "cargoType": "…", "weight": 800, "origin": { "city": "Córdoba" } },
+  "missing": ["pickupDate", "deliveryDate"],  // campos obligatorios todavía vacíos
+  "readyToConfirm": false,
+  "degraded": false                           // true = se resolvió sin IA (modo básico)
+}
+```
+
 ## Postulations
 
 Source: [`../backend/src/postulations/postulations.controller.ts`](../backend/src/postulations/postulations.controller.ts). Todos requieren JWT.

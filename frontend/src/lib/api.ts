@@ -73,6 +73,16 @@ export const loadsApi = {
     api.get('/loads/register/export', { params, responseType: 'blob' }),
 };
 
+// Asistente conversacional de creación de carga (chatbot con Gemini).
+// El "cerebro" vive en el backend; el geocoding y el create final los hace el
+// frontend reutilizando lib/routing.ts + loadsApi.create.
+export const assistantApi = {
+  getFlow: () => api.get('/loads/assistant/flow'),
+  sendMessage: (data: { messages: { role: 'user' | 'assistant'; content: string }[]; draft?: any }) =>
+    api.post('/loads/assistant/message', data),
+  updateFlow: (data: any) => api.put('/loads/assistant/flow', data),
+};
+
 // Trips
 export const tripsApi = {
   accept: (loadId: string) => api.post(`/trips/accept/${loadId}`),

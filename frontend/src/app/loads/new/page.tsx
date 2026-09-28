@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
@@ -479,7 +480,15 @@ export default function NewLoadPage() {
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6">Crear Nueva Carga</h1>
+        <div className="flex items-center justify-between mb-6 gap-4">
+          <h1 className="text-2xl font-bold">Crear Nueva Carga</h1>
+          <Link
+            href="/loads/new/chat"
+            className="text-sm px-3 py-2 rounded-lg border border-primary-300 text-primary-700 hover:bg-primary-50 transition whitespace-nowrap"
+          >
+            ✨ Crear con asistente
+          </Link>
+        </div>
 
         {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">{error}</div>}
 

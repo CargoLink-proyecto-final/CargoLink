@@ -22,6 +22,7 @@ import {
   UserCheck,
   UserCog,
   Hand,
+  Bot,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -53,6 +54,7 @@ const navItems = {
     { href: '/loads', label: 'Todas las Cargas', icon: Package },
     { href: '/trips', label: 'Viajes', icon: Truck },
     { href: '/users', label: 'Usuarios', icon: Users },
+    { href: '/dashboard/admin/assistant-flow', label: 'Flujo del asistente', icon: Bot },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
     { href: '/register', label: 'Registro', icon: ClipboardList },
   ],
