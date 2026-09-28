@@ -21,6 +21,14 @@ export class ChatBroadcaster {
 
   /** La llama el gateway en `afterInit`, cuando el adapter ya levantó. */
   register(server: Server) {
+    // Hoy hay un solo gateway, así que esto no puede pasar. Si mañana aparece
+    // otro en otro namespace y llama acá, el chat se redirigiría en silencio a
+    // un namespace donde nadie escucha: mejor que quede en los logs.
+    if (this.server) {
+      this.logger.warn(
+        'Ya había un servidor de Socket.IO registrado: el chat va a emitir contra el último',
+      );
+    }
     this.server = server;
   }
 
@@ -36,6 +44,16 @@ export class ChatBroadcaster {
       );
       return;
     }
-    this.server.to(`trip_${tripId}`).emit('newMessage', message);
+    // Best-effort, igual que la push: quien llama ya persistió el mensaje, así
+    // que un fallo del socket no puede convertir un envío exitoso en un 500.
+    // El cliente lo recupera con su polling o al reconectar.
+    try {
+      this.server.to(`trip_${tripId}`).emit('newMessage', message);
+    } catch (err) {
+      this.logger.error(
+        `No se pudo difundir el mensaje del viaje ${tripId}`,
+        err as Error,
+      );
+    }
   }
 }

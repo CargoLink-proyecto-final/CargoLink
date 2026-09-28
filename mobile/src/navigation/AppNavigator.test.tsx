@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-native';
 import AppNavigator from './AppNavigator';
 import { useAuthStore } from '../store/auth';
 
@@ -25,7 +25,11 @@ jest.mock('../services/notifications', () => ({
   scheduleLocalNotification: jest.fn(),
 }));
 
-// Las pantallas piden datos al montar; el ruteo no depende de esas respuestas.
+// Las pantallas piden datos al montar; el ruteo no depende de esas respuestas,
+// pero los nombres tienen que ser los reales de src/services/api.ts: con un
+// nombre inventado el fetch tira TypeError, el `catch` del dashboard se lo traga
+// y la pantalla monta en estado de error — el test seguiría verde probando menos
+// de lo que dice.
 jest.mock('../services/api', () => ({
   api: { get: jest.fn().mockResolvedValue({ data: {} }) },
   usersApi: {
@@ -34,44 +38,55 @@ jest.mock('../services/api', () => ({
     deleteMe: jest.fn(),
   },
   loadsApi: {
-    getMyLoads: jest.fn().mockResolvedValue({ data: { loads: [] } }),
+    getMy: jest.fn().mockResolvedValue({ data: { loads: [] } }),
     getAvailable: jest.fn().mockResolvedValue({ data: { loads: [] } }),
   },
   tripsApi: {
-    getMyTrips: jest.fn().mockResolvedValue({ data: { trips: [] } }),
-    getMyLoadTrips: jest.fn().mockResolvedValue({ data: { trips: [] } }),
+    getMy: jest.fn().mockResolvedValue({ data: { trips: [] } }),
+    getMyLoads: jest.fn().mockResolvedValue({ data: { trips: [] } }),
   },
   messagesApi: {
     getConversations: jest.fn().mockResolvedValue({ data: [] }),
     getUnreadCount: jest.fn().mockResolvedValue({ data: { count: 0 } }),
   },
-  postulationsApi: { getMyPostulations: jest.fn().mockResolvedValue({ data: [] }) },
+  postulationsApi: { listMine: jest.fn().mockResolvedValue({ data: [] }) },
 }));
 
+// En act() porque el store es zustand y el navigator está suscripto: mutarlo
+// suelto llena la salida de advertencias que taparían un error de verdad.
 const signInAs = (role: string) => {
-  useAuthStore.setState({
-    user: { id: 'u1', email: 'x@y.z', firstName: 'A', lastName: 'B', role } as any,
-    token: 'fake-token',
-    isAuthenticated: true,
-    isLoading: false,
+  act(() => {
+    useAuthStore.setState({
+      user: { id: 'u1', email: 'x@y.z', firstName: 'A', lastName: 'B', role } as any,
+      token: 'fake-token',
+      isAuthenticated: true,
+      isLoading: false,
+    });
   });
 };
 
 describe('AppNavigator — ruteo por rol', () => {
   afterEach(() => {
-    useAuthStore.setState({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
+    act(() => {
+      useAuthStore.setState({
+        user: null,
+        token: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
     });
   });
 
-  it('manda al transportista a buscar cargas', async () => {
+  // Las aserciones miran el título que renderiza la pantalla montada, no la
+  // etiqueta de la pestaña: bottom-tabs monta sólo la screen inicial, así que
+  // una etiqueta probaría nada más que la configuración del navigator.
+  it('manda al transportista a su panel de viajes', async () => {
     signInAs('TRANSPORTER');
     render(<AppNavigator />);
 
-    await waitFor(() => expect(screen.getByText('Buscar Cargas')).toBeTruthy());
+    // 'Mis Viajes' es el título de carrier/DashboardScreen, la screen inicial.
+    await waitFor(() => expect(screen.getByText('Mis Viajes')).toBeTruthy());
+    expect(screen.queryByText('Mis Cargas')).toBeNull();
   });
 
   it('manda al dador de carga a sus cargas', async () => {
@@ -96,10 +111,21 @@ describe('AppNavigator — ruteo por rol', () => {
     },
   );
 
+  // Importa porque en el perfil viven cerrar sesión y eliminar la cuenta, y
+  // Apple exige que el borrado sea alcanzable desde la app.
   it('deja el perfil accesible para esos roles, que es donde se borra la cuenta', async () => {
     signInAs('ADMIN');
     render(<AppNavigator />);
 
-    await waitFor(() => expect(screen.getByText('Perfil')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText('Esta cuenta se administra desde el web')).toBeTruthy(),
+    );
+
+    // Se aprieta la pestaña: si sólo se mirara la etiqueta, el test pasaría
+    // igual sin que ProfileScreen monte.
+    fireEvent.press(screen.getByText('Perfil'));
+
+    await waitFor(() => expect(screen.getByText('Cerrar Sesión')).toBeTruthy());
+    expect(screen.getByText('Eliminar mi cuenta')).toBeTruthy();
   });
 });
