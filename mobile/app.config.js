@@ -7,6 +7,10 @@ module.exports = () => ({
   expo: {
     name: 'CargoLink',
     slug: 'cargolink',
+    // El proyecto de EAS vive bajo la cuenta de la organización, no bajo la
+    // personal de quien corre el build. Sin `owner`, EAS lo busca en la cuenta
+    // logueada y no lo encuentra.
+    owner: 'cargolink-2026',
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/icon.png',

@@ -33,7 +33,7 @@ El backend tiene que estar corriendo aparte (`docker compose up -d` en la raíz)
 
 No hay que hardcodear ninguna IP. `src/config/env.ts` resuelve la URL en este orden:
 
-1. `EXPO_PUBLIC_API_URL` del `.env`, si está seteada (para apuntar a Cloud Run).
+1. `EXPO_PUBLIC_API_URL` del `.env`, si está seteada (para apuntar al VPS).
 2. `extra.apiUrl` de `app.config.js`.
 3. **La IP de la máquina que corre Metro**, en el puerto `3001`. Esto es lo que
    hace que funcione en un dispositivo físico: `localhost` desde el celular
@@ -87,13 +87,14 @@ registra el token en `PUT /users/me/push-token` y el backend emite contra la
 Expo Push API cuando llega un mensaje. Sólo emite si el destinatario **no** tiene
 el socket de chat conectado, para no duplicar la notificación local.
 
-Falta una sola cosa para que funcionen: **el projectId de EAS**. `eas init` no
-puede escribir en un `app.config.js` dinámico, así que el id entra por env:
+Falta una sola cosa para que funcionen: **el projectId de EAS** en el entorno.
+`eas init` no puede escribir en un `app.config.js` dinámico, así que el id entra
+por env. El proyecto ya está creado (`@cargolink-2026/cargolink`) y los builds de
+la nube lo toman del `env` de cada perfil de `eas.json` — ver § "Builds en la
+nube y TestFlight (EAS)". Para dev local, va en el `.env`:
 
 ```bash
-npx eas-cli login
-npx eas-cli init          # imprime el projectId
-echo "EAS_PROJECT_ID=<el-id>" >> .env
+echo "EAS_PROJECT_ID=1069c26e-a3bd-4919-9461-01599fce42e9" >> .env
 ```
 
 Sin esa variable `registerForPushNotifications()` devuelve `null`, no se registra
@@ -192,8 +193,8 @@ Hay que repetir el `adb reverse` cada vez que se desconecta el cable.
 **Sobre `http://`**: Android bloquea tráfico en claro desde API 28, pero el
 `AndroidManifest.xml` del *debug* que genera el prebuild trae
 `usesCleartextTraffic="true"`, así que el backend local funciona sin tocar nada.
-Un build de **release** sí lo bloquea — en prod no importa porque Cloud Run es
-https.
+Un build de **release** sí lo bloquea — en prod no importa porque las URLs del
+VPS, publicadas vía Cloudflare Tunnel, son https.
 
 ### Notificaciones
 
@@ -234,10 +235,96 @@ Diferencias de API respecto de `react-native-maps`, por si tocás la pantalla:
 Ojo con el orden de las coordenadas: MapLibre usa `[longitud, latitud]` (como
 GeoJSON), al revés de `{ latitude, longitude }` que usa el resto del código.
 
+## Builds en la nube y TestFlight (EAS)
+
+`eas.json` define los perfiles de build. Son la única forma de que la app salga
+de esta Mac: iOS sólo instala apps firmadas que distribuye Apple, así que el
+camino es **EAS Build → App Store Connect → TestFlight**.
+
+| Perfil | Distribución | Backend que queda grabado | Para qué |
+|---|---|---|---|
+| `simulator` | interna | `https://dev.cargolink.com.ar/api` | Build para el simulador de iOS, sin firmar con cuenta Apple. |
+| `preview` | interna | `https://dev.cargolink.com.ar/api` | Ad hoc: se instala en iPhones registrados con `eas device:create`. En Android sale un `.apk` instalable. |
+| `production` | store | `https://plataforma.cargolink.com.ar/api` | Lo que se sube a TestFlight y a la App Store. En Android, `.aab`. |
+
+La URL del API **se congela en el build**: no se puede cambiar después sin
+recompilar. Por eso hay un perfil por entorno en vez de una sola build
+configurable.
+
+### Antes del primer build
+
+El proyecto ya está creado: **`@cargolink-2026/cargolink`**, declarado en
+`app.config.js` vía `owner` y en el `env` de cada perfil vía `EAS_PROJECT_ID`.
+Sólo hace falta loguearse con una cuenta que pertenezca a esa organización:
+
+```bash
+cd mobile
+npx eas-cli login
+export EAS_PROJECT_ID=1069c26e-a3bd-4919-9461-01599fce42e9
+```
+
+1. **`EAS_PROJECT_ID` va en `eas.json` _además_ del entorno local.** En
+   `eas.json` porque el `.env` está gitignoreado y EAS sólo sube lo que está
+   commiteado: en los servidores de build esa variable no existiría y
+   `getExpoPushTokenAsync()` se quedaría sin id. Y en el entorno local porque los
+   comandos del CLI que **no** toman `--profile` no reciben el `env` de ningún
+   perfil y no saben contra qué proyecto trabajar: `submit`, `device:create`,
+   `project:info`, `build:list`. Sin el `export` de arriba, el paso a TestFlight
+   corta con "EAS project not configured".
+2. **El bundle identifier tiene que ser tuyo.** `com.cargolink.app` (en
+   `app.config.js`) está registrado por otra cuenta de Apple; con la cuenta paga
+   hay que elegir uno libre y registrarlo en App Store Connect.
+3. **Cuenta de Apple Developer paga** (99 USD al año). La gratuita no sirve acá:
+   no soporta push remotas y sus certificados vencen a los 7 días.
+
+### Compilar y subir
+
+```bash
+npx eas-cli build -p ios --profile production
+npx eas-cli submit -p ios --latest     # deja el build en TestFlight
+```
+
+`requireCommit: true` en `eas.json` hace que EAS rechace el build si hay cambios
+sin commitear: lo que se compila es siempre un commit identificable. Y como
+`ios/` y `android/` están gitignoreados (workflow CNG), EAS corre `expo prebuild`
+del lado del servidor a partir de `app.config.js`.
+
+`appVersionSource: "remote"` con `autoIncrement` en `production` deja que EAS
+lleve el número de build. Apple rechaza dos subidas con el mismo número, y así
+no hay que tocarlo a mano en cada release.
+
+El perfil `production` no declara `channel` porque el proyecto todavía no usa
+`expo-updates`. Cuando se agregue EAS Update, ahí va el canal.
+
+### Límites y costos
+
+El plan gratuito de EAS da **15 builds de iOS y 15 de Android por mes**, con cola
+de baja prioridad y un tope de 45 minutos por build. Alcanza de sobra si se
+compila en la nube sólo para publicar: el desarrollo diario sigue con
+`npx expo run:ios`, que corre en la Mac y no consume cuota.
+
+Cada build de TestFlight **caduca a los 90 días**.
+
+### Enviar a la App Store
+
+TestFlight interno (hasta 100 miembros del equipo) no necesita revisión de Apple.
+Para testers externos o para publicar hace falta pasar revisión, y hoy faltan
+tres cosas del lado del producto:
+
+- **Borrar la cuenta desde la app.** Apple lo exige a toda app con registro de
+  usuarios; el backend no expone hoy ningún endpoint que borre la cuenta.
+- **Una política de privacidad pública**, con URL propia.
+- **Un usuario de prueba con el email ya verificado** para los revisores.
+
+Además, declarar `ITSAppUsesNonExemptEncryption: false` evita la pregunta de
+cifrado en cada subida.
+
 ## Pendientes conocidos
 
-- **Push remotas sin `EAS_PROJECT_ID`.** El código está completo de punta a
-  punta; falta correr `eas init`. Ver § "Notificaciones push".
+- **Push remotas sólo en builds de EAS.** El proyecto de EAS ya existe y su
+  `projectId` está cableado en `eas.json`, así que los builds de la nube emiten
+  token. En dev local hay que ponerlo en el `.env`, y en iOS hace falta una
+  cuenta de Apple paga. Ver § "Notificaciones push".
 - **Un solo dispositivo por cuenta.** El token de Expo se guarda en una columna
   de `User`: el último teléfono que se registra desplaza al anterior. Varios
   dispositivos a la vez necesitarían una tabla aparte.
