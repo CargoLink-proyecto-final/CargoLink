@@ -72,8 +72,10 @@ Para cambiar el logo, editar `drawTruck()` y volver a correrlo.
 - El gateway autentica con `handshake.query.userId` y mete al socket en una room
   por cada viaje del usuario — el cliente sólo escucha `newMessage`.
 - Si el socket no conecta, `ChatScreen` cae a polling cada 3s y muestra un aviso.
-  El `POST /messages/trip/:tripId` no dispara broadcast, así que ese camino sólo
-  se usa como fallback.
+- La difusión la hace `MessagesService.create` a través de `ChatBroadcaster`, no
+  el handler del socket: los mensajes también entran por `POST /messages/trip/:id`
+  —que es como los manda el web— y mientras el emit vivía en el gateway, un
+  mensaje escrito desde el web no llegaba en vivo a la app.
 - El listener global (`src/hooks/useMessageNotifications.ts`) dispara una
   notificación local por los mensajes que llegan fuera de la conversación abierta.
 

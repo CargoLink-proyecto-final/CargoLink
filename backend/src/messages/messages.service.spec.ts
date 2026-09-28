@@ -3,6 +3,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
+import { ChatBroadcaster } from './chat-broadcaster';
 
 describe('MessagesService', () => {
   let service: MessagesService;
@@ -18,6 +19,7 @@ describe('MessagesService', () => {
     };
   };
   let push: { notify: jest.Mock };
+  let broadcaster: { register: jest.Mock; emitNewMessage: jest.Mock };
 
   const carrierId = 'carrier-1';
   const shipperId = 'shipper-1';
@@ -45,12 +47,14 @@ describe('MessagesService', () => {
       },
     };
     push = { notify: jest.fn().mockResolvedValue(undefined) };
+    broadcaster = { register: jest.fn(), emitNewMessage: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessagesService,
         { provide: PrismaService, useValue: prisma },
         { provide: PushService, useValue: push },
+        { provide: ChatBroadcaster, useValue: broadcaster },
       ],
     }).compile();
 
@@ -78,6 +82,29 @@ describe('MessagesService', () => {
         },
       });
       expect(result).toBe(created);
+    });
+
+    // El bug que arregla esto: el emit vivía en el handler del socket, así que un
+    // mensaje escrito desde el web (que entra por REST) no llegaba en vivo a la
+    // app y la conversación quedaba congelada del otro lado.
+    it('broadcasts the message whatever path it came in through', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      const created = { id: 'msg-1', content: 'hello' };
+      prisma.message.create.mockResolvedValue(created);
+
+      await service.create(carrierId, tripId, 'hello');
+
+      expect(broadcaster.emitNewMessage).toHaveBeenCalledWith(tripId, created);
+    });
+
+    it('does not broadcast a message it refused to persist', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+
+      await expect(service.create('stranger', tripId, 'x')).rejects.toThrow(
+        ForbiddenException,
+      );
+
+      expect(broadcaster.emitNewMessage).not.toHaveBeenCalled();
     });
 
     it('creates a message from the shipper to the carrier (receiver flips)', async () => {
