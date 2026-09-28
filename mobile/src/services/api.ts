@@ -77,6 +77,12 @@ export const usersApi = {
     zoneLng?: number;
     zoneRadiusKm?: number;
   }) => api.patch('/users/me', data),
+  /**
+   * Baja definitiva de la cuenta. Apple la exige dentro de la app para cualquier
+   * app con registro de usuarios (guideline 5.1.1(v)). El backend anonimiza la
+   * fila en vez de borrarla, así el historial de la contraparte no se rompe.
+   */
+  deleteMe: () => api.delete('/users/me'),
 };
 
 export const postulationsApi = {

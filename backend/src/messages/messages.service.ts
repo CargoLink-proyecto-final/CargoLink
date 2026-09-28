@@ -20,6 +20,17 @@ export class MessagesService {
     if (!isCarrier && !isShipper) {
       throw new ForbiddenException('No eres participante de este viaje');
     }
+    // El gateway de WebSockets no valida JWT: toma el userId del handshake. Sin
+    // este chequeo, una cuenta dada de baja o desactivada seguía entrando a la
+    // room del viaje y escribiendo mensajes, porque el corte de sesión vive en
+    // la estrategia de JWT y el socket no pasa por ahí.
+    const sender = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+    if (!sender?.isActive) {
+      throw new ForbiddenException('La cuenta no está activa');
+    }
     return trip;
   }
 

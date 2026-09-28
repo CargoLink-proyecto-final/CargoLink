@@ -262,6 +262,14 @@ export default function RegisterPage() {
             Iniciar Sesión
           </Link>
         </p>
+
+        <p className="text-center text-[11px] text-gray-400 mt-4">
+          Al registrarte aceptás nuestra{' '}
+          <Link href="/privacidad" className="hover:text-gray-600 hover:underline">
+            política de privacidad
+          </Link>
+          .
+        </p>
       </div>
     </div>
   );
