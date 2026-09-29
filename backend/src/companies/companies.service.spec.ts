@@ -31,7 +31,14 @@ describe('CompaniesService', () => {
     $transaction: jest.Mock;
   };
 
-  const company = { id: 'company-1', name: 'Acme', ownerId: 'owner-1' };
+  // `owner` viene del include de `createJoinRequest`: la empresa de un titular
+  // dado de baja no puede aprobar nada, así que no acepta solicitudes.
+  const company = {
+    id: 'company-1',
+    name: 'Acme',
+    ownerId: 'owner-1',
+    owner: { isActive: true },
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -85,6 +92,18 @@ describe('CompaniesService', () => {
       expect(result).toBe(dir);
       expect(prisma.company.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ orderBy: { name: 'asc' } }),
+      );
+    });
+
+    // Todo lo que administra una empresa se resuelve por su titular: si se dio de
+    // baja, la empresa no puede aprobar ni rechazar nada.
+    it('hides companies whose owner is no longer active', async () => {
+      prisma.company.findMany.mockResolvedValue([]);
+
+      await service.listCompanies();
+
+      expect(prisma.company.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { owner: { isActive: true } } }),
       );
     });
   });
@@ -178,6 +197,18 @@ describe('CompaniesService', () => {
       await expect(
         service.createJoinRequest('driver-1', 'missing'),
       ).rejects.toThrow(NotFoundException);
+      expect(prisma.companyJoinRequest.upsert).not.toHaveBeenCalled();
+    });
+
+    it('refuses to join a company whose owner deleted their account', async () => {
+      prisma.company.findUnique.mockResolvedValue({
+        ...company,
+        owner: { isActive: false },
+      });
+
+      await expect(
+        service.createJoinRequest('driver-1', 'company-1'),
+      ).rejects.toThrow(ConflictException);
       expect(prisma.companyJoinRequest.upsert).not.toHaveBeenCalled();
     });
 

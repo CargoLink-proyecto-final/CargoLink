@@ -1,9 +1,15 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
+import { ChatBroadcaster } from './chat-broadcaster';
 
 @Injectable()
 export class MessagesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private push: PushService,
+    private broadcaster: ChatBroadcaster,
+  ) {}
 
   private async validateTripParticipant(tripId: string, userId: string) {
     const trip = await this.prisma.trip.findUnique({
@@ -16,6 +22,17 @@ export class MessagesService {
     if (!isCarrier && !isShipper) {
       throw new ForbiddenException('No eres participante de este viaje');
     }
+    // El gateway de WebSockets no valida JWT: toma el userId del handshake. Sin
+    // este chequeo, una cuenta dada de baja o desactivada seguía entrando a la
+    // room del viaje y escribiendo mensajes, porque el corte de sesión vive en
+    // la estrategia de JWT y el socket no pasa por ahí.
+    const sender = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true },
+    });
+    if (!sender?.isActive) {
+      throw new ForbiddenException('La cuenta no está activa');
+    }
     return trip;
   }
 
@@ -24,12 +41,39 @@ export class MessagesService {
     const receiverId =
       trip.carrierId === senderId ? trip.load.shipperId : trip.carrierId;
 
-    return this.prisma.message.create({
+    const message = await this.prisma.message.create({
       data: { senderId, receiverId, tripId, content },
       include: {
         sender: { select: { id: true, firstName: true, lastName: true } },
       },
     });
+
+    // Difusión en vivo a quien tenga la conversación abierta. Va acá por lo
+    // mismo que la push: los mensajes del web entran por REST y no pasan por el
+    // gateway, así que emitir desde el handler del socket dejaba la conversación
+    // congelada del otro lado.
+    this.broadcaster.emitNewMessage(tripId, message);
+
+    // Acá y no en el gateway porque los mensajes también entran por REST, que no
+    // pasa por el socket. `notify` se saltea solo a quien tiene la app abierta.
+    // No se espera: el mensaje ya está guardado y avisar es best-effort.
+    // El nombre sale del include, pero se degrada en vez de romper: notificar no
+    // puede tumbar el envío de un mensaje que ya está persistido.
+    const senderName = message.sender
+      ? `${message.sender.firstName} ${message.sender.lastName}`.trim()
+      : 'Nuevo mensaje';
+
+    // El `.catch` va acá aunque `notify` ya maneje sus errores: sin él, una
+    // rejection inesperada queda sin handler y en Node tumba el proceso.
+    void this.push
+      .notify(receiverId, {
+        title: senderName || 'Nuevo mensaje',
+        body: content,
+        data: { tripId },
+      })
+      .catch(() => undefined);
+
+    return message;
   }
 
   async getTripMessages(

@@ -7,8 +7,8 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // CORS_ORIGIN admite uno o varios orígenes separados por coma (ej. el dominio
-  // custom + la URL .run.app durante la transición). Ver infra/gcp/README.md.
+  // CORS_ORIGIN admite uno o varios orígenes separados por coma (ej. durante una
+  // migración de dominio, el viejo y el nuevo a la vez).
   const DEFAULT_CORS_ORIGIN = 'http://localhost:3000';
   const corsOrigins = (process.env.CORS_ORIGIN || DEFAULT_CORS_ORIGIN)
     .split(',')

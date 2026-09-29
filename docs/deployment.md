@@ -4,7 +4,7 @@ CargoLink corre en un **VPS propio** (`ubuntu-tesis01`) con Docker Compose: **pr
 
 - Pipeline: [`ci-cd.md`](./ci-cd.md)
 - Por qué VPS + runner self-hosted: [`decision-deploy-vps.md`](./decision-deploy-vps.md)
-- Setup anterior en GCP (histórico, en desuso): [`arquitectura-gcp.md`](./arquitectura-gcp.md) e [`../infra/gcp/README.md`](../infra/gcp/README.md)
+- Setup anterior en GCP (apagado el 2026-09-14): [`decision-deploy-vps.md`](./decision-deploy-vps.md) § GCP
 
 ## Estado actual
 
@@ -72,7 +72,7 @@ Los clones hacen pull por HTTPS con un **fine-grained PAT** de la cuenta `soport
 
 Los aliases `prod-*` / `dev-*` los declaran los overrides [`compose.prod.yml`](../deploy/vps/compose.prod.yml) / [`compose.dev.yml`](../deploy/vps/compose.dev.yml). Los overrides también quitan los `ports:`, así que **nada queda publicado en el host**.
 
-Apex y `www` apuntan a GitHub Pages (landing). `api.cargolink.com.ar` y `api.dev.cargolink.com.ar` siguen apuntando a GCP (DNS only) hasta que se apague.
+Apex y `www` apuntan a GitHub Pages (landing). No hay subdominio `api.`: la API se sirve en `/api` del mismo hostname de cada entorno.
 
 ## Runner self-hosted
 

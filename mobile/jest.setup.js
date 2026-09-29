@@ -11,22 +11,13 @@ jest.mock('react-native-safe-area-context', () =>
   require('react-native-safe-area-context/jest/mock').default,
 );
 
-// react-native-maps depende de un TurboModule nativo que no existe bajo jest:
-// importarlo tira "TurboModuleRegistry.getEnforcing(...) could not be found".
-// Se mockea acá para que cualquier test que monte el árbol de navegación
-// completo funcione. Los tests que ya lo mockean localmente pisan esta versión.
-jest.mock('react-native-maps', () => {
+// MapLibre depende de módulos nativos que no existen bajo jest: importarlo tira
+// "TurboModuleRegistry.getEnforcing(...) could not be found". Se mockea acá para
+// que cualquier test que monte el árbol de navegación completo funcione. Los
+// tests que ya lo mockean localmente pisan esta versión.
+jest.mock('@maplibre/maplibre-react-native', () => {
   const React = require('react');
   const { View } = require('react-native');
-
-  const MapView = React.forwardRef((props, ref) => {
-    React.useImperativeHandle(ref, () => ({
-      fitToCoordinates: jest.fn(),
-      animateToRegion: jest.fn(),
-    }));
-    return React.createElement(View, props);
-  });
-  MapView.displayName = 'MapView';
 
   const passthrough = (name) => {
     const Component = (props) => React.createElement(View, props);
@@ -34,14 +25,24 @@ jest.mock('react-native-maps', () => {
     return Component;
   };
 
+  const Camera = React.forwardRef((props, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      fitBounds: jest.fn(),
+      flyTo: jest.fn(),
+      jumpTo: jest.fn(),
+    }));
+    return React.createElement(View, props);
+  });
+  Camera.displayName = 'Camera';
+
   return {
     __esModule: true,
-    default: MapView,
+    Map: passthrough('Map'),
+    Camera,
     Marker: passthrough('Marker'),
-    Polyline: passthrough('Polyline'),
-    Callout: passthrough('Callout'),
-    Circle: passthrough('Circle'),
-    PROVIDER_DEFAULT: 'default',
-    PROVIDER_GOOGLE: 'google',
+    GeoJSONSource: passthrough('GeoJSONSource'),
+    Layer: passthrough('Layer'),
+    ViewAnnotation: passthrough('ViewAnnotation'),
+    UserLocation: passthrough('UserLocation'),
   };
 });

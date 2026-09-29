@@ -1,23 +1,47 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import {
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Map,
+  Marker,
+  type CameraRef,
+} from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import { tripsApi } from '../../services/api';
 import { fetchRoute } from '../../services/routing';
+import { boundsFor, type LatLng } from '../../lib/bounds';
+import { MAP_STYLE_URL } from '../../config/env';
 import { useAuthStore } from '../../store/auth';
 import { Trip } from '../../types';
 
 interface RouteData {
   tripId: string;
-  coordinates: { latitude: number; longitude: number }[];
+  coordinates: LatLng[];
+}
+
+/** Centro inicial: Buenos Aires, hasta que haya viajes que encuadrar. */
+const INITIAL_CENTER: [number, number] = [-58.3816, -34.6037];
+
+/**
+ * Chapita del marcador. MapLibre no trae pines con color como react-native-maps:
+ * cada `Marker` renderiza la vista que le pasemos, así que el pin es nuestro.
+ */
+function MapPin({ color, label }: { color: string; label: string }) {
+  return (
+    <View style={[styles.pin, { backgroundColor: color }]}>
+      <Text style={styles.pinLabel}>{label}</Text>
+    </View>
+  );
 }
 
 export default function TrackingScreen({ navigation }: any) {
   const user = useAuthStore((s) => s.user);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [routes, setRoutes] = useState<RouteData[]>([]);
-  const mapRef = useRef<MapView>(null);
+  const cameraRef = useRef<CameraRef>(null);
   const fetchedRouteIds = useRef<Set<string>>(new Set());
 
   const fetchTrips = async () => {
@@ -62,8 +86,8 @@ export default function TrackingScreen({ navigation }: any) {
 
   // Fit map to show all points
   useEffect(() => {
-    if (!mapRef.current) return;
-    const allCoords: { latitude: number; longitude: number }[] = [];
+    if (!cameraRef.current) return;
+    const allCoords: LatLng[] = [];
 
     trips.forEach((t) => {
       if (t.currentLat && t.currentLng) {
@@ -75,10 +99,11 @@ export default function TrackingScreen({ navigation }: any) {
       }
     });
 
-    if (allCoords.length >= 2) {
-      mapRef.current.fitToCoordinates(allCoords, {
-        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-        animated: true,
+    const bounds = boundsFor(allCoords);
+    if (bounds) {
+      cameraRef.current.fitBounds(bounds, {
+        padding: { top: 50, right: 50, bottom: 50, left: 50 },
+        duration: 500,
       });
     }
   }, [trips, routes]);
@@ -117,43 +142,42 @@ export default function TrackingScreen({ navigation }: any) {
       <Text style={styles.title}>Seguimiento</Text>
 
       <View style={styles.mapContainer}>
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          provider={PROVIDER_DEFAULT}
-          initialRegion={{
-            latitude: -34.6037,
-            longitude: -58.3816,
-            latitudeDelta: 10,
-            longitudeDelta: 10,
-          }}
-        >
+        <Map style={styles.map} mapStyle={MAP_STYLE_URL} logo={false} attribution>
+          <Camera ref={cameraRef} initialViewState={{ center: INITIAL_CENTER, zoom: 3.5 }} />
+
           {/* Route polylines */}
           {routes.map((route) => (
-            <Polyline
+            <GeoJSONSource
               key={route.tripId}
-              coordinates={route.coordinates}
-              strokeColor="#3b82f6"
-              strokeWidth={4}
-            />
+              id={`route-${route.tripId}`}
+              data={{
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                  type: 'LineString',
+                  coordinates: route.coordinates.map((c) => [c.longitude, c.latitude]),
+                },
+              }}
+            >
+              <Layer
+                id={`route-line-${route.tripId}`}
+                type="line"
+                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                paint={{ 'line-color': '#3b82f6', 'line-width': 4 }}
+              />
+            </GeoJSONSource>
           ))}
 
           {/* Origin & destination markers */}
           {trips.map((t) =>
             t.load ? (
               <React.Fragment key={`markers-${t.id}`}>
-                <Marker
-                  coordinate={{ latitude: t.load.originLat, longitude: t.load.originLng }}
-                  title="Origen"
-                  description={t.load.originAddress}
-                  pinColor="green"
-                />
-                <Marker
-                  coordinate={{ latitude: t.load.destLat, longitude: t.load.destLng }}
-                  title="Destino"
-                  description={t.load.destAddress}
-                  pinColor="red"
-                />
+                <Marker lngLat={[t.load.originLng, t.load.originLat]}>
+                  <MapPin color="#16a34a" label="A" />
+                </Marker>
+                <Marker lngLat={[t.load.destLng, t.load.destLat]}>
+                  <MapPin color="#dc2626" label="B" />
+                </Marker>
               </React.Fragment>
             ) : null,
           )}
@@ -162,15 +186,11 @@ export default function TrackingScreen({ navigation }: any) {
           {trips
             .filter((t) => t.currentLat && t.currentLng)
             .map((t) => (
-              <Marker
-                key={t.id}
-                coordinate={{ latitude: t.currentLat!, longitude: t.currentLng! }}
-                title={t.load?.title || 'Viaje'}
-                description="Posición actual del conductor"
-                pinColor="blue"
-              />
+              <Marker key={t.id} lngLat={[t.currentLng!, t.currentLat!]}>
+                <MapPin color="#2563eb" label="🚚" />
+              </Marker>
             ))}
-        </MapView>
+        </Map>
       </View>
 
       {/* Trip list */}
@@ -213,6 +233,21 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: 'bold', padding: 16, paddingBottom: 8 },
   mapContainer: { height: 300, margin: 16, marginTop: 8, borderRadius: 12, overflow: 'hidden' },
   map: { width: '100%', height: '100%' },
+  pin: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  pinLabel: { color: 'white', fontSize: 12, fontWeight: '700' },
   listContainer: { flex: 1, marginHorizontal: 16 },
   listTitle: { fontSize: 14, color: '#6b7280', marginBottom: 8 },
   tripItem: {
