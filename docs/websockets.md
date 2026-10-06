@@ -84,19 +84,32 @@ Handler (gateway):
 ```ts
 @SubscribeMessage('sendMessage')
 async handleMessage(client: Socket, payload: { senderId, tripId, content }) {
-  const message = await this.messagesService.create(
+  // El broadcast lo hace el service, para no emitir dos veces.
+  return this.messagesService.create(
     payload.senderId, payload.tripId, payload.content,
   );
-
-  this.server.to(`trip_${payload.tripId}`).emit('newMessage', message);
-
-  return message;
 }
 ```
 
 - Persiste vía `MessagesService.create()` (mismo flujo que el REST `POST /messages/trip/:tripId`).
-- Broadcastea `newMessage` al room del trip — incluye al sender, así el cliente que mandó también recibe la confirmación con el ID generado.
 - Devuelve el `message` al cliente que llamó vía ack/promise.
+
+**Quién emite `newMessage`.** No el gateway: lo hace `MessagesService.create()` a
+través de `ChatBroadcaster`. La razón es que los mensajes entran por dos caminos
+—este evento y el `POST /messages/trip/:tripId` que usa el web— y emitir desde el
+handler difundía sólo los del socket: un mensaje escrito desde el web no llegaba
+en vivo a la app, que apaga su polling justamente cuando el socket está vivo.
+
+`ChatBroadcaster` existe para romper el ciclo: el service necesita emitir y el
+servidor de Socket.IO lo tiene el gateway, que a su vez necesita al service para
+persistir. Inyectar el gateway en el service cierra el ciclo y **`forwardRef` no
+alcanza** — la resolución se va en recursión y el proceso muere al arrancar. Con
+el broadcaster, el gateway le registra su `Server` en `afterInit` y el service
+sólo emite. `messages.module.spec.ts` compila el módulo con el contenedor de Nest
+para que ese ciclo no vuelva a pasar inadvertido.
+
+El broadcast incluye al sender, así el cliente que mandó también recibe la
+confirmación con el ID generado.
 
 ### `newMessage` (servidor → cliente)
 

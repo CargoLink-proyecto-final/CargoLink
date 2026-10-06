@@ -4,18 +4,20 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../push/presence.service';
+import { ChatBroadcaster } from './chat-broadcaster';
 
 @WebSocketGateway({
   cors: { origin: '*' },
   namespace: '/chat',
 })
 export class MessagesGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
   server: Server;
@@ -27,7 +29,16 @@ export class MessagesGateway
     private messagesService: MessagesService,
     private prisma: PrismaService,
     private presence: PresenceService,
+    private broadcaster: ChatBroadcaster,
   ) {}
+
+  /**
+   * Le pasa el servidor al `ChatBroadcaster` para que los servicios de dominio
+   * puedan difundir sin depender de este gateway (ver ChatBroadcaster).
+   */
+  afterInit(server: Server) {
+    this.broadcaster.register(server);
+  }
 
   async handleConnection(client: Socket) {
     const userId = client.handshake.query.userId as string;
@@ -71,14 +82,11 @@ export class MessagesGateway
     client: Socket,
     payload: { senderId: string; tripId: string; content: string },
   ) {
-    const message = await this.messagesService.create(
+    // El broadcast lo hace el service, para no emitir dos veces.
+    return this.messagesService.create(
       payload.senderId,
       payload.tripId,
       payload.content,
     );
-
-    this.server.to(`trip_${payload.tripId}`).emit('newMessage', message);
-
-    return message;
   }
 }

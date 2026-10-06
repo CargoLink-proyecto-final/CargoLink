@@ -16,6 +16,7 @@ describe('UsersController', () => {
     changeUserEmail: jest.Mock;
     changeRole: jest.Mock;
     getRoleHistory: jest.Mock;
+    deleteOwnAccount: jest.Mock;
   };
   let pushService: { registerToken: jest.Mock; clearToken: jest.Mock };
 
@@ -37,6 +38,7 @@ describe('UsersController', () => {
       changeUserEmail: jest.fn(),
       changeRole: jest.fn(),
       getRoleHistory: jest.fn(),
+      deleteOwnAccount: jest.fn(),
     };
     pushService = {
       registerToken: jest.fn().mockResolvedValue(undefined),
@@ -146,6 +148,20 @@ describe('UsersController', () => {
       await expect(
         controller.findOne('admin-1', admin),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('deleteOwnAccount', () => {
+    it('deletes the account of whoever is authenticated, not an id from the request', async () => {
+      usersService.deleteOwnAccount.mockResolvedValue({
+        deleted: true,
+        email: baseUser.email,
+      });
+
+      const result = await controller.deleteOwnAccount('user-1');
+
+      expect(usersService.deleteOwnAccount).toHaveBeenCalledWith('user-1');
+      expect(result).toEqual({ deleted: true, email: baseUser.email });
     });
   });
 

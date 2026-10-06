@@ -7,6 +7,10 @@ module.exports = () => ({
   expo: {
     name: 'CargoLink',
     slug: 'cargolink',
+    // El proyecto de EAS vive bajo la cuenta de la organización, no bajo la
+    // personal de quien corre el build. Sin `owner`, EAS lo busca en la cuenta
+    // logueada y no lo encuentra.
+    owner: 'cargolink-2026',
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/icon.png',
@@ -17,10 +21,12 @@ module.exports = () => ({
       supportsTablet: true,
       bundleIdentifier: 'com.cargolink.app',
       infoPlist: {
+        // Sólo la cadena de "mientras usás la app": la app pide únicamente
+        // permiso en primer plano (`requestForegroundPermissionsAsync`).
+        // Declarar además la de segundo plano contradecía el privacy label y es
+        // algo que la revisión de Apple pregunta.
         NSLocationWhenInUseUsageDescription:
           'CargoLink usa tu ubicación para mostrar el seguimiento del viaje en tiempo real.',
-        NSLocationAlwaysAndWhenInUseUsageDescription:
-          'CargoLink usa tu ubicación en segundo plano para actualizar el seguimiento del viaje.',
         // Permite http:// contra el backend local durante desarrollo; en prod
         // las URLs del VPS (vía Cloudflare Tunnel) son https y no se apoya en esta excepción.
         NSAppTransportSecurity: {

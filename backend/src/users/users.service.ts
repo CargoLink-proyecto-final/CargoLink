@@ -7,7 +7,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { LoadStatus, Role, TripStatus } from '@prisma/client';
+import { hash } from 'bcrypt';
+import {
+  JoinRequestStatus,
+  LoadStatus,
+  PostulationStatus,
+  Role,
+  TripStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { RegisterDto } from '../auth/dto/register.dto';
@@ -30,6 +37,12 @@ const ACTIVE_TRIP_STATUSES: TripStatus[] = [
 // Roles que el admin puede asignar desde el panel. COMPANY_ADMIN queda afuera: implica
 // titularidad de una Company (ownership) y se gestiona por su propio flujo.
 const ASSIGNABLE_ROLES: Role[] = [Role.CARGO_GENERATOR, Role.TRANSPORTER, Role.ADMIN];
+
+// Nombre con el que queda una cuenta dada de baja. La contraparte sigue viendo
+// el viaje y la calificación, atribuidos a alguien que ya no está.
+export const DELETED_USER_FIRST_NAME = 'Usuario';
+export const DELETED_USER_LAST_NAME = 'eliminado';
+export const DELETED_COMPANY_NAME = 'Empresa eliminada';
 
 /**
  * Campos de `User` que pueden salir por HTTP.
@@ -156,11 +169,132 @@ export class UsersService {
 
   async reactivate(id: string) {
     await this.findById(id);
+    // `deletedAt` no viaja en PUBLIC_USER_SELECT, así que hay que leerla aparte.
+    // Sin este chequeo un admin podía revivir una cuenta dada de baja por su
+    // titular: los datos personales ya no están, pero la fila volvía a operar.
+    const row = await this.prisma.user.findUnique({
+      where: { id },
+      select: { deletedAt: true },
+    });
+    if (row?.deletedAt) {
+      throw new ConflictException(
+        'La cuenta fue eliminada por su titular y no puede reactivarse.',
+      );
+    }
     return this.prisma.user.update({
       where: { id },
       data: { isActive: true },
       select: PUBLIC_USER_SELECT,
     });
+  }
+
+  /**
+   * Baja definitiva pedida por el propio usuario, requisito de la App Store para
+   * toda app con registro (guideline 5.1.1(v)).
+   *
+   * No borra la fila: la anonimiza. Un `delete` en cascada se llevaría cargas,
+   * viajes, mensajes y calificaciones que también son de la contraparte — el
+   * transportista perdería su historial y sus calificaciones porque el dador se
+   * dio de baja. Lo que se borra es todo dato personal; lo que sobrevive es el
+   * registro operativo, atribuido a un "Usuario eliminado".
+   *
+   * El email se reescribe a un placeholder único en el dominio reservado
+   * `.invalid` (RFC 2606) por dos razones: la columna es `@unique`, y así la
+   * dirección real queda libre para registrarse de nuevo.
+   */
+  async deleteOwnAccount(id: string) {
+    const user = await this.findById(id);
+
+    // Hash por fuera de la transacción: bcrypt con cost 10 tarda ~100ms y no
+    // hay razón para tener la transacción abierta mientras corre.
+    const unusablePassword = await hash(randomBytes(32).toString('hex'), 10);
+    // `ownerId` es @unique y la titularidad sólo se crea en el registro, así que
+    // esta lectura no puede quedar desactualizada respecto de la transacción.
+    const ownedCompany = await this.prisma.company.findUnique({
+      where: { ownerId: id },
+      select: { id: true },
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      // El chequeo va adentro: con dos sesiones abiertas del mismo usuario
+      // (publicar una carga desde el web mientras se borra desde el celular),
+      // hacerlo afuera dejaba una carga PUBLISHED de un "Usuario eliminado".
+      const [activeLoads, activeTrips] = await Promise.all([
+        tx.load.count({ where: { shipperId: id, status: { in: ACTIVE_LOAD_STATUSES } } }),
+        tx.trip.count({ where: { carrierId: id, status: { in: ACTIVE_TRIP_STATUSES } } }),
+      ]);
+      if (activeLoads > 0 || activeTrips > 0) {
+        throw new ConflictException(
+          'No se puede eliminar la cuenta: tiene cargas o viajes activos. Cerralos primero.',
+        );
+      }
+
+      await tx.user.update({
+        where: { id },
+        data: {
+          email: `deleted-${id}@cargolink.invalid`,
+          // Deja la columna con un hash válido en vez de un string vacío, así
+          // ningún `compare` acierta.
+          password: unusablePassword,
+          firstName: DELETED_USER_FIRST_NAME,
+          lastName: DELETED_USER_LAST_NAME,
+          phone: null,
+          companyName: null,
+          industry: null,
+          avatarUrl: null,
+          zoneLat: null,
+          zoneLng: null,
+          zoneRadiusKm: null,
+          // Corta las push al dispositivo y lo desvincula de la empresa.
+          expoPushToken: null,
+          companyId: null,
+          resetToken: null,
+          resetTokenExp: null,
+          emailVerificationToken: null,
+          emailVerificationTokenExp: null,
+          emailVerified: false,
+          isActive: false,
+          deletedAt: new Date(),
+        },
+      });
+
+      // Retira las postulaciones abiertas. Sin esto el dador de carga podría
+      // aceptar la postulación de alguien que ya no existe: se abriría un viaje
+      // asignado a una cuenta que no puede loguear nunca más y la carga quedaría
+      // trabada en ASSIGNED sin forma de recuperarla.
+      await tx.postulation.updateMany({
+        where: {
+          transporterId: id,
+          status: { in: [PostulationStatus.PENDING, PostulationStatus.NEGOTIATING] },
+        },
+        data: { status: PostulationStatus.WITHDRAWN },
+      });
+
+      // Si era titular de una empresa, la empresa también pierde sus datos y se
+      // queda sin miembros. No hay transferencia de titularidad ni baja de
+      // empresa en el producto, así que dejarla intacta significaría que el
+      // nombre (que en un monotributista suele ser su propio nombre) sobreviva
+      // en una empresa sin administrador posible.
+      if (ownedCompany) {
+        await tx.user.updateMany({
+          where: { companyId: ownedCompany.id },
+          data: { companyId: null },
+        });
+        await tx.companyJoinRequest.updateMany({
+          where: { companyId: ownedCompany.id, status: JoinRequestStatus.PENDING },
+          data: { status: JoinRequestStatus.REJECTED, decidedAt: new Date() },
+        });
+        await tx.company.update({
+          where: { id: ownedCompany.id },
+          data: { name: DELETED_COMPANY_NAME },
+        });
+      }
+    });
+
+    this.logger.log(`Cuenta ${id} eliminada y anonimizada a pedido del usuario`);
+    // No devuelve el usuario: ya no hay nada que el cliente pueda mostrar, y el
+    // JWT que hizo la request queda apuntando a una cuenta que no puede loguear.
+    return { deleted: true, email: user.email };
   }
 
   // Cambio de email por un admin. Como el email es el identificador, exige revalidación:

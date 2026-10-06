@@ -11,6 +11,7 @@ jest.mock('../../services/api', () => ({
   usersApi: {
     getMe: jest.fn(),
     updateMe: jest.fn(),
+    deleteMe: jest.fn(),
   },
 }));
 
@@ -323,5 +324,71 @@ describe('ProfileScreen', () => {
     expect(mockLogout).toHaveBeenCalled();
 
     alertSpy.mockRestore();
+  });
+
+  // Apple exige que la baja se pueda pedir desde la app. El punto de estos tests
+  // es que no se dispare con un solo toque y que cierre sesión después.
+  describe('eliminar cuenta', () => {
+    const pressDelete = async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      render(<ProfileScreen />);
+      await waitFor(() => expect(screen.getByText('Ana Diaz')).toBeTruthy());
+
+      fireEvent.press(screen.getByText('Eliminar mi cuenta'));
+      return alertSpy;
+    };
+
+    const confirmTwice = (alertSpy: jest.SpyInstance) => {
+      const first = alertSpy.mock.calls[0][2] as any[];
+      first.find((a) => a.style === 'destructive').onPress();
+      const second = alertSpy.mock.calls[1][2] as any[];
+      return second.find((a) => a.style === 'destructive').onPress();
+    };
+
+    it('pide dos confirmaciones antes de llamar al API', async () => {
+      (usersApi.deleteMe as jest.Mock).mockResolvedValue({ data: { deleted: true } });
+      const alertSpy = await pressDelete();
+
+      // Primer toque: sólo advierte, todavía no borra nada.
+      expect(usersApi.deleteMe).not.toHaveBeenCalled();
+
+      const first = alertSpy.mock.calls[0][2] as any[];
+      first.find((a) => a.style === 'destructive').onPress();
+      expect(usersApi.deleteMe).not.toHaveBeenCalled();
+
+      const second = alertSpy.mock.calls[1][2] as any[];
+      await second.find((a) => a.style === 'destructive').onPress();
+      expect(usersApi.deleteMe).toHaveBeenCalled();
+
+      alertSpy.mockRestore();
+    });
+
+    it('cierra sesión cuando el borrado sale bien', async () => {
+      (usersApi.deleteMe as jest.Mock).mockResolvedValue({ data: { deleted: true } });
+      const alertSpy = await pressDelete();
+
+      await confirmTwice(alertSpy);
+
+      await waitFor(() => expect(mockLogout).toHaveBeenCalled());
+      alertSpy.mockRestore();
+    });
+
+    it('avisa y mantiene la sesión si el backend rechaza el borrado', async () => {
+      (usersApi.deleteMe as jest.Mock).mockRejectedValue({
+        response: { data: { message: 'No se puede eliminar la cuenta: tiene viajes activos.' } },
+      });
+      const alertSpy = await pressDelete();
+
+      await confirmTwice(alertSpy);
+
+      await waitFor(() =>
+        expect(alertSpy).toHaveBeenCalledWith(
+          'No pudimos eliminar la cuenta',
+          'No se puede eliminar la cuenta: tiene viajes activos.',
+        ),
+      );
+      expect(mockLogout).not.toHaveBeenCalled();
+      alertSpy.mockRestore();
+    });
   });
 });

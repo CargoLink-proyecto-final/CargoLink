@@ -68,6 +68,11 @@ model User {
   // dispositivos a la vez requeriría una tabla aparte.
   expoPushToken             String?   @map("expo_push_token")
   isActive                  Boolean   @default(true) @map("is_active")
+  // Baja definitiva pedida por el propio usuario (distinta de `isActive`, que es
+  // una desactivación administrativa y reversible). Cuando se setea, los datos
+  // personales de la fila ya se anonimizaron y la cuenta no se puede recuperar:
+  // la fila sobrevive sólo para no romper el historial de la contraparte.
+  deletedAt                 DateTime? @map("deleted_at")
   resetToken                String?   @map("reset_token")
   resetTokenExp             DateTime? @map("reset_token_exp")
   emailVerified             Boolean   @default(false) @map("email_verified")

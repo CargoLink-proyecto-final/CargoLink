@@ -3,11 +3,13 @@ import { MessagesGateway } from './messages.gateway';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../push/presence.service';
+import { ChatBroadcaster } from './chat-broadcaster';
 
 describe('MessagesGateway', () => {
   let gateway: MessagesGateway;
   let messagesService: { create: jest.Mock };
   let prisma: { trip: { findMany: jest.Mock } };
+  let broadcaster: { register: jest.Mock; emitNewMessage: jest.Mock };
 
   // Mock Socket.IO server with chainable .to().emit()
   let serverEmit: jest.Mock;
@@ -21,12 +23,14 @@ describe('MessagesGateway', () => {
   beforeEach(async () => {
     messagesService = { create: jest.fn() };
     prisma = { trip: { findMany: jest.fn() } };
+    broadcaster = { register: jest.fn(), emitNewMessage: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessagesGateway,
         { provide: MessagesService, useValue: messagesService },
         { provide: PrismaService, useValue: prisma },
+        { provide: ChatBroadcaster, useValue: broadcaster },
         // Real y no mock: es un contador en memoria sin dependencias, y así los
         // tests verifican de verdad el conteo de conexiones.
         PresenceService,
@@ -92,8 +96,20 @@ describe('MessagesGateway', () => {
     });
   });
 
+  describe('afterInit', () => {
+    // Sin esto el service emitiría contra un broadcaster sin servidor y los
+    // mensajes no llegarían en vivo a nadie.
+    it('hands the socket server to the broadcaster', () => {
+      gateway.afterInit(server as any);
+
+      expect(broadcaster.register).toHaveBeenCalledWith(server);
+    });
+  });
+
   describe('handleMessage', () => {
-    it('persists the message and broadcasts it to the trip room', async () => {
+    // El emit ya no vive acá: lo hace el service, para que los mensajes que
+    // entran por REST (el camino del web) también se difundan.
+    it('delegates to the service without broadcasting twice', async () => {
       const client = makeClient({ userId: 'user-1' });
       const payload = { senderId: 'user-1', tripId: 'trip-1', content: 'hi' };
       const created = { id: 'msg-1', content: 'hi' };
@@ -102,8 +118,7 @@ describe('MessagesGateway', () => {
       const result = await gateway.handleMessage(client as any, payload);
 
       expect(messagesService.create).toHaveBeenCalledWith('user-1', 'trip-1', 'hi');
-      expect(server.to).toHaveBeenCalledWith('trip_trip-1');
-      expect(serverEmit).toHaveBeenCalledWith('newMessage', created);
+      expect(serverEmit).not.toHaveBeenCalled();
       expect(result).toBe(created);
     });
 

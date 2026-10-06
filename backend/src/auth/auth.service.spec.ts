@@ -194,6 +194,22 @@ describe('AuthService', () => {
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
+    // Una cuenta eliminada queda con emailVerified en false, así que sin el corte
+    // por isActive se generaba un token y se mandaba un mail a la dirección
+    // placeholder @cargolink.invalid: un bounce garantizado contra el SMTP real.
+    it('does nothing for a deleted or deactivated account', async () => {
+      usersService.findByEmail.mockResolvedValue({
+        ...baseUser,
+        emailVerified: false,
+        isActive: false,
+      });
+
+      await service.resendVerification(baseUser.email);
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(mailService.sendVerificationEmail).not.toHaveBeenCalled();
+    });
+
     it('sends a new verification email for an unverified user', async () => {
       usersService.findByEmail.mockResolvedValue({ ...baseUser, emailVerified: false });
       await service.resendVerification(baseUser.email);

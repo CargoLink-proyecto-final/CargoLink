@@ -34,6 +34,11 @@ export class CompaniesService {
   /** Directorio de empresas para que un transportista elija a cuál postularse. */
   async listCompanies() {
     return this.prisma.company.findMany({
+      // Sólo las que tienen a alguien del otro lado. Todo lo que administra una
+      // empresa se resuelve por su titular, así que una empresa cuyo titular se
+      // dio de baja no puede aprobar ni rechazar nada: ofrecerla sería mandar al
+      // transportista a esperar una respuesta que no va a llegar.
+      where: { owner: { isActive: true } },
       select: {
         id: true,
         name: true,
@@ -67,8 +72,14 @@ export class CompaniesService {
   async createJoinRequest(transporterId: string, companyId: string) {
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
+      include: { owner: { select: { isActive: true } } },
     });
     if (!company) throw new NotFoundException('Empresa no encontrada');
+    // El directorio ya las filtra, pero el id puede llegar de un link viejo o de
+    // una pantalla cargada antes de la baja del titular.
+    if (!company.owner.isActive) {
+      throw new ConflictException('La empresa ya no está activa');
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: transporterId },

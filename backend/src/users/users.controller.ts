@@ -58,6 +58,14 @@ export class UsersController {
     return { registered: true };
   }
 
+  @Delete('me')
+  @ApiOperation({
+    summary: 'Delete the current account permanently (anonymizes personal data)',
+  })
+  deleteOwnAccount(@CurrentUser('id') userId: string) {
+    return this.usersService.deleteOwnAccount(userId);
+  }
+
   @Delete('me/push-token')
   @ApiOperation({ summary: 'Stop sending push notifications to this account' })
   async clearPushToken(@CurrentUser('id') userId: string) {
