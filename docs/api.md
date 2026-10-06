@@ -198,11 +198,12 @@ Response:
 
 ### GET `/loads/metrics`
 
-Métricas del dador de carga logueado, para su panel. Tres bloques:
+Métricas del dador de carga logueado, para su panel. Dos bloques:
 
-- **Cargas**: conteos por estado, `assignmentRate` (cuántas de las no canceladas consiguieron transportista), `avgHoursToAssignment` y `avgPostulationsPerLoad`.
-- **Entregas**: `onTimeDeliveries` / `lateDeliveries` / `onTimeRate`, con el mismo `computeFuelAndDeliveryMetrics` que usa el transportista.
-- **Dinero**: `totalAmount`, `amountThisMonth`, `avgAmountPerTrip`, `amountPerKm` y `monthly` (12 meses, incluidos los vacíos), más `avgNegotiationDelta` (desvío promedio entre precio publicado y pactado), `topCarriers` y `spendByCargoType`.
+- **Cargas**: conteos por estado (`totalLoads`, `publishedLoads`, `assignedLoads`, `inTransitLoads`, `deliveredLoads`, `cancelledLoads`) y `totalDistanceKm` de los viajes completados.
+- **Dinero**: `totalAmount`, `amountThisMonth`, `avgAmountPerTrip`, `amountPerKm` y `monthly` (12 meses, incluidos los vacíos), más `avgNegotiationDelta` / `negotiatedLoads` (desvío promedio entre precio publicado y pactado), `topCarriers` y `spendByCargoType`.
+
+No expone métricas de asignación ni de puntualidad: miden qué tan atractivas son las cargas para el mercado y no le dan al dador nada sobre lo que actuar.
 
 El precio de cada viaje sale de `resolveTripPrice` ([`../backend/src/common/metrics.ts`](../backend/src/common/metrics.ts)): la postulación aceptada manda, y si no hubo, el precio publicado.
 

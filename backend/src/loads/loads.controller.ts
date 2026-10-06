@@ -149,7 +149,7 @@ export class LoadsController {
   @UseGuards(RolesGuard)
   @Roles('CARGO_GENERATOR')
   @ApiOperation({
-    summary: 'Load, delivery and spend metrics for the current shipper',
+    summary: 'Load status and spend metrics for the current shipper',
   })
   getMyMetrics(@CurrentUser('id') userId: string) {
     return this.loadsService.getShipperMetrics(userId);
