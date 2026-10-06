@@ -13,7 +13,6 @@ import { LoadStatus, Prisma, PostulationStatus, TripStatus } from '@prisma/clien
 import {
   computeFuelAndDeliveryMetrics,
   computeMoneyMetrics,
-  round1,
   round2,
 } from '../common/metrics';
 
@@ -439,9 +438,8 @@ export class LoadsService {
   }
 
   /**
-   * Métricas del dador de carga logueado: estado de sus cargas, qué tan rápido
-   * consiguen transportista, puntualidad de las entregas que recibió y cuánto
-   * gastó en fletes. Alimenta el panel del shipper.
+   * Métricas del dador de carga logueado: estado de sus cargas y cuánto gastó
+   * en fletes (con quién y en qué tipo de carga). Alimenta el panel del shipper.
    */
   async getShipperMetrics(shipperId: string) {
     const now = new Date();
@@ -452,9 +450,7 @@ export class LoadsService {
         status: true,
         price: true,
         cargoType: true,
-        createdAt: true,
         deliveryDate: true,
-        _count: { select: { postulations: true } },
         // El precio pactado vive acá, no en load.price — ver resolveTripPrice().
         postulations: {
           where: { status: PostulationStatus.ACCEPTED },
@@ -464,7 +460,6 @@ export class LoadsService {
         trip: {
           select: {
             status: true,
-            createdAt: true,
             completedAt: true,
             distanceKm: true,
             carrier: {
@@ -498,21 +493,6 @@ export class LoadsService {
     const byStatus = (status: LoadStatus) =>
       loads.filter((l) => l.status === status).length;
 
-    // La tasa de asignación mide cuántas cargas consiguieron transportista.
-    // Las canceladas no entran: el dador las bajó, no es que el mercado no
-    // las tomó.
-    const assignable = loads.filter((l) => l.status !== LoadStatus.CANCELLED);
-    const assigned = assignable.filter((l) => l.trip);
-
-    const assignmentHours = assigned.flatMap((l) =>
-      l.trip ? [(l.trip.createdAt.getTime() - l.createdAt.getTime()) / 3_600_000] : [],
-    );
-    const avgHoursToAssignment = assignmentHours.length
-      ? round1(assignmentHours.reduce((a, b) => a + b, 0) / assignmentHours.length)
-      : null;
-
-    const totalPostulations = loads.reduce((sum, l) => sum + l._count.postulations, 0);
-
     // Cuánto se corrió el precio pactado respecto del publicado. Solo mide las
     // cargas que salieron con precio: en las "a convenir" no hay referencia.
     const negotiationDeltas = loads.flatMap((l) => {
@@ -524,8 +504,7 @@ export class LoadsService {
       ? negotiationDeltas.reduce((a, b) => a + b, 0) / negotiationDeltas.length
       : null;
 
-    const { onTimeDeliveries, lateDeliveries, onTimeRate, totalDistanceKm } =
-      computeFuelAndDeliveryMetrics(trips, now);
+    const { totalDistanceKm } = computeFuelAndDeliveryMetrics(trips, now);
     const money = computeMoneyMetrics(trips, now);
 
     // Ranking de transportistas: con quiénes viene trabajando y cuánto les pagó.
@@ -592,15 +571,6 @@ export class LoadsService {
       inTransitLoads: byStatus(LoadStatus.IN_TRANSIT),
       deliveredLoads: byStatus(LoadStatus.DELIVERED),
       cancelledLoads: byStatus(LoadStatus.CANCELLED),
-      // null cuando todavía no publicó nada medible, para no mostrar 0%.
-      assignmentRate: assignable.length ? assigned.length / assignable.length : null,
-      avgHoursToAssignment,
-      avgPostulationsPerLoad: loads.length
-        ? round1(totalPostulations / loads.length)
-        : null,
-      onTimeDeliveries,
-      lateDeliveries,
-      onTimeRate,
       totalDistanceKm,
       avgNegotiationDelta,
       negotiatedLoads: negotiationDeltas.length,

@@ -104,7 +104,7 @@ describe('ShipperDashboard', () => {
     expect(screen.getByText('Cargando…')).toBeInTheDocument();
   });
 
-  it('renders spend and assignment metrics with the carrier ranking', async () => {
+  it('renders spend metrics with the carrier ranking', async () => {
     loadsApi.getMy.mockResolvedValue({ data: { loads: [] } });
     loadsApi.getMetrics.mockResolvedValue({
       data: {
@@ -114,12 +114,6 @@ describe('ShipperDashboard', () => {
         inTransitLoads: 1,
         deliveredLoads: 5,
         cancelledLoads: 1,
-        assignmentRate: 0.75,
-        avgHoursToAssignment: 18.5,
-        avgPostulationsPerLoad: 2.4,
-        onTimeDeliveries: 4,
-        lateDeliveries: 1,
-        onTimeRate: 0.8,
         totalDistanceKm: 3000,
         avgNegotiationDelta: 0.15,
         negotiatedLoads: 6,
@@ -137,11 +131,9 @@ describe('ShipperDashboard', () => {
 
     renderWithClient(<ShipperDashboard />);
 
-    expect(await screen.findByText('75%')).toBeInTheDocument();
-    expect(screen.getByText('18.5 h')).toBeInTheDocument();
-    expect(screen.getByText('2.4')).toBeInTheDocument();
-    expect(screen.getByText(/80% de las medibles · 1 demorada/)).toBeInTheDocument();
-    expect(screen.getByText(/2\.400\.000/)).toBeInTheDocument();
+    expect(await screen.findByText(/2\.400\.000/)).toBeInTheDocument();
+    // La fila de desempeño (asignación, puntualidad) se sacó: no le servía al dador.
+    expect(screen.queryByText('Desempeño de tus cargas')).not.toBeInTheDocument();
     // Pagó 15% por encima de lo publicado, sobre 6 cargas con precio fijado.
     expect(screen.getByText('+15%')).toBeInTheDocument();
     expect(screen.getByText(/en 6 cargas con precio/)).toBeInTheDocument();

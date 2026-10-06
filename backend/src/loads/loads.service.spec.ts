@@ -725,9 +725,6 @@ describe('LoadsService', () => {
       const result = await service.getShipperMetrics('shipper-1');
 
       expect(result.totalLoads).toBe(0);
-      expect(result.assignmentRate).toBeNull();
-      expect(result.avgHoursToAssignment).toBeNull();
-      expect(result.avgPostulationsPerLoad).toBeNull();
       expect(result.avgNegotiationDelta).toBeNull();
       expect(result.totalAmount).toBe(0);
       expect(result.topCarriers).toEqual([]);
@@ -737,19 +734,16 @@ describe('LoadsService', () => {
       expect(prisma.rating.groupBy).not.toHaveBeenCalled();
     });
 
-    it('aggregates assignment, punctuality and spend across the shipper loads', async () => {
+    it('aggregates load status and spend across the shipper loads', async () => {
       prisma.load.findMany.mockResolvedValue([
         {
           status: LoadStatus.DELIVERED,
           price: 100000,
           cargoType: 'Granos',
-          createdAt: hoursAgo(48),
           deliveryDate: hoursAgo(-24), // se comprometió para mañana
-          _count: { postulations: 3 },
           postulations: [{ proposedPrice: 120000 }],
           trip: {
             status: 'COMPLETED',
-            createdAt: hoursAgo(24),
             completedAt: hoursAgo(1),
             distanceKm: 200,
             carrier: {
@@ -764,9 +758,7 @@ describe('LoadsService', () => {
           status: LoadStatus.PUBLISHED,
           price: 50000,
           cargoType: 'Cemento',
-          createdAt: hoursAgo(5),
           deliveryDate: null,
-          _count: { postulations: 1 },
           postulations: [],
           trip: null,
         },
@@ -775,9 +767,7 @@ describe('LoadsService', () => {
           status: LoadStatus.CANCELLED,
           price: 20000,
           cargoType: 'Cemento',
-          createdAt: hoursAgo(72),
           deliveryDate: null,
-          _count: { postulations: 0 },
           postulations: [],
           trip: null,
         },
@@ -792,12 +782,7 @@ describe('LoadsService', () => {
       expect(result.deliveredLoads).toBe(1);
       expect(result.publishedLoads).toBe(1);
       expect(result.cancelledLoads).toBe(1);
-      // 1 de las 2 asignables consiguió transportista.
-      expect(result.assignmentRate).toBe(0.5);
-      expect(result.avgHoursToAssignment).toBe(24);
-      expect(result.avgPostulationsPerLoad).toBe(1.3); // (3 + 1 + 0) / 3
-      expect(result.onTimeDeliveries).toBe(1);
-      expect(result.lateDeliveries).toBe(0);
+      expect(result.totalDistanceKm).toBe(200);
       // Pagó 20% más que el precio publicado.
       expect(result.avgNegotiationDelta).toBeCloseTo(0.2);
       expect(result.negotiatedLoads).toBe(1);

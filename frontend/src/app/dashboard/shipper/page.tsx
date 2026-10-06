@@ -11,7 +11,7 @@ import { loadsApi } from '@/lib/api';
 import { formatCurrency, formatPrice } from '@/lib/utils';
 import {
   Package, TrendingUp, Clock, CheckCircle, ArrowRight, Inbox, Hand,
-  Wallet, Coins, Route, Timer, Target, Users, Boxes,
+  Wallet, Coins, Route, Users, Boxes,
 } from 'lucide-react';
 import Link from 'next/link';
 import type { ShipperMetrics } from '@/types';
@@ -60,45 +60,6 @@ export default function ShipperDashboard() {
           <StatCard label="En tránsito" value={stats.inTransit} icon={Clock} tone="primary" />
           <StatCard label="Entregadas" value={stats.delivered} icon={CheckCircle} tone="success" />
         </div>
-
-        {/* Desempeño de las cargas */}
-        <section className="space-y-4">
-          <p className="eyebrow">Desempeño de tus cargas</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              label="Tasa de asignación"
-              value={percent(metrics?.assignmentRate)}
-              icon={Target}
-              tone="info"
-              hint="Cargas que consiguieron transportista, sin contar canceladas"
-            />
-            <StatCard
-              label="Hasta conseguir flete"
-              value={metrics?.avgHoursToAssignment != null ? `${metrics.avgHoursToAssignment} h` : '—'}
-              icon={Timer}
-              tone="primary"
-              hint="Promedio desde que publicás hasta que se asigna"
-            />
-            <StatCard
-              label="Postulaciones por carga"
-              value={metrics?.avgPostulationsPerLoad ?? '—'}
-              icon={Hand}
-              tone="ink"
-              hint="Termómetro del interés que despiertan tus cargas"
-            />
-            <StatCard
-              label="Entregas a tiempo"
-              value={metrics?.onTimeDeliveries ?? '—'}
-              icon={CheckCircle}
-              tone={metrics && metrics.lateDeliveries > 0 ? 'warning' : 'success'}
-              hint={
-                metrics?.onTimeRate != null
-                  ? `${percent(metrics.onTimeRate)} de las medibles · ${metrics.lateDeliveries} demorada${metrics.lateDeliveries === 1 ? '' : 's'}`
-                  : 'Sin fechas comprometidas aún'
-              }
-            />
-          </div>
-        </section>
 
         {/* Dinero */}
         <section className="space-y-4">

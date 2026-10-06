@@ -122,13 +122,6 @@ export interface ShipperMetrics extends MoneyMetrics {
   inTransitLoads: number;
   deliveredLoads: number;
   cancelledLoads: number;
-  /** Cargas que consiguieron transportista sobre las no canceladas. */
-  assignmentRate: number | null;
-  avgHoursToAssignment: number | null;
-  avgPostulationsPerLoad: number | null;
-  onTimeDeliveries: number;
-  lateDeliveries: number;
-  onTimeRate: number | null;
   totalDistanceKm: number;
   /** Desvío promedio entre el precio publicado y el pactado (0.2 = pagó 20% más). */
   avgNegotiationDelta: number | null;
