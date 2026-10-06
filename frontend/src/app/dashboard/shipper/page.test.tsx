@@ -17,7 +17,7 @@ jest.mock('@/components/layout/Sidebar', () => ({
 }));
 
 jest.mock('@/lib/api', () => ({
-  loadsApi: { getMy: jest.fn() },
+  loadsApi: { getMy: jest.fn(), getMetrics: jest.fn() },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -41,6 +41,7 @@ function renderWithClient(ui: React.ReactElement) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockAuth({ isAuthenticated: true, user: { id: 's1', role: 'CARGO_GENERATOR' } });
+  loadsApi.getMetrics.mockResolvedValue({ data: null });
 });
 
 describe('ShipperDashboard', () => {
@@ -101,5 +102,54 @@ describe('ShipperDashboard', () => {
     renderWithClient(<ShipperDashboard />);
 
     expect(screen.getByText('Cargando…')).toBeInTheDocument();
+  });
+
+  it('renders spend metrics with the carrier ranking', async () => {
+    loadsApi.getMy.mockResolvedValue({ data: { loads: [] } });
+    loadsApi.getMetrics.mockResolvedValue({
+      data: {
+        totalLoads: 10,
+        publishedLoads: 2,
+        assignedLoads: 1,
+        inTransitLoads: 1,
+        deliveredLoads: 5,
+        cancelledLoads: 1,
+        totalDistanceKm: 3000,
+        avgNegotiationDelta: 0.15,
+        negotiatedLoads: 6,
+        totalAmount: 2400000,
+        amountThisMonth: 400000,
+        avgAmountPerTrip: 480000,
+        amountPerKm: 800,
+        monthly: [],
+        topCarriers: [
+          { id: 'c1', name: 'Transportes Sur', completedTrips: 3, totalSpend: 1500000, avgRating: 4.7 },
+        ],
+        spendByCargoType: [{ cargoType: 'Granos', trips: 3, amount: 1500000 }],
+      },
+    });
+
+    renderWithClient(<ShipperDashboard />);
+
+    expect(await screen.findByText(/2\.400\.000/)).toBeInTheDocument();
+    // La fila de desempeño (asignación, puntualidad) se sacó: no le servía al dador.
+    expect(screen.queryByText('Desempeño de tus cargas')).not.toBeInTheDocument();
+    // Pagó 15% por encima de lo publicado, sobre 6 cargas con precio fijado.
+    expect(screen.getByText('+15%')).toBeInTheDocument();
+    expect(screen.getByText(/en 6 cargas con precio/)).toBeInTheDocument();
+    expect(screen.getByText('Transportes Sur')).toBeInTheDocument();
+    expect(screen.getByText(/3 viajes · 4.7 ★ que le diste/)).toBeInTheDocument();
+    expect(screen.getByText('Granos')).toBeInTheDocument();
+  });
+
+  it('keeps the metric cards readable while the metrics request is in flight', async () => {
+    loadsApi.getMy.mockResolvedValue({ data: { loads: [] } });
+    loadsApi.getMetrics.mockRejectedValue(new Error('offline'));
+
+    renderWithClient(<ShipperDashboard />);
+
+    // Sin métricas no se rompe el panel: las cards muestran un guion.
+    expect(await screen.findByText('Aún no publicaste cargas')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 });

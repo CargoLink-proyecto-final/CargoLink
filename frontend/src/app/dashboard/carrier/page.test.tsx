@@ -38,6 +38,13 @@ function renderWithClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
+const monthly = Array.from({ length: 12 }, (_, i) => ({
+  month: `2026-${String(i + 1).padStart(2, '0')}`,
+  amount: i === 11 ? 300000 : 0,
+  trips: i === 11 ? 2 : 0,
+  km: i === 11 ? 700 : 0,
+}));
+
 const metrics = {
   avgKmPerLiter: 3.5,
   litersThisMonth: 200,
@@ -45,6 +52,18 @@ const metrics = {
   onTimeDeliveries: 4,
   lateDeliveries: 1,
   onTimeRate: 0.8,
+  totalFuelLiters: 500,
+  totalDistanceKm: 2000,
+  totalAmount: 1200000,
+  amountThisMonth: 300000,
+  avgAmountPerTrip: 400000,
+  amountPerKm: 1500,
+  monthly,
+  postulationsSent: 10,
+  postulationsAccepted: 3,
+  postulationAcceptanceRate: 0.3,
+  avgRating: 4.5,
+  ratingsCount: 6,
 };
 
 beforeEach(() => {
@@ -138,6 +157,35 @@ describe('CarrierDashboard', () => {
     expect(
       screen.getByText('Postulate a una carga disponible para arrancar un viaje.'),
     ).toBeInTheDocument();
+  });
+
+it('renders income metrics and the postulation conversion', async () => {
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+
+    renderWithClient(<CarrierDashboard />);
+
+    // Los ingresos van visibles sin desplegar nada: es la razón de manejar.
+    expect(await screen.findByText(/1\.200\.000/)).toBeInTheDocument();
+    expect(screen.getByText(/2 viajes cerrados/)).toBeInTheDocument();
+    expect(screen.getByText('30%')).toBeInTheDocument();
+    expect(screen.getByText('3 de 10')).toBeInTheDocument();
+  });
+
+  it('computes the fuel margin from the price the carrier types', async () => {
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+
+    renderWithClient(<CarrierDashboard />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Ver métricas/ }));
+    fireEvent.change(screen.getByPlaceholderText('1500'), { target: { value: '1000' } });
+
+    // 500 L x $1000 = $500.000 de combustible → quedan $700.000 de $1.200.000.
+    expect(await screen.findByText(/500\.000/)).toBeInTheDocument();
+    expect(screen.getByText(/700\.000/)).toBeInTheDocument();
+    // 700.000 / 2000 km = $350 por km.
+    expect(screen.getByText(/350.*por km/)).toBeInTheDocument();
   });
 
   it('keeps available loads and postulations off the panel', async () => {

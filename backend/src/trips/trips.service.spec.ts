@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { TripStatus, LoadStatus } from '@prisma/client';
+import { TripStatus, LoadStatus, PostulationStatus } from '@prisma/client';
 import { TripsService } from './trips.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { fetchRouteDistanceKm } from '../common/routing';
@@ -29,6 +29,8 @@ describe('TripsService', () => {
       count: jest.Mock;
       update: jest.Mock;
     };
+    postulation: { groupBy: jest.Mock };
+    rating: { aggregate: jest.Mock };
     $transaction: jest.Mock;
   };
 
@@ -65,6 +67,14 @@ describe('TripsService', () => {
         findUnique: jest.fn(),
         count: jest.fn(),
         update: jest.fn(),
+      },
+      // getCarrierMetrics cruza viajes con postulaciones y calificaciones.
+      postulation: { groupBy: jest.fn().mockResolvedValue([]) },
+      rating: {
+        aggregate: jest.fn().mockResolvedValue({
+          _avg: { score: null },
+          _count: { score: 0 },
+        }),
       },
       // $transaction soporta dos formas: callback (acceptLoad) o array
       // (start/complete). Implementamos ambas.
@@ -444,6 +454,73 @@ describe('TripsService', () => {
       const result = await service.getCarrierMetrics(CARRIER_ID);
       expect(result.totalFuelLiters).toBe(0);
       expect(result.avgKmPerLiter).toBeNull();
+    });
+
+    it('adds up the agreed price and falls back to the published one', async () => {
+      const thisMonth = new Date();
+      prisma.trip.findMany.mockResolvedValue([
+        // negociada: vale la postulación aceptada, no el precio publicado
+        {
+          status: TripStatus.COMPLETED,
+          completedAt: thisMonth,
+          fuelLiters: null,
+          distanceKm: 100,
+          load: {
+            deliveryDate: null,
+            price: 50000,
+            postulations: [{ proposedPrice: 65000 }],
+          },
+        },
+        // tomada al precio publicado: no hay postulación
+        {
+          status: TripStatus.COMPLETED,
+          completedAt: thisMonth,
+          fuelLiters: null,
+          distanceKm: 100,
+          load: { deliveryDate: null, price: 40000, postulations: [] },
+        },
+        // en curso: todavía no facturó
+        {
+          status: TripStatus.IN_PROGRESS,
+          completedAt: null,
+          fuelLiters: null,
+          distanceKm: 500,
+          load: { deliveryDate: null, price: 999999, postulations: [] },
+        },
+      ]);
+
+      const result = await service.getCarrierMetrics(CARRIER_ID);
+
+      expect(result.totalAmount).toBe(105000);
+      expect(result.amountThisMonth).toBe(105000);
+      expect(result.avgAmountPerTrip).toBe(52500);
+      expect(result.amountPerKm).toBe(525); // 105000 / 200 km
+      // La serie siempre trae los 12 meses, con el actual al final.
+      expect(result.monthly).toHaveLength(12);
+      expect(result.monthly[11].amount).toBe(105000);
+      expect(result.monthly[11].trips).toBe(2);
+    });
+
+    it('derives the postulation acceptance rate from the grouped counts', async () => {
+      prisma.trip.findMany.mockResolvedValue([]);
+      prisma.postulation.groupBy.mockResolvedValue([
+        { status: PostulationStatus.ACCEPTED, _count: { _all: 3 } },
+        { status: PostulationStatus.REJECTED, _count: { _all: 5 } },
+        { status: PostulationStatus.PENDING, _count: { _all: 2 } },
+      ]);
+
+      const result = await service.getCarrierMetrics(CARRIER_ID);
+
+      expect(result.postulationsSent).toBe(10);
+      expect(result.postulationsAccepted).toBe(3);
+      expect(result.postulationAcceptanceRate).toBeCloseTo(0.3);
+    });
+
+    it('leaves the acceptance rate null when the carrier never applied', async () => {
+      prisma.trip.findMany.mockResolvedValue([]);
+      const result = await service.getCarrierMetrics(CARRIER_ID);
+      expect(result.postulationsSent).toBe(0);
+      expect(result.postulationAcceptanceRate).toBeNull();
     });
   });
 

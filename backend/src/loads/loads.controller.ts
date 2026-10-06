@@ -144,6 +144,17 @@ export class LoadsController {
     });
   }
 
+  // Va antes de @Get(':id') — si no, 'metrics' se interpretaría como un id.
+  @Get('metrics')
+  @UseGuards(RolesGuard)
+  @Roles('CARGO_GENERATOR')
+  @ApiOperation({
+    summary: 'Load status and spend metrics for the current shipper',
+  })
+  getMyMetrics(@CurrentUser('id') userId: string) {
+    return this.loadsService.getShipperMetrics(userId);
+  }
+
   @Get('register')
   @ApiOperation({
     summary:

@@ -6,7 +6,12 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JoinRequestStatus, PostulationStatus, TripStatus } from '@prisma/client';
-import { computeFuelAndDeliveryMetrics } from '../common/metrics';
+import {
+  computeFuelAndDeliveryMetrics,
+  computeMoneyMetrics,
+  resolveTripPrice,
+  round2,
+} from '../common/metrics';
 
 // Campos públicos de un conductor — nunca exponemos password ni tokens.
 const DRIVER_SELECT = {
@@ -345,11 +350,8 @@ export class CompaniesService {
         t.status === TripStatus.ACCEPTED ||
         t.status === TripStatus.PENDING,
     );
-    // Precio del viaje: el pactado en la postulación aceptada; si el
-    // transportista no propuso nada, aceptó el precio publicado.
-    const totalRevenue = completed.reduce(
-      (sum, t) => sum + (t.load?.postulations[0]?.proposedPrice ?? t.load?.price ?? 0),
-      0,
+    const totalRevenue = round2(
+      completed.reduce((sum, t) => sum + resolveTripPrice(t), 0),
     );
 
     // Puntualidad + combustible: mismo cómputo que el dashboard del transportista.
@@ -373,4 +375,130 @@ export class CompaniesService {
       ...fuelAndDelivery,
     };
   }
+  /**
+   * Métricas agregadas de la flota: facturación, consumo, puntualidad y
+   * ranking de conductores. Alimenta el panel del admin de empresa.
+   *
+   * Reusa los mismos helpers puros que el panel del transportista, así un
+   * conductor y su empresa nunca ven números distintos para el mismo viaje.
+   */
+  async getCompanyMetrics(ownerId: string) {
+    const company = await this.getOwnedCompany(ownerId);
+    const now = new Date();
+
+    const drivers = await this.prisma.user.findMany({
+      where: { companyId: company.id },
+      select: DRIVER_SELECT,
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+    const driverIds = drivers.map((d) => d.id);
+
+    if (!driverIds.length) {
+      return {
+        driverCount: 0,
+        activeDriverCount: 0,
+        idleDriverCount: 0,
+        utilizationRate: null,
+        totalTrips: 0,
+        completedTrips: 0,
+        activeTrips: 0,
+        ...computeFuelAndDeliveryMetrics([], now),
+        ...computeMoneyMetrics([], now),
+        driverRanking: [],
+      };
+    }
+
+    const [trips, ratings] = await Promise.all([
+      this.prisma.trip.findMany({
+        where: { carrierId: { in: driverIds } },
+        select: {
+          carrierId: true,
+          status: true,
+          completedAt: true,
+          fuelLiters: true,
+          distanceKm: true,
+          load: {
+            select: {
+              deliveryDate: true,
+              price: true,
+              // El precio pactado vive en la postulación aceptada —
+              // ver resolveTripPrice() en common/metrics.
+              postulations: {
+                where: { status: PostulationStatus.ACCEPTED },
+                select: { proposedPrice: true },
+                take: 1,
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.rating.groupBy({
+        by: ['toUserId'],
+        where: { toUserId: { in: driverIds } },
+        _avg: { score: true },
+        _count: { score: true },
+      }),
+    ]);
+
+    const isActive = (status: TripStatus) =>
+      status === TripStatus.PENDING ||
+      status === TripStatus.ACCEPTED ||
+      status === TripStatus.IN_PROGRESS;
+
+    const ratingByDriver = new Map(
+      ratings.map((r) => [r.toUserId, { avg: r._avg.score, count: r._count.score }]),
+    );
+
+    // Un conductor cuenta como inactivo si no tiene viaje en curso ni entregó
+    // nada en los últimos 30 días — es la señal de flota subutilizada.
+    const idleSince = new Date(now.getTime() - 30 * 24 * 3_600_000);
+
+    const driverRanking = drivers.map((d) => {
+      const own = trips.filter((t) => t.carrierId === d.id);
+      const fuelAndDelivery = computeFuelAndDeliveryMetrics(own, now);
+      const money = computeMoneyMetrics(own, now);
+      const activeTrips = own.filter((t) => isActive(t.status)).length;
+      const lastCompletedAt = own.reduce<Date | null>((latest, t) => {
+        if (!t.completedAt) return latest;
+        return !latest || t.completedAt > latest ? t.completedAt : latest;
+      }, null);
+      const rating = ratingByDriver.get(d.id);
+
+      return {
+        id: d.id,
+        name: `${d.firstName} ${d.lastName}`,
+        avatarUrl: d.avatarUrl,
+        totalTrips: own.length,
+        completedTrips: own.filter((t) => t.status === TripStatus.COMPLETED).length,
+        activeTrips,
+        totalAmount: money.totalAmount,
+        amountThisMonth: money.amountThisMonth,
+        amountPerKm: money.amountPerKm,
+        totalDistanceKm: fuelAndDelivery.totalDistanceKm,
+        avgKmPerLiter: fuelAndDelivery.avgKmPerLiter,
+        onTimeRate: fuelAndDelivery.onTimeRate,
+        lateDeliveries: fuelAndDelivery.lateDeliveries,
+        avgRating: rating?.avg ?? null,
+        ratingsCount: rating?.count ?? 0,
+        lastCompletedAt,
+        idle: activeTrips === 0 && (!lastCompletedAt || lastCompletedAt < idleSince),
+      };
+    });
+
+    const activeDriverCount = driverRanking.filter((d) => d.activeTrips > 0).length;
+
+    return {
+      driverCount: drivers.length,
+      activeDriverCount,
+      idleDriverCount: driverRanking.filter((d) => d.idle).length,
+      utilizationRate: drivers.length ? activeDriverCount / drivers.length : null,
+      totalTrips: trips.length,
+      completedTrips: trips.filter((t) => t.status === TripStatus.COMPLETED).length,
+      activeTrips: trips.filter((t) => isActive(t.status)).length,
+      ...computeFuelAndDeliveryMetrics(trips, now),
+      ...computeMoneyMetrics(trips, now),
+      driverRanking: driverRanking.sort((a, b) => b.totalAmount - a.totalAmount),
+    };
+  }
+
 }

@@ -65,6 +65,7 @@ export const loadsApi = {
   getAll: (params?: any) => api.get('/loads', { params }),
   getAvailable: (params?: any) => api.get('/loads/available', { params }),
   getMy: (params?: any) => api.get('/loads/my', { params }),
+  getMetrics: () => api.get('/loads/metrics'),
   getById: (id: string) => api.get(`/loads/${id}`),
   update: (id: string, data: any) => api.patch(`/loads/${id}`, data),
   cancel: (id: string) => api.delete(`/loads/${id}`),
@@ -129,6 +130,7 @@ export const companiesApi = {
   leave: () => api.post('/companies/leave'),
   // Company admin side (scoped to the owned company)
   getMyCompany: () => api.get('/companies/me'),
+  getMyCompanyMetrics: () => api.get('/companies/me/metrics'),
   getDrivers: () => api.get('/companies/me/drivers'),
   removeDriver: (driverId: string) =>
     api.delete(`/companies/me/drivers/${driverId}`),

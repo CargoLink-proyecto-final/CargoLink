@@ -27,6 +27,7 @@ describe('LoadsService', () => {
       findMany: jest.Mock;
       count: jest.Mock;
     };
+    rating: { groupBy: jest.Mock };
   };
 
   const baseLoad = {
@@ -62,6 +63,8 @@ describe('LoadsService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(1),
       },
+      // getShipperMetrics cruza las cargas con las calificaciones que dio.
+      rating: { groupBy: jest.fn().mockResolvedValue([]) },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -707,6 +710,95 @@ describe('LoadsService', () => {
       );
       const where = prisma.load.findMany.mock.calls[0][0].where;
       expect(where.shipperId).toBe('shipper-1');
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // getShipperMetrics
+  // ------------------------------------------------------------------
+  describe('getShipperMetrics', () => {
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000);
+
+    it('returns zeroed metrics when the shipper has no loads', async () => {
+      prisma.load.findMany.mockResolvedValue([]);
+
+      const result = await service.getShipperMetrics('shipper-1');
+
+      expect(result.totalLoads).toBe(0);
+      expect(result.avgNegotiationDelta).toBeNull();
+      expect(result.totalAmount).toBe(0);
+      expect(result.topCarriers).toEqual([]);
+      expect(result.spendByCargoType).toEqual([]);
+      expect(result.monthly).toHaveLength(12);
+      // Sin transportistas no hace falta ir a buscar calificaciones.
+      expect(prisma.rating.groupBy).not.toHaveBeenCalled();
+    });
+
+    it('aggregates load status and spend across the shipper loads', async () => {
+      prisma.load.findMany.mockResolvedValue([
+        {
+          status: LoadStatus.DELIVERED,
+          price: 100000,
+          cargoType: 'Granos',
+          deliveryDate: hoursAgo(-24), // se comprometió para mañana
+          postulations: [{ proposedPrice: 120000 }],
+          trip: {
+            status: 'COMPLETED',
+            completedAt: hoursAgo(1),
+            distanceKm: 200,
+            carrier: {
+              id: 'c1',
+              firstName: 'Ana',
+              lastName: 'Diaz',
+              companyName: null,
+            },
+          },
+        },
+        {
+          status: LoadStatus.PUBLISHED,
+          price: 50000,
+          cargoType: 'Cemento',
+          deliveryDate: null,
+          postulations: [],
+          trip: null,
+        },
+        // Cancelada: no penaliza la tasa de asignación.
+        {
+          status: LoadStatus.CANCELLED,
+          price: 20000,
+          cargoType: 'Cemento',
+          deliveryDate: null,
+          postulations: [],
+          trip: null,
+        },
+      ]);
+      prisma.rating.groupBy.mockResolvedValue([
+        { toUserId: 'c1', _avg: { score: 5 } },
+      ]);
+
+      const result = await service.getShipperMetrics('shipper-1');
+
+      expect(result.totalLoads).toBe(3);
+      expect(result.deliveredLoads).toBe(1);
+      expect(result.publishedLoads).toBe(1);
+      expect(result.cancelledLoads).toBe(1);
+      expect(result.totalDistanceKm).toBe(200);
+      // Pagó 20% más que el precio publicado.
+      expect(result.avgNegotiationDelta).toBeCloseTo(0.2);
+      expect(result.negotiatedLoads).toBe(1);
+      expect(result.totalAmount).toBe(120000);
+      expect(result.topCarriers).toEqual([
+        {
+          id: 'c1',
+          name: 'Ana Diaz',
+          completedTrips: 1,
+          totalSpend: 120000,
+          avgRating: 5,
+        },
+      ]);
+      expect(result.spendByCargoType).toEqual([
+        { cargoType: 'Granos', trips: 1, amount: 120000 },
+      ]);
     });
   });
 });

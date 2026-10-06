@@ -17,6 +17,7 @@ Next.js 14 App Router con TypeScript strict, Tailwind, Zustand y TanStack Query.
 | Leaflet | 1.9 + react-leaflet 4.2 |
 | Socket.IO Client | 4.7 |
 | lucide-react | 0.309 (icon set) |
+| Recharts | 2.15 (series mensuales de los paneles) |
 | date-fns | 3.2 |
 
 `package.json` completo en [`../frontend/package.json`](../frontend/package.json).
@@ -89,15 +90,28 @@ El root `/` redirige según rol — la página llega con `useAuthStore` ya hidra
 ```
 src/components/
 ├── Providers.tsx              # wrapper root (QueryClientProvider + hydrate de auth)
+├── charts/                    # ChartCard, MonthlyTrendChart (recharts), RankingBars, chartTheme
 ├── chat/                      # bubble, input, scroll
 ├── layout/                    # DashboardLayout, Sidebar, navegación
 ├── loads/                     # cards y listado de loads
 ├── maps/                      # MapView (tracking), LocationPicker (crear load)
+├── metrics/                   # FuelMarginCard (margen con precio de gasoil local)
 ├── postulations/              # PostulationsPanel, PostulationCard, PostulateModal
 ├── register/                  # RegisterList, RegisterRow, RegisterFilters, MessageThread
 ├── trips/                     # trip cards
 └── ui/                        # StatCard, StatusBadge — primitives de diseño
 ```
+
+### `charts/`
+
+Las piezas de los paneles de métricas (transportista, dador de carga y empresa):
+
+- `MonthlyTrendChart` — serie mensual de dinero en barras (recharts). Recibe los 12 meses que devuelve el backend y destaca el mes en curso; si no hay actividad muestra un mensaje en vez de 12 barras en cero.
+- `RankingBars` — ranking en barras horizontales de CSS (top transportistas, tipos de carga, conductores). Preferido sobre un gráfico real para listas cortas: las etiquetas largas se leen enteras y cada fila puede linkear a un detalle.
+- `ChartCard` — encabezado común (eyebrow + título + dato al costado).
+- `chartTheme.ts` — colores derivados de los tokens de Tailwind y los formateadores de mes y de moneda compacta.
+
+`metrics/FuelMarginCard` calcula el margen del transportista (ingresos − litros × precio del gasoil). El precio del litro lo escribe el usuario y se guarda en `localStorage`: cambia todo el tiempo y es distinto para cada uno, así que no vive en el backend.
 
 ### `maps/MapView.tsx`
 
