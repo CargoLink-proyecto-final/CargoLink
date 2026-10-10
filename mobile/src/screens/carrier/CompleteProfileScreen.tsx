@@ -17,7 +17,8 @@ import { usersApi, transporterProfileApi } from '../../services/api';
 import {
   DOCUMENT_TYPES,
   LICENSE_CATEGORIES,
-  VEHICLE_TYPES,
+  BODY_TYPES,
+  VEHICLE_UNITS,
   describeMissing,
   documentLabel,
   VERIFICATION_META,
@@ -40,7 +41,8 @@ import {
   TransporterDocument,
   User,
   Vehicle,
-  VehicleType,
+  BodyType,
+  VehicleUnit,
 } from '../../types';
 
 // Versión del texto de la declaración jurada — se guarda junto a la fecha de
@@ -59,7 +61,8 @@ interface VehicleForm {
   brand: string;
   model: string;
   year: string;
-  type: VehicleType;
+  unit: VehicleUnit;
+  bodyType: BodyType;
   maxWeightKg: string;
   maxVolumeM3: string;
   heightCm: string;
@@ -67,7 +70,6 @@ interface VehicleForm {
   lengthCm: string;
   refrigerated: boolean;
   hazardousMaterials: boolean;
-  bulkLiquid: boolean;
   insuranceExpiresAt: string;
   vtvExpiresAt: string;
 }
@@ -77,7 +79,8 @@ const EMPTY_VEHICLE_FORM: VehicleForm = {
   brand: '',
   model: '',
   year: '',
-  type: 'CAMION',
+  unit: 'CHASIS',
+  bodyType: 'CERRADA',
   maxWeightKg: '',
   maxVolumeM3: '',
   heightCm: '',
@@ -85,7 +88,6 @@ const EMPTY_VEHICLE_FORM: VehicleForm = {
   lengthCm: '',
   refrigerated: false,
   hazardousMaterials: false,
-  bulkLiquid: false,
   insuranceExpiresAt: '',
   vtvExpiresAt: '',
 };
@@ -104,7 +106,8 @@ function toVehicleForm(vehicle: Vehicle): VehicleForm {
     brand: vehicle.brand,
     model: vehicle.model,
     year: String(vehicle.year),
-    type: vehicle.type,
+    unit: vehicle.unit,
+    bodyType: vehicle.bodyType,
     maxWeightKg: String(vehicle.maxWeightKg),
     maxVolumeM3: vehicle.maxVolumeM3 != null ? String(vehicle.maxVolumeM3) : '',
     heightCm: vehicle.heightCm != null ? String(vehicle.heightCm) : '',
@@ -112,7 +115,6 @@ function toVehicleForm(vehicle: Vehicle): VehicleForm {
     lengthCm: vehicle.lengthCm != null ? String(vehicle.lengthCm) : '',
     refrigerated: vehicle.refrigerated,
     hazardousMaterials: vehicle.hazardousMaterials,
-    bulkLiquid: vehicle.bulkLiquid,
     insuranceExpiresAt: vehicle.insuranceExpiresAt ? vehicle.insuranceExpiresAt.slice(0, 10) : '',
     vtvExpiresAt: vehicle.vtvExpiresAt ? vehicle.vtvExpiresAt.slice(0, 10) : '',
   };
@@ -221,7 +223,8 @@ export default function CompleteProfileScreen() {
         brand: vehicleForm.brand.trim(),
         model: vehicleForm.model.trim(),
         year: Number(vehicleForm.year),
-        type: vehicleForm.type,
+        unit: vehicleForm.unit,
+        bodyType: vehicleForm.bodyType,
         maxWeightKg: Number(vehicleForm.maxWeightKg),
         maxVolumeM3: optionalNumber(vehicleForm.maxVolumeM3),
         heightCm: optionalNumber(vehicleForm.heightCm),
@@ -229,7 +232,6 @@ export default function CompleteProfileScreen() {
         lengthCm: optionalNumber(vehicleForm.lengthCm),
         refrigerated: vehicleForm.refrigerated,
         hazardousMaterials: vehicleForm.hazardousMaterials,
-        bulkLiquid: vehicleForm.bulkLiquid,
         insuranceExpiresAt: vehicleForm.insuranceExpiresAt.trim() || undefined,
         vtvExpiresAt: vehicleForm.vtvExpiresAt.trim() || undefined,
       });
@@ -428,20 +430,38 @@ export default function CompleteProfileScreen() {
             placeholder="AB123CD"
             autoCapitalize="characters"
           />
-          <Text style={styles.label}>Tipo de vehículo</Text>
+          <Text style={styles.label}>Unidad</Text>
           <View style={styles.chipRow}>
-            {VEHICLE_TYPES.map((v) => (
+            {VEHICLE_UNITS.map((u) => (
               <TouchableOpacity
-                key={v.value}
-                style={[styles.chip, vehicleForm.type === v.value && styles.chipActive]}
-                onPress={() => setVehicleForm((f) => ({ ...f, type: v.value }))}
+                key={u.value}
+                style={[styles.chip, vehicleForm.unit === u.value && styles.chipActive]}
+                onPress={() => setVehicleForm((f) => ({ ...f, unit: u.value }))}
               >
-                <Text style={[styles.chipText, vehicleForm.type === v.value && styles.chipTextActive]}>
-                  {v.label}
+                <Text style={[styles.chipText, vehicleForm.unit === u.value && styles.chipTextActive]}>
+                  {u.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+          <Text style={styles.label}>Carrocería</Text>
+          <View style={styles.chipRow}>
+            {BODY_TYPES.map((b) => (
+              <TouchableOpacity
+                key={b.value}
+                style={[styles.chip, vehicleForm.bodyType === b.value && styles.chipActive]}
+                onPress={() => setVehicleForm((f) => ({ ...f, bodyType: b.value }))}
+              >
+                <Text style={[styles.chipText, vehicleForm.bodyType === b.value && styles.chipTextActive]}>
+                  {b.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.helper}>
+            {BODY_TYPES.find((b) => b.value === vehicleForm.bodyType)?.hint}. Las cargas que piden otra
+            carrocería no van a estar disponibles para vos.
+          </Text>
           <Text style={styles.label}>Marca</Text>
           <TextInput
             style={styles.input}
@@ -482,14 +502,14 @@ export default function CompleteProfileScreen() {
             keyboardType="numeric"
           />
           <View style={styles.row}>
-            {(['refrigerated', 'hazardousMaterials', 'bulkLiquid'] as const).map((key) => (
+            {(['refrigerated', 'hazardousMaterials'] as const).map((key) => (
               <TouchableOpacity
                 key={key}
                 style={[styles.chip, vehicleForm[key] && styles.chipActive, { flex: 1 }]}
                 onPress={() => setVehicleForm((f) => ({ ...f, [key]: !f[key] }))}
               >
                 <Text style={[styles.chipText, vehicleForm[key] && styles.chipTextActive]}>
-                  {key === 'refrigerated' ? 'Refrigerado' : key === 'hazardousMaterials' ? 'Peligrosas' : 'A granel'}
+                  {key === 'refrigerated' ? 'Refrigerado' : 'Cargas peligrosas'}
                 </Text>
               </TouchableOpacity>
             ))}
