@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { VehicleType } from '@prisma/client';
+import { BodyType, VehicleUnit } from '@prisma/client';
 import {
   IsBoolean,
   IsDateString,
@@ -39,9 +39,13 @@ export class UpsertVehicleDto {
   @Max(new Date().getFullYear() + 1, { message: 'El año no es válido' })
   year: number;
 
-  @ApiProperty({ enum: VehicleType, example: 'CAMION' })
-  @IsEnum(VehicleType, { message: 'El tipo de vehículo no es válido' })
-  type: VehicleType;
+  @ApiProperty({ enum: VehicleUnit, example: 'CHASIS', description: 'Tamaño de la unidad (informativo)' })
+  @IsEnum(VehicleUnit, { message: 'La unidad no es válida' })
+  unit: VehicleUnit;
+
+  @ApiProperty({ enum: BodyType, example: 'CERRADA' })
+  @IsEnum(BodyType, { message: 'La carrocería no es válida' })
+  bodyType: BodyType;
 
   @ApiProperty({ example: 12000 })
   @IsNumber({}, { message: 'La capacidad de carga debe ser un número' })
@@ -82,10 +86,6 @@ export class UpsertVehicleDto {
   @IsBoolean({ message: 'Cargas peligrosas debe ser verdadero o falso' })
   hazardousMaterials?: boolean;
 
-  @ApiProperty({ example: false, required: false })
-  @IsOptional()
-  @IsBoolean({ message: 'A granel debe ser verdadero o falso' })
-  bulkLiquid?: boolean;
 
   @ApiProperty({ example: '2027-01-01', required: false })
   @IsOptional()

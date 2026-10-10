@@ -5,7 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { LoadStatus, PostulationStatus, TripStatus } from '@prisma/client';
+import { BodyType, LoadStatus, PostulationStatus, TripStatus } from '@prisma/client';
 import { PostulationsService } from './postulations.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -13,6 +13,7 @@ describe('PostulationsService', () => {
   let service: PostulationsService;
   let prisma: {
     load: { findUnique: jest.Mock; update: jest.Mock };
+    vehicle: { findUnique: jest.Mock };
     postulation: {
       findUnique: jest.Mock;
       findMany: jest.Mock;
@@ -34,6 +35,21 @@ describe('PostulationsService', () => {
     shipperId: SHIPPER_ID,
     price: 100000,
     status: LoadStatus.PUBLISHED,
+    weight: 5000,
+    volume: null,
+    requiredBodyType: null as BodyType | null,
+    requiresRefrigeration: false,
+    requiresHazmat: false,
+  };
+
+  // Vehículo del transportista: cumple los requisitos de baseLoad.
+  const baseVehicle = {
+    userId: TRANSPORTER_ID,
+    bodyType: BodyType.ABIERTA,
+    refrigerated: false,
+    hazardousMaterials: false,
+    maxWeightKg: 12000,
+    maxVolumeM3: null,
   };
 
   const basePostulation = {
@@ -52,6 +68,7 @@ describe('PostulationsService', () => {
   beforeEach(async () => {
     prisma = {
       load: { findUnique: jest.fn(), update: jest.fn() },
+      vehicle: { findUnique: jest.fn().mockResolvedValue(baseVehicle) },
       postulation: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -98,6 +115,40 @@ describe('PostulationsService', () => {
   // create
   // ---------------------------------------------------------------------------
   describe('create', () => {
+    it('rejects a vehicle that does not meet the load requirements, saying why', async () => {
+      prisma.load.findUnique.mockResolvedValue({
+        ...baseLoad,
+        requiredBodyType: BodyType.CERRADA,
+        requiresRefrigeration: true,
+      });
+
+      const err = await service.create('load-1', TRANSPORTER_ID, {}).catch((e) => e);
+
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect((err as BadRequestException).getResponse()).toMatchObject({
+        reasons: ['BODY_TYPE', 'REFRIGERATION'],
+        message: expect.stringContaining('requiere carrocería cerrada'),
+      });
+      expect(prisma.postulation.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a load heavier than the vehicle capacity', async () => {
+      prisma.load.findUnique.mockResolvedValue({ ...baseLoad, weight: 20000 });
+
+      await expect(service.create('load-1', TRANSPORTER_ID, {})).rejects.toThrow(
+        /supera la capacidad de carga/,
+      );
+    });
+
+    it('requires the transporter to have a vehicle', async () => {
+      prisma.load.findUnique.mockResolvedValue(baseLoad);
+      prisma.vehicle.findUnique.mockResolvedValue(null);
+
+      await expect(service.create('load-1', TRANSPORTER_ID, {})).rejects.toThrow(
+        'Cargá tu vehículo antes de postularte',
+      );
+    });
+
     it('creates a new postulation on the happy path (no proposed price)', async () => {
       prisma.load.findUnique.mockResolvedValue(baseLoad);
       prisma.postulation.findUnique.mockResolvedValue(null);

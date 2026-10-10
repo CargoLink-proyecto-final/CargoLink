@@ -102,10 +102,13 @@ export class LoadsController {
     @Query('deliveryTo') deliveryTo?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    // "true" = solo cargas cuyos requisitos cumple el vehículo del transportista.
+    @Query('compatibleOnly') compatibleOnly?: string,
   ) {
     // Las cargas se priorizan por la zona de influencia del transportista (P12)
     // dentro del service, según el userId.
     return this.loadsService.findAvailable(userId, {
+      compatibleOnly: compatibleOnly === 'true',
       cargoType, q, originCityId, destCityId,
       minWeight: minWeight ? Number(minWeight) : undefined,
       maxWeight: maxWeight ? Number(maxWeight) : undefined,
