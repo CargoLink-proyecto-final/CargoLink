@@ -175,6 +175,10 @@ Detalle del flujo y consideraciones de seguridad en [`autenticacion.md`](./auten
 
 Endpoints listados arriba en la matriz; detalle en [`api.md`](./api.md).
 
+**Requisitos de vehículo:** `vehicle-compatibility.ts` es la única fuente de verdad de si un vehículo sirve para una carga. `checkVehicleCompatibility` es una función pura que devuelve la lista de motivos de incompatibilidad; la usa `PostulationsService.create` para bloquear la postulación. `compatibleLoadsWhere` expresa el mismo criterio como filtro de Prisma para `GET /loads/available?compatibleOnly=true`, así no se traen todas las cargas a memoria. Si cambia la regla, hay que cambiar las dos (los tests de `vehicle-compatibility.spec.ts` cubren ambas) y los espejos de web (`frontend/src/lib/vehicleRequirements.ts`) y mobile (`mobile/src/lib/vehicleRequirements.ts`), que solo sirven para avisar antes de postularse.
+
+Por qué carrocería y no tipo de vehículo: el `VehicleType` original mezclaba dos ejes (FURGON y BATEA son carrocerías; CAMION y SEMIRREMOLQUE son tamaños), así que una regla como "electrónica → furgón" fallaba con cargas pesadas que necesitan un semi cerrado. Ahora `Vehicle` separa `unit` (tamaño, informativo) de `bodyType` (carrocería), el tamaño lo resuelven peso y volumen contra la capacidad, y la carga solo exige carrocería, frío y habilitación para peligrosas. La sugerencia de carrocería por categoría vive en los clientes (`suggestedRequirements` / `suggestedBodyType`), porque es una ayuda de UX que el publicador confirma, no una regla.
+
 Hay dos endpoints "register" que son específicos del dominio:
 
 - `GET /api/loads/register` — lista loads cerrados (`DELIVERED` o `CANCELLED`) con filtros por fecha. Shipper ve los propios, carrier ve los que llevó, admin ve todo.

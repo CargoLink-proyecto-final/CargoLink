@@ -20,7 +20,8 @@ enum TripStatus        { PENDING  ACCEPTED  IN_PROGRESS  COMPLETED  CANCELLED }
 enum PostulationStatus { PENDING  NEGOTIATING  ACCEPTED  REJECTED  WITHDRAWN }
 enum DocumentType      { DNI_FRONT  DNI_BACK  LICENSE_FRONT  LICENSE_BACK  AFIP_CONSTANCIA  VEHICLE_CARD  INSURANCE  VTV }
 enum DocumentStatus    { PENDING  APPROVED  REJECTED }
-enum VehicleType       { CAMION  CAMIONETA  FURGON  SEMIRREMOLQUE  BATEA  OTRO }
+enum VehicleUnit       { CAMIONETA  CHASIS  BALANCIN  SEMIRREMOLQUE }
+enum BodyType          { CERRADA  ABIERTA  VOLCADORA  CISTERNA }
 ```
 
 Estados manejados desde la capa de servicio — Prisma no enforced transitions.
@@ -108,6 +109,8 @@ Constraints e índices:
 | `cargoType` | `String` |
 | `weight` | `Float` (kg) |
 | `volume` | `Float?` (m³) |
+| `requiredBodyType` | `BodyType?` (`required_body_type`); null = cualquier carrocería |
+| `requiresRefrigeration` / `requiresHazmat` | `Boolean` default `false` (`requires_refrigeration`, `requires_hazmat`) |
 | `pickupDate` | `DateTime` |
 | `deliveryDate` | `DateTime?` |
 | `price` | `Float` |
@@ -217,10 +220,11 @@ puede postularse a una carga — ver `ProfileApprovedGuard` en [`backend.md`](./
 | `userId` | `String @unique` → `User.id` | `user_id`; 1:1 hoy — sacar el `@unique` habilita flota (varios vehículos) sin reescribir el modelo |
 | `plate` | `String @unique` | dominio/patente |
 | `brand` / `model` / `year` | `String` / `String` / `Int` | |
-| `type` | `VehicleType` | |
+| `unit` | `VehicleUnit` | tamaño de la unidad; informativo (la capacidad la da `maxWeightKg`) |
+| `bodyType` | `BodyType` | `body_type`; se compara con `Load.requiredBodyType` |
 | `maxWeightKg` | `Float` | `max_weight_kg` |
 | `maxVolumeM3` / `heightCm` / `widthCm` / `lengthCm` | `Float?` | espejan los campos logísticos de `Load` a propósito, para cruzar capacidad de vehículo contra carga a futuro |
-| `refrigerated` / `hazardousMaterials` / `bulkLiquid` | `Boolean` default `false` | `hazardous_materials` / `bulk_liquid` |
+| `refrigerated` / `hazardousMaterials` | `Boolean` default `false` | `hazardous_materials` |
 | `insuranceExpiresAt` / `vtvExpiresAt` | `DateTime?` | `insurance_expires_at` / `vtv_expires_at`; atributos del vehículo, no del archivo escaneado que los respalda (ver `Document`) |
 | `createdAt` / `updatedAt` | | |
 

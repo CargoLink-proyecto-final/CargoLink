@@ -165,11 +165,16 @@ Source: [`../backend/src/loads/loads.controller.ts`](../backend/src/loads/loads.
   "volume": 12.5,                               // m³, opcional
   "pickupDate": "2026-06-01T08:00:00Z",
   "deliveryDate": "2026-06-03T18:00:00Z",       // opcional
-  "price": 250000                                // moneda local (no se trackea currency)
+  "price": 250000,                               // moneda local (no se trackea currency)
+  "requiredBodyType": "CERRADA",               // opcional; CERRADA | ABIERTA | VOLCADORA | CISTERNA; null/ausente = cualquiera
+  "requiresRefrigeration": false,              // opcional, default false
+  "requiresHazmat": false                      // opcional, default false
 }
 ```
 
 Response 201 con el load creado, status `PUBLISHED` por defecto, `shipperId` autoseteado al usuario logueado.
+
+**Requisitos de vehículo:** el publicador no elige vehículos, describe lo que necesita su carga: carrocería (`requiredBodyType`), frío y si es peligrosa. El tamaño no se pide: sale de comparar el peso con `maxWeightKg` y el volumen con `maxVolumeM3` (este último solo si los dos datos están). Los clientes sugieren la carrocería según `cargoType` (ej. Electrónica → `CERRADA`, Maquinaria → `ABIERTA`, categorías ambiguas → cualquiera) y el publicador la confirma o la cambia; el backend no aplica sugerencias. Se validan contra el `Vehicle` del transportista al postularse (ver `POST /loads/:loadId/postulations`). Para quitar el requisito de carrocería al editar, mandá `requiredBodyType: null`. Una vez aceptada una postulación, los requisitos quedan bloqueados como el resto de los campos críticos.
 
 ### GET `/loads`, `/loads/available`, `/loads/my` — query params
 
@@ -183,9 +188,10 @@ Response 201 con el load creado, status `PUBLISHED` por defecto, `shipperId` aut
 ?pickupFrom=...&pickupTo=...
 ?deliveryFrom=...&deliveryTo=...
 ?page=1&limit=50
+?compatibleOnly=true      # solo /loads/available: cargas cuyos requisitos cumple el vehículo del transportista
 ```
 
-`/loads/available` fuerza `status=PUBLISHED`. `/loads/my` filtra por shipper logueado.
+`/loads/available` fuerza `status=PUBLISHED`. Con `compatibleOnly=true` filtra por el vehículo del transportista logueado (tipo, specs, peso y volumen); si todavía no cargó vehículo, el filtro se ignora. `/loads/my` filtra por shipper logueado.
 
 Response:
 
@@ -263,6 +269,8 @@ Source: [`../backend/src/postulations/postulations.controller.ts`](../backend/sr
 
 Requiere perfil de transportista **aprobado** (`ProfileApprovedGuard`, ver [`backend.md`](./backend.md)): completo y con los 8 documentos aprobados por un admin. Si no, `403 Forbidden` con `{ message, state, missing, pendingReview, rejected }` — `state` es `INCOMPLETE`, `REJECTED` o `PENDING_REVIEW` y `message` ya viene redactado para el usuario. Usá `GET /transporter-profile/status` para saberlo de antemano.
 
+El vehículo del transportista tiene que cumplir los requisitos de la carga (`checkVehicleCompatibility` en `backend/src/loads/vehicle-compatibility.ts`). Si no, `400 Bad Request` con `{ message, reasons }`: `reasons` es una lista de `BODY_TYPE`, `REFRIGERATION`, `HAZMAT`, `WEIGHT` y `VOLUME`, y `message` ya viene redactado para el usuario.
+
 Si `proposedPrice` se envía y es <= `load.price`, falla con 400 (regla: el carrier ofrece subir el precio si quiere atraer; la baja se negocia por counter-offer).
 
 Crea postulación con `status=PENDING`. La unique compuesta `(loadId, transporterId)` previene duplicados.
@@ -332,13 +340,13 @@ Sirve el archivo con su `Content-Type`. Nunca es un link estático: exige JWT y 
   "brand": "Mercedes-Benz",
   "model": "Actros",
   "year": 2019,
-  "type": "CAMION",              // CAMION | CAMIONETA | FURGON | SEMIRREMOLQUE | BATEA | OTRO
+  "unit": "CHASIS",              // CAMIONETA | CHASIS | BALANCIN | SEMIRREMOLQUE (informativo)
+  "bodyType": "CERRADA",          // CERRADA | ABIERTA | VOLCADORA | CISTERNA
   "maxWeightKg": 12000,
   "maxVolumeM3": 40,              // opcional, espeja Load.volume
   "heightCm": 250, "widthCm": 240, "lengthCm": 600,  // opcionales, espejan Load.*Cm
   "refrigerated": false,
   "hazardousMaterials": false,
-  "bulkLiquid": false,
   "insuranceExpiresAt": "2027-01-01",  // opcional
   "vtvExpiresAt": "2027-01-01"          // opcional
 }
