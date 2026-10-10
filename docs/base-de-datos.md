@@ -208,8 +208,8 @@ Constraints:
 ### `Vehicle` (tabla `vehicles`)
 
 Perfil de transportista (P13): vehículo propio. Un `TRANSPORTER` sin `Vehicle` +
-documentos completos + declaración jurada aceptada no puede postularse a una
-carga — ver `ProfileCompleteGuard` en [`backend.md`](./backend.md).
+documentos completos y aprobados por un admin + declaración jurada aceptada no
+puede postularse a una carga — ver `ProfileApprovedGuard` en [`backend.md`](./backend.md).
 
 | Campo | Tipo | Notas |
 |---|---|---|
@@ -236,12 +236,16 @@ tipo nuevo (ej. RUTA/CNRT) con una migración chica.
 | `userId` → `User.id` | | `user_id` |
 | `type` | `DocumentType` | |
 | `fileUrl` | `String` | `file_url`; ruta relativa a `UPLOAD_DIR` (ver [`docker.md`](./docker.md)) — **nunca servida como estática pública**, solo vía `GET /transporter-profile/documents/:id/file` (dueño o `ADMIN`) |
-| `status` | `DocumentStatus` default `PENDING` | la revisión manual por un admin (`APPROVED`/`REJECTED`) todavía no está implementada — el estado existe pero hoy no bloquea nada |
+| `status` | `DocumentStatus` default `PENDING` | lo cambia un admin (`APPROVED`/`REJECTED`, CU-11); vuelve a `PENDING` al re-subir el archivo o si cambia el dato que respalda |
+| `rejectionReason` | `String?` | `rejection_reason`; motivo que ve el transportista. Se limpia al volver a `PENDING` |
+| `reviewedAt` | `DateTime?` | `reviewed_at` |
+| `reviewedById` → `User.id` | `String?` | `reviewed_by_id`; admin que revisó (`ON DELETE SET NULL`) |
 | `createdAt` / `updatedAt` | | |
 
 Constraints e índices:
 - `@@unique([userId, type])` — un solo documento vigente por tipo y usuario; volver a subir el mismo tipo reemplaza (upsert), no acumula versiones.
 - `@@index([userId])`
+- `@@index([status])` — la cola de revisión del admin filtra por `PENDING`.
 
 ## Diagrama de relaciones
 

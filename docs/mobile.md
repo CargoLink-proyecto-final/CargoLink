@@ -156,7 +156,7 @@ Source: [`../mobile/src/navigation/AppNavigator.tsx`](../mobile/src/navigation/A
 ### Carrier
 - **DashboardScreen** — KPIs (loads disponibles, trips activos, completados). Muestra un banner "Completá tu perfil" (link a `CompleteProfileScreen`) mientras `GET /transporter-profile/status` devuelva `complete: false`.
 - **AvailableLoadsScreen** — lista de loads `PUBLISHED` con filtros básicos.
-- **CompleteProfileScreen** — perfil de transportista (P13): datos personales (CUIT, licencia), documentos (foto con cámara vía `expo-image-picker` o archivo/PDF vía `expo-document-picker`), vehículo, declaración jurada. Se llega desde el banner del dashboard o desde `ProfileScreen`, **no** es un paso forzado del registro (mismo criterio que la zona de cobertura: editable después, no bloquea el alta) — el bloqueo real vive en el backend, en `ProfileCompleteGuard` al momento de postularse.
+- **CompleteProfileScreen** — perfil de transportista (P13): datos personales (CUIT, licencia), documentos (foto con cámara vía `expo-image-picker` o archivo/PDF vía `expo-document-picker`), vehículo, declaración jurada. Se llega desde el banner del dashboard o desde `ProfileScreen`, **no** es un paso forzado del registro (mismo criterio que la zona de cobertura: editable después, no bloquea el alta) — el bloqueo real vive en el backend, en `ProfileApprovedGuard` al momento de postularse (perfil completo y aprobado por un admin). El banner del dashboard y la tarjeta de estado muestran en qué paso está: incompleto, rechazado (con el motivo de cada documento), en revisión o aprobado.
 
 ### Comunes
 - **TrackingScreen** — mapa con la ruta + posición actual del trip activo. El carrier reporta `PATCH /trips/:id/location` periódicamente con `expo-location`.

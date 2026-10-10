@@ -261,7 +261,7 @@ Source: [`../backend/src/postulations/postulations.controller.ts`](../backend/sr
 }
 ```
 
-Requiere perfil de transportista completo (`ProfileCompleteGuard`, ver [`backend.md`](./backend.md)) — si falta algo, `403 Forbidden` con `{ message, missing: string[] }`, ej. `missing: ["vehicle", "document:DNI_FRONT"]`. Usá `GET /transporter-profile/status` para saber de antemano qué falta.
+Requiere perfil de transportista **aprobado** (`ProfileApprovedGuard`, ver [`backend.md`](./backend.md)): completo y con los 8 documentos aprobados por un admin. Si no, `403 Forbidden` con `{ message, state, missing, pendingReview, rejected }` — `state` es `INCOMPLETE`, `REJECTED` o `PENDING_REVIEW` y `message` ya viene redactado para el usuario. Usá `GET /transporter-profile/status` para saberlo de antemano.
 
 Si `proposedPrice` se envía y es <= `load.price`, falla con 400 (regla: el carrier ofrece subir el precio si quiere atraer; la baja se negocia por counter-offer).
 
@@ -312,11 +312,11 @@ Source: [`../backend/src/transporter-profile/transporter-profile.controller.ts`]
 | PUT | `/transporter-profile/vehicle` | `TRANSPORTER` | Crea/reemplaza mi vehículo |
 | GET | `/transporter-profile/vehicle` | `TRANSPORTER` | Mi vehículo o `null` |
 | POST | `/transporter-profile/terms` | `TRANSPORTER` | Acepta la declaración jurada |
-| GET | `/transporter-profile/status` | `TRANSPORTER` | `{ complete, missing }` — completitud del perfil |
+| GET | `/transporter-profile/status` | `TRANSPORTER` | Estado de verificación del perfil (ver abajo) |
 
 ### POST `/transporter-profile/documents`
 
-`multipart/form-data` con dos campos: `type` (uno de `DocumentType`, ver abajo) y `file` (JPG/PNG/PDF, ≤5MB). Guarda en disco bajo `UPLOAD_DIR/<userId>/<type>.<ext>` y hace upsert del `Document` — volver a subir el mismo `type` reemplaza al anterior (no acumula versiones) y lo vuelve a dejar en `status=PENDING`.
+`multipart/form-data` con dos campos: `type` (uno de `DocumentType`, ver abajo) y `file` (JPG/PNG/PDF, ≤5MB). Guarda en disco bajo `UPLOAD_DIR/<userId>/<type>.<ext>` y hace upsert del `Document` — volver a subir el mismo `type` reemplaza al anterior (no acumula versiones), lo vuelve a dejar en `status=PENDING` y limpia la revisión anterior (`rejectionReason`, `reviewedAt`, `reviewedById`).
 
 `DocumentType`: `DNI_FRONT`, `DNI_BACK`, `LICENSE_FRONT`, `LICENSE_BACK`, `AFIP_CONSTANCIA`, `VEHICLE_CARD`, `INSURANCE`, `VTV`. Los 8 son obligatorios para que el perfil cuente como completo.
 
@@ -346,6 +346,8 @@ Sirve el archivo con su `Content-Type`. Nunca es un link estático: exige JWT y 
 
 Semántica de reemplazo completo (no parcial). `plate` es único global — `409 Conflict` si ya está registrado por otro transportista.
 
+Si el vehículo ya existía y cambia algún dato, los documentos **aprobados** que lo respaldan (`VEHICLE_CARD`, `INSURANCE`, `VTV`) vuelven a `PENDING`: el admin los aprobó contra los datos viejos. Lo mismo pasa al actualizar el perfil de usuario con otro CUIT (`AFIP_CONSTANCIA`) o con otra categoría o vencimiento de licencia (`LICENSE_FRONT`, `LICENSE_BACK`). Los documentos rechazados no cambian: el problema era el archivo.
+
 ### POST `/transporter-profile/terms`
 
 ```jsonc
@@ -358,12 +360,39 @@ Setea `User.termsAcceptedAt = now()` y `termsAcceptedVersion = version` — qued
 
 ```jsonc
 {
-  "complete": false,
-  "missing": ["cuit", "vehicle", "document:VTV"]
+  "complete": true,                 // cargó todo lo obligatorio
+  "approved": false,                // completo + 8 documentos APPROVED
+  "state": "REJECTED",              // REJECTED | INCOMPLETE | PENDING_REVIEW | APPROVED
+  "missing": [],                    // ej. "cuit", "vehicle", "document:VTV"
+  "pendingReview": ["DNI_FRONT"],
+  "rejected": ["VTV"]
 }
 ```
 
-Misma lógica (`computeProfileStatus`) que usa el `ProfileCompleteGuard` de `POST /loads/:loadId/postulations` — lo consumen los frontends para el checklist de "completar perfil".
+`state` resume el estado en orden de prioridad para el usuario: un rechazo (trae feedback concreto del admin) se muestra antes que lo que falta cargar. Misma lógica (`computeProfileStatus`) que usa el `ProfileApprovedGuard` de `POST /loads/:loadId/postulations`.
+
+## Transporter Reviews (admin)
+
+Source: [`../backend/src/transporter-profile/transporter-review.controller.ts`](../backend/src/transporter-profile/transporter-review.controller.ts). Revisión manual de la documentación de transportistas (CU-11). Todos `ADMIN`. Los archivos se descargan con `GET /transporter-profile/documents/:id/file`.
+
+| Método | Path | Descripción |
+|---|---|---|
+| GET | `/admin/transporter-reviews` | Cola: transportistas con al menos un documento `PENDING`, el que espera hace más tiempo primero |
+| GET | `/admin/transporter-reviews/:userId` | Perfil completo: datos declarados, vehículo, documentos con su revisión y `status` |
+| POST | `/admin/transporter-reviews/:userId` | Aprueba o rechaza documentos |
+
+### POST `/admin/transporter-reviews/:userId`
+
+```jsonc
+{
+  "decisions": [
+    { "documentId": "<uuid>", "status": "APPROVED" },
+    { "documentId": "<uuid>", "status": "REJECTED", "reason": "La foto está borrosa" }  // reason obligatorio al rechazar, max 500
+  ]
+}
+```
+
+La revisión se manda junta (no documento por documento) para que el transportista reciba **un solo mail**: con la lista de rechazos y sus motivos, o el aviso de "perfil aprobado" cuando con esta revisión queda habilitado. Si el mail falla, la revisión igual se guarda. `400` si algún documento no es de ese transportista o hay decisiones repetidas; `404` si el usuario no es `TRANSPORTER`. Devuelve el `status` actualizado.
 
 ## Trips
 
