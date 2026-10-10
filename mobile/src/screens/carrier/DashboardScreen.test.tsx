@@ -38,12 +38,21 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, 'error').mockImplementation(() => {});
   mockedTransporterProfileApi.getStatus.mockResolvedValue({
-    data: { complete: true, missing: [] },
+    data: profileStatus('APPROVED'),
   } as any);
 });
 
 afterEach(() => {
   (console.error as jest.Mock).mockRestore?.();
+});
+
+const profileStatus = (state: string, missing: string[] = []) => ({
+  complete: state !== 'INCOMPLETE',
+  approved: state === 'APPROVED',
+  state,
+  missing,
+  pendingReview: [],
+  rejected: [],
 });
 
 describe('CarrierDashboard', () => {
@@ -109,7 +118,7 @@ describe('CarrierDashboard', () => {
   it('shows a banner prompting to complete the profile when it is incomplete', async () => {
     mockedTripsApi.getMy.mockResolvedValue({ data: { trips: [] } } as any);
     mockedTransporterProfileApi.getStatus.mockResolvedValue({
-      data: { complete: false, missing: ['vehicle'] },
+      data: profileStatus('INCOMPLETE', ['vehicle']),
     } as any);
 
     render(<CarrierDashboard navigation={navigation} />);
@@ -119,7 +128,17 @@ describe('CarrierDashboard', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('CompleteProfile');
   });
 
-  it('hides the profile banner once the profile is complete', async () => {
+  it('tells the carrier the documents are under review', async () => {
+    mockedTripsApi.getMy.mockResolvedValue({ data: { trips: [] } } as any);
+    mockedTransporterProfileApi.getStatus.mockResolvedValue({ data: profileStatus('PENDING_REVIEW') } as any);
+
+    render(<CarrierDashboard navigation={navigation} />);
+
+    expect(await screen.findByText('Documentación en revisión')).toBeTruthy();
+    expect(screen.queryByText('Completá tu perfil')).toBeNull();
+  });
+
+  it('hides the profile banner once the profile is approved', async () => {
     mockedTripsApi.getMy.mockResolvedValue({ data: { trips: [] } } as any);
 
     render(<CarrierDashboard navigation={navigation} />);

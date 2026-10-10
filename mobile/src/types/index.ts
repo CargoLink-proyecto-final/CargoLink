@@ -56,6 +56,9 @@ export interface TransporterDocument {
   id: string;
   type: DocumentType;
   status: DocumentStatus;
+  // Motivo que escribió el admin al rechazar; null si no fue rechazado.
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -82,9 +85,17 @@ export interface Vehicle {
   updatedAt: string;
 }
 
+export type VerificationState = 'REJECTED' | 'INCOMPLETE' | 'PENDING_REVIEW' | 'APPROVED';
+
 export interface ProfileStatus {
+  // Cargó todo lo obligatorio (no implica revisión del admin).
   complete: boolean;
+  // Completo y con todos los documentos aprobados — recién ahí puede postularse.
+  approved: boolean;
+  state: VerificationState;
   missing: string[];
+  pendingReview: DocumentType[];
+  rejected: DocumentType[];
 }
 
 export interface Load {

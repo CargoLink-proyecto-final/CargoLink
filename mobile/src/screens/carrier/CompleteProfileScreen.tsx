@@ -19,6 +19,8 @@ import {
   LICENSE_CATEGORIES,
   VEHICLE_TYPES,
   describeMissing,
+  documentLabel,
+  VERIFICATION_META,
   isNotExpired,
 } from '../../lib/transporterProfile';
 
@@ -300,24 +302,30 @@ export default function CompleteProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16 }}>
-        {status && (
-          <View style={[styles.statusCard, status.complete ? styles.statusOk : styles.statusWarn]}>
-            {status.complete ? (
-              <Text style={styles.statusOkText}>
-                ✓ Tu perfil está completo. Ya podés postularte a cargas.
-              </Text>
-            ) : (
-              <>
-                <Text style={styles.statusWarnTitle}>Te falta completar:</Text>
-                {status.missing.map((code) => (
-                  <Text key={code} style={styles.statusWarnItem}>
-                    • {describeMissing(code)}
-                  </Text>
-                ))}
-              </>
-            )}
-          </View>
-        )}
+        {status && (() => {
+          const meta = VERIFICATION_META[status.state];
+          return (
+            <View style={[styles.statusCard, { backgroundColor: meta.background }]}>
+              <Text style={[styles.statusTitle, { color: meta.color }]}>{meta.title}</Text>
+              <Text style={styles.statusItem}>{meta.description}</Text>
+              {status.rejected.length > 0 && (
+                <Text style={[styles.statusItem, { marginTop: 6 }]}>
+                  Rechazados: {status.rejected.map(documentLabel).join(', ')}
+                </Text>
+              )}
+              {status.missing.length > 0 && (
+                <>
+                  <Text style={[styles.statusItem, { marginTop: 6, fontWeight: '600' }]}>Te falta completar:</Text>
+                  {status.missing.map((code) => (
+                    <Text key={code} style={styles.statusItem}>
+                      • {describeMissing(code)}
+                    </Text>
+                  ))}
+                </>
+              )}
+            </View>
+          );
+        })()}
 
         {/* Datos personales */}
         <View style={styles.section}>
@@ -375,9 +383,22 @@ export default function CompleteProfileScreen() {
               <View key={type} style={styles.docRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.docLabel}>{label}</Text>
-                  <Text style={doc ? styles.docStatusOk : styles.docStatusEmpty}>
+                  <Text
+                    style={
+                      !doc
+                        ? styles.docStatusEmpty
+                        : doc.status === 'REJECTED'
+                          ? styles.docStatusRejected
+                          : styles.docStatusOk
+                    }
+                  >
                     {doc ? `Subido — ${doc.status === 'PENDING' ? 'en revisión' : doc.status === 'APPROVED' ? 'aprobado' : 'rechazado'}` : 'No subido'}
                   </Text>
+                  {doc?.status === 'REJECTED' && doc.rejectionReason ? (
+                    <Text style={styles.docRejectionReason}>
+                      Motivo: {doc.rejectionReason}. Volvé a subirlo.
+                    </Text>
+                  ) : null}
                 </View>
                 {uploading ? (
                   <ActivityIndicator color="#2563eb" />
@@ -541,11 +562,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   statusCard: { borderRadius: 12, padding: 14, marginBottom: 12 },
-  statusOk: { backgroundColor: '#dcfce7' },
-  statusOkText: { color: '#15803d', fontWeight: '600' },
-  statusWarn: { backgroundColor: '#fef3c7' },
-  statusWarnTitle: { color: '#b45309', fontWeight: '600', marginBottom: 4 },
-  statusWarnItem: { color: '#92400e', fontSize: 13 },
+  statusTitle: { fontWeight: '600', marginBottom: 4 },
+  statusItem: { color: '#374151', fontSize: 13 },
   section: {
     backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, gap: 6,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
@@ -573,6 +591,8 @@ const styles = StyleSheet.create({
   docLabel: { fontSize: 13.5, fontWeight: '500', color: '#374151' },
   docStatusOk: { fontSize: 12, color: '#15803d', marginTop: 2 },
   docStatusEmpty: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+  docStatusRejected: { fontSize: 12, color: '#b91c1c', marginTop: 2 },
+  docRejectionReason: { fontSize: 12, color: '#b91c1c', marginTop: 2 },
   docActions: { flexDirection: 'row', gap: 8 },
   docBtn: {
     width: 34, height: 34, borderRadius: 8, borderWidth: 1, borderColor: '#bfdbfe',
