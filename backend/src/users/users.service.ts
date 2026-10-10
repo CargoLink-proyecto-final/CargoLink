@@ -11,6 +11,11 @@ import { LoadStatus, Role, TripStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { RegisterDto } from '../auth/dto/register.dto';
+import {
+  CUIT_DOCUMENT_TYPES,
+  LICENSE_DOCUMENT_TYPES,
+} from '../transporter-profile/profile-completeness';
+import { sendApprovedDocumentsBackToReview } from '../transporter-profile/profile-status';
 
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
@@ -125,13 +130,35 @@ export class UsersService {
     // Prisma exige un DateTime ISO completo; el DTO solo valida "es una fecha"
     // (acepta "2028-01-01" sin hora), así que lo normalizamos acá.
     const { licenseExpiresAt, ...rest } = data;
-    return this.prisma.user.update({
+    const before = await this.prisma.user.findUnique({
       where: { id },
-      data: {
-        ...rest,
-        ...(licenseExpiresAt !== undefined ? { licenseExpiresAt: new Date(licenseExpiresAt) } : {}),
-      },
-      select: PUBLIC_USER_SELECT,
+      select: { cuit: true, licenseCategory: true, licenseExpiresAt: true },
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: {
+          ...rest,
+          ...(licenseExpiresAt !== undefined ? { licenseExpiresAt: new Date(licenseExpiresAt) } : {}),
+        },
+        select: PUBLIC_USER_SELECT,
+      });
+
+      // La constancia de AFIP y la licencia se aprobaron contra los datos
+      // viejos: si el transportista los cambia, vuelven a revisión del admin.
+      if (before) {
+        if (updated.cuit !== before.cuit) {
+          await sendApprovedDocumentsBackToReview(tx, id, CUIT_DOCUMENT_TYPES);
+        }
+        if (
+          updated.licenseCategory !== before.licenseCategory ||
+          updated.licenseExpiresAt?.getTime() !== before.licenseExpiresAt?.getTime()
+        ) {
+          await sendApprovedDocumentsBackToReview(tx, id, LICENSE_DOCUMENT_TYPES);
+        }
+      }
+      return updated;
     });
   }
 

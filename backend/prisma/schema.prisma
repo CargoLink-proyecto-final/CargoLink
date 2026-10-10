@@ -145,7 +145,10 @@ model User {
 
   // Perfil de transportista: vehículo propio + documentos subidos
   vehicle   Vehicle?
-  documents Document[]
+  documents Document[] @relation("DocumentOwner")
+
+  // Documentos de transportistas que este admin aprobó o rechazó
+  reviewedDocuments Document[] @relation("DocumentReviewer")
 
   @@index([companyId])
   // Cada registro de dispositivo desasocia el token de su dueño anterior con un
@@ -382,11 +385,19 @@ model Vehicle {
 model Document {
   id     String @id @default(uuid())
   userId String @map("user_id")
-  user   User   @relation(fields: [userId], references: [id])
+  user   User   @relation("DocumentOwner", fields: [userId], references: [id])
 
   type    DocumentType
   fileUrl String         @map("file_url")
   status  DocumentStatus @default(PENDING)
+
+  // Revisión del admin (CU-11). Se limpian cuando el documento vuelve a
+  // PENDING (re-subida o cambio de los datos que respalda): el motivo de un
+  // rechazo viejo no aplica a un archivo nuevo.
+  rejectionReason String?   @map("rejection_reason")
+  reviewedAt      DateTime? @map("reviewed_at")
+  reviewedById    String?   @map("reviewed_by_id")
+  reviewedBy      User?     @relation("DocumentReviewer", fields: [reviewedById], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -395,6 +406,8 @@ model Document {
   // tipo reemplaza (upsert), no acumula versiones.
   @@unique([userId, type])
   @@index([userId])
+  // La cola de revisión del admin filtra por documentos PENDING.
+  @@index([status])
   @@map("documents")
 }
 

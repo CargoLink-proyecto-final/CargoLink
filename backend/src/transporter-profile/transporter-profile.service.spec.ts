@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { mkdir, unlink, writeFile } from 'fs/promises';
-import { DocumentType } from '@prisma/client';
+import { DocumentStatus, DocumentType } from '@prisma/client';
 import { TransporterProfileService } from './transporter-profile.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -11,16 +11,31 @@ jest.mock('fs/promises');
 describe('TransporterProfileService', () => {
   let service: TransporterProfileService;
   let prisma: {
-    document: { upsert: jest.Mock; findMany: jest.Mock; findUnique: jest.Mock; delete: jest.Mock };
+    document: {
+      upsert: jest.Mock;
+      findMany: jest.Mock;
+      findUnique: jest.Mock;
+      delete: jest.Mock;
+      updateMany: jest.Mock;
+    };
     vehicle: { upsert: jest.Mock; findUnique: jest.Mock };
     user: { findUnique: jest.Mock; update: jest.Mock };
+    $transaction: jest.Mock;
   };
 
   beforeEach(async () => {
     prisma = {
-      document: { upsert: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), delete: jest.fn() },
+      document: {
+        upsert: jest.fn(),
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        delete: jest.fn(),
+        updateMany: jest.fn(),
+      },
       vehicle: { upsert: jest.fn(), findUnique: jest.fn() },
       user: { findUnique: jest.fn(), update: jest.fn() },
+      // Transacción interactiva: el callback recibe el mismo mock como tx.
+      $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -150,6 +165,27 @@ describe('TransporterProfileService', () => {
 
       const result = await service.upsertVehicle('user-1', dto);
       expect(result).toEqual({ id: 'vehicle-1', ...dto });
+      // Alta de vehículo: no hay documentos aprobados contra datos viejos.
+      expect(prisma.document.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('sends approved vehicle documents back to review when the vehicle changes', async () => {
+      const existing = { id: 'vehicle-1', userId: 'user-1', ...dto };
+      prisma.vehicle.findUnique.mockResolvedValue(existing);
+      prisma.vehicle.upsert.mockResolvedValue({ ...existing, maxWeightKg: 15000 });
+
+      await service.upsertVehicle('user-1', { ...dto, maxWeightKg: 15000 });
+
+      expect(prisma.document.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: 'user-1',
+            type: { in: ['VEHICLE_CARD', 'INSURANCE', 'VTV'] },
+            status: 'APPROVED',
+          },
+          data: expect.objectContaining({ status: 'PENDING', reviewedById: null }),
+        }),
+      );
     });
 
     it('rejects a plate already used by another transporter', async () => {
@@ -158,11 +194,13 @@ describe('TransporterProfileService', () => {
       expect(prisma.vehicle.upsert).not.toHaveBeenCalled();
     });
 
-    it('allows re-saving your own plate', async () => {
-      prisma.vehicle.findUnique.mockResolvedValue({ id: 'vehicle-1', userId: 'user-1' });
-      prisma.vehicle.upsert.mockResolvedValue({ id: 'vehicle-1', ...dto });
+    it('allows re-saving your own plate without re-opening the review', async () => {
+      const existing = { id: 'vehicle-1', userId: 'user-1', ...dto };
+      prisma.vehicle.findUnique.mockResolvedValue(existing);
+      prisma.vehicle.upsert.mockResolvedValue(existing);
 
       await expect(service.upsertVehicle('user-1', dto)).resolves.toBeDefined();
+      expect(prisma.document.updateMany).not.toHaveBeenCalled();
     });
   });
 
@@ -189,7 +227,9 @@ describe('TransporterProfileService', () => {
         termsAcceptedAt: new Date(),
       });
       prisma.vehicle.findUnique.mockResolvedValue({ id: 'vehicle-1' });
-      prisma.document.findMany.mockResolvedValue([{ type: DocumentType.DNI_FRONT }]);
+      prisma.document.findMany.mockResolvedValue([
+        { type: DocumentType.DNI_FRONT, status: DocumentStatus.PENDING },
+      ]);
 
       const status = await service.getStatus('user-1');
       expect(status.complete).toBe(false);

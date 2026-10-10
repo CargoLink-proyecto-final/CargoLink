@@ -24,6 +24,7 @@ describe('UsersService', () => {
     load: { count: jest.Mock };
     trip: { count: jest.Mock };
     roleChangeLog: { create: jest.Mock; findMany: jest.Mock };
+    document: { updateMany: jest.Mock };
     $transaction: jest.Mock;
   };
 
@@ -52,8 +53,12 @@ describe('UsersService', () => {
       load: { count: jest.fn() },
       trip: { count: jest.fn() },
       roleChangeLog: { create: jest.fn(), findMany: jest.fn() },
-      // El service usa $transaction([...]) y espera el array de resultados resuelto.
-      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+      document: { updateMany: jest.fn() },
+      // El service usa $transaction([...]) (array de resultados) y también la
+      // forma interactiva $transaction(async (tx) => ...), con el mismo mock como tx.
+      $transaction: jest.fn((arg: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
+        typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
+      ),
     };
     mailService = { sendVerificationEmail: jest.fn().mockResolvedValue(undefined) };
 
@@ -278,6 +283,54 @@ describe('UsersService', () => {
         select: PUBLIC_USER_SELECT,
       });
       expect(result.firstName).toBe('Updated');
+    });
+
+    const verifiedData = {
+      cuit: '20-12345678-3',
+      licenseCategory: 'E1',
+      licenseExpiresAt: new Date('2027-01-01'),
+    };
+
+    it('does not touch documents when no verified data changed', async () => {
+      prisma.user.findUnique.mockResolvedValue(verifiedData);
+      prisma.user.update.mockResolvedValue({ ...baseUser, ...verifiedData, phone: '+999' });
+
+      await service.update('user-1', { phone: '+999' });
+
+      expect(prisma.document.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('sends the approved AFIP constancia back to review when the CUIT changes', async () => {
+      prisma.user.findUnique.mockResolvedValue(verifiedData);
+      prisma.user.update.mockResolvedValue({ ...baseUser, ...verifiedData, cuit: '27-87654321-4' });
+
+      await service.update('user-1', { cuit: '27-87654321-4' });
+
+      expect(prisma.document.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.document.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-1', type: { in: ['AFIP_CONSTANCIA'] }, status: 'APPROVED' },
+          data: expect.objectContaining({ status: 'PENDING', rejectionReason: null }),
+        }),
+      );
+    });
+
+    it('sends the approved license back to review when its expiry changes', async () => {
+      prisma.user.findUnique.mockResolvedValue(verifiedData);
+      prisma.user.update.mockResolvedValue({
+        ...baseUser,
+        ...verifiedData,
+        licenseExpiresAt: new Date('2029-01-01'),
+      });
+
+      await service.update('user-1', { licenseExpiresAt: '2029-01-01' });
+
+      expect(prisma.document.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.document.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ type: { in: ['LICENSE_FRONT', 'LICENSE_BACK'] } }),
+        }),
+      );
     });
   });
 

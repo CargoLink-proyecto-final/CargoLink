@@ -8,10 +8,15 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { mkdir, unlink, writeFile } from 'fs/promises';
 import { join, resolve } from 'path';
-import { DocumentType } from '@prisma/client';
+import { DocumentType, Vehicle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertVehicleDto } from './dto/upsert-vehicle.dto';
-import { computeProfileStatus } from './profile-completeness';
+import { VEHICLE_DOCUMENT_TYPES } from './profile-completeness';
+import {
+  CLEARED_REVIEW,
+  loadProfileStatus,
+  sendApprovedDocumentsBackToReview,
+} from './profile-status';
 
 // Únicos formatos que aceptamos para documentos: fotos y PDF (la constancia
 // de AFIP suele descargarse como PDF, no se fotografía).
@@ -51,14 +56,24 @@ export class TransporterProfileService {
     return this.prisma.document.upsert({
       where: { userId_type: { userId, type } },
       create: { userId, type, fileUrl: relativePath },
-      update: { fileUrl: relativePath, status: 'PENDING' },
+      // Archivo nuevo = revisión nueva: se descarta el veredicto (y el motivo
+      // de rechazo) del archivo anterior.
+      update: { fileUrl: relativePath, ...CLEARED_REVIEW },
     });
   }
 
   async listDocuments(userId: string) {
     return this.prisma.document.findMany({
       where: { userId },
-      select: { id: true, type: true, status: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        rejectionReason: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: { type: 'asc' },
     });
   }
@@ -110,10 +125,20 @@ export class TransporterProfileService {
       ...(vtvExpiresAt !== undefined ? { vtvExpiresAt: new Date(vtvExpiresAt) } : {}),
     };
 
-    return this.prisma.vehicle.upsert({
-      where: { userId },
-      create: { userId, ...data },
-      update: { ...data },
+    const existing = await this.prisma.vehicle.findUnique({ where: { userId } });
+
+    return this.prisma.$transaction(async (tx) => {
+      const vehicle = await tx.vehicle.upsert({
+        where: { userId },
+        create: { userId, ...data },
+        update: { ...data },
+      });
+      // La cédula, el seguro y la VTV se aprobaron contra los datos viejos del
+      // vehículo: si cambió algo, el admin tiene que volver a mirarlos.
+      if (existing && vehicleChanged(existing, vehicle)) {
+        await sendApprovedDocumentsBackToReview(tx, userId, VEHICLE_DOCUMENT_TYPES);
+      }
+      return vehicle;
     });
   }
 
@@ -130,20 +155,39 @@ export class TransporterProfileService {
   }
 
   async getStatus(userId: string) {
-    const [user, vehicle, documents] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { cuit: true, licenseCategory: true, licenseExpiresAt: true, termsAcceptedAt: true },
-      }),
-      this.prisma.vehicle.findUnique({ where: { userId } }),
-      this.prisma.document.findMany({ where: { userId }, select: { type: true } }),
-    ]);
-    if (!user) throw new NotFoundException('Usuario no encontrado');
-
-    return computeProfileStatus({
-      user,
-      hasVehicle: !!vehicle,
-      documentTypes: documents.map((d) => d.type),
-    });
+    const status = await loadProfileStatus(this.prisma, userId);
+    if (!status) throw new NotFoundException('Usuario no encontrado');
+    return status;
   }
+}
+
+// Compara solo los atributos que declara el transportista (no id/fechas de
+// auditoría). Las fechas se comparan por valor.
+const VEHICLE_FIELDS = [
+  'plate',
+  'brand',
+  'model',
+  'year',
+  'type',
+  'maxWeightKg',
+  'maxVolumeM3',
+  'heightCm',
+  'widthCm',
+  'lengthCm',
+  'refrigerated',
+  'hazardousMaterials',
+  'bulkLiquid',
+  'insuranceExpiresAt',
+  'vtvExpiresAt',
+] as const satisfies readonly (keyof Vehicle)[];
+
+function vehicleChanged(before: Vehicle, after: Vehicle): boolean {
+  return VEHICLE_FIELDS.some((field) => {
+    const a = before[field];
+    const b = after[field];
+    if (a instanceof Date || b instanceof Date) {
+      return (a as Date | null)?.getTime() !== (b as Date | null)?.getTime();
+    }
+    return a !== b;
+  });
 }
