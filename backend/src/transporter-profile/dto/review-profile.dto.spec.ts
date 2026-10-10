@@ -20,6 +20,19 @@ describe('ReviewProfileDto', () => {
     );
   });
 
+  it('rejects a reason made only of whitespace', async () => {
+    expect(
+      await errorsFor({ decisions: [{ documentId: DOC_ID, status: 'REJECTED', reason: '   ' }] }),
+    ).toContain('Indicá el motivo del rechazo');
+  });
+
+  it('trims the reason before storing it', () => {
+    const dto = plainToInstance(ReviewProfileDto, {
+      decisions: [{ documentId: DOC_ID, status: 'REJECTED', reason: '  Borrosa  ' }],
+    });
+    expect(dto.decisions[0].reason).toBe('Borrosa');
+  });
+
   it('accepts a rejection with reason', async () => {
     expect(
       await errorsFor({ decisions: [{ documentId: DOC_ID, status: 'REJECTED', reason: 'Borrosa' }] }),

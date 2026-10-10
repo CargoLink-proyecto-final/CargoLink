@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
@@ -25,7 +25,9 @@ export class DocumentDecisionDto {
   status: ReviewVerdict;
 
   // Obligatorio solo al rechazar: el transportista necesita saber qué corregir.
+  // Se recorta antes de validar para que un motivo de solo espacios no pase.
   @ApiProperty({ required: false, example: 'La foto está borrosa, no se lee el número' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @ValidateIf((o: DocumentDecisionDto) => o.status === 'REJECTED')
   @IsString({ message: 'El motivo debe ser texto' })
   @IsNotEmpty({ message: 'Indicá el motivo del rechazo' })

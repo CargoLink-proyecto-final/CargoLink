@@ -73,6 +73,23 @@ describe('TransporterProfileService', () => {
       expect(result).toEqual({ id: 'doc-1', type: DocumentType.DNI_FRONT });
     });
 
+    it('sends a re-uploaded document back to review and clears the previous verdict', async () => {
+      prisma.document.upsert.mockResolvedValue({ id: 'doc-1', type: DocumentType.VTV });
+
+      await service.uploadDocument('user-1', DocumentType.VTV, file);
+
+      expect(prisma.document.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            status: 'PENDING',
+            rejectionReason: null,
+            reviewedAt: null,
+            reviewedById: null,
+          }),
+        }),
+      );
+    });
+
     it('rejects a mimetype outside the allowlist', async () => {
       const badFile = { mimetype: 'application/zip', buffer: Buffer.from('x') } as Express.Multer.File;
 

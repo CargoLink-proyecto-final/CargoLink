@@ -344,8 +344,8 @@ model RoleChangeLog {
 
 // ---------------------------------------------------------------------------
 // Perfil de transportista (P13): vehículo + documentación de identidad y
-// habilitación. Mientras un TRANSPORTER no complete esto no puede postularse
-// a una carga (ver ProfileCompleteGuard) — pero el resto de la app queda
+// habilitación. Mientras un admin no apruebe esto, un TRANSPORTER no puede postularse
+// a una carga (ver ProfileApprovedGuard) — pero el resto de la app queda
 // accesible igual.
 // ---------------------------------------------------------------------------
 

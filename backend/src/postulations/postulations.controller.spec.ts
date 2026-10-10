@@ -4,7 +4,7 @@ import { PostulationsController } from './postulations.controller';
 import { PostulationsService } from './postulations.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-// ProfileCompleteGuard (aplicado en create()) sólo se ejecuta cuando Nest
+// ProfileApprovedGuard (aplicado en create()) sólo se ejecuta cuando Nest
 // procesa una request real vía HTTP — llamar a los métodos del controller
 // directamente (como hacen estos tests) lo salta por completo. Pero como es
 // una guard class y no un token, Nest igual necesita poder instanciarla al
