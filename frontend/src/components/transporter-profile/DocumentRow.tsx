@@ -62,6 +62,11 @@ export default function DocumentRow({ type, label, document, onUpload, uploading
         ) : (
           <span className="text-[11px] text-ink-400">No subido</span>
         )}
+        {document?.status === 'REJECTED' && document.rejectionReason && (
+          <p className="text-[12px] text-danger-700 mt-1">
+            Motivo: {document.rejectionReason}. Reemplazalo para que lo revisemos de nuevo.
+          </p>
+        )}
         {viewError && <p className="text-danger-600 text-xs mt-1">{viewError}</p>}
       </div>
       <div className="flex items-center gap-2 shrink-0">

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { DocumentDecision } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002/api';
 
@@ -168,6 +169,15 @@ export const transporterProfileApi = {
   getVehicle: () => api.get('/transporter-profile/vehicle'),
   upsertVehicle: (data: any) => api.put('/transporter-profile/vehicle', data),
   acceptTerms: (version: string) => api.post('/transporter-profile/terms', { version }),
+};
+
+// Revisión de documentación de transportistas (solo ADMIN). Los archivos se
+// abren con transporterProfileApi.getDocumentFile, que también admite al ADMIN.
+export const transporterReviewApi = {
+  getQueue: () => api.get('/admin/transporter-reviews'),
+  getProfile: (userId: string) => api.get(`/admin/transporter-reviews/${userId}`),
+  review: (userId: string, decisions: DocumentDecision[]) =>
+    api.post(`/admin/transporter-reviews/${userId}`, { decisions }),
 };
 
 // Postulations

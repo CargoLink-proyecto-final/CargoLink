@@ -42,6 +42,15 @@ function renderWithClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
+const profileStatus = (state: string, missing: string[] = []) => ({
+  complete: state !== 'INCOMPLETE',
+  approved: state === 'APPROVED',
+  state,
+  missing,
+  pendingReview: [],
+  rejected: [],
+});
+
 const metrics = {
   avgKmPerLiter: 3.5,
   litersThisMonth: 200,
@@ -55,7 +64,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockAuth({ isAuthenticated: true, user: { id: 'c1', role: 'TRANSPORTER' } });
   ratingsApi.getUserRatings.mockResolvedValue({ data: { ratings: [], averageScore: 0, totalRatings: 0 } });
-  transporterProfileApi.getStatus.mockResolvedValue({ data: { complete: true, missing: [] } });
+  transporterProfileApi.getStatus.mockResolvedValue({ data: profileStatus('APPROVED') });
 });
 
 describe('CarrierDashboard', () => {
@@ -169,19 +178,30 @@ describe('CarrierDashboard', () => {
     tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
     tripsApi.getMetrics.mockResolvedValue({ data: metrics });
     transporterProfileApi.getStatus.mockResolvedValue({
-      data: { complete: false, missing: ['vehicle'] },
+      data: profileStatus('INCOMPLETE', ['vehicle']),
     });
 
     renderWithClient(<CarrierDashboard />);
 
     expect(await screen.findByText('Completá tu perfil')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Completar ahora/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Ir a mi perfil/ })).toHaveAttribute(
       'href',
       '/profile/complete',
     );
   });
 
-  it('hides the profile banner once the profile is complete', async () => {
+  it('tells the carrier the documents are under review while the admin checks them', async () => {
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+    transporterProfileApi.getStatus.mockResolvedValue({ data: profileStatus('PENDING_REVIEW') });
+
+    renderWithClient(<CarrierDashboard />);
+
+    expect(await screen.findByText('Documentación en revisión')).toBeInTheDocument();
+    expect(screen.queryByText('Completá tu perfil')).not.toBeInTheDocument();
+  });
+
+  it('hides the profile banner once the profile is approved', async () => {
     tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
     tripsApi.getMetrics.mockResolvedValue({ data: metrics });
 

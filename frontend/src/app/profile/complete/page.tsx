@@ -5,13 +5,13 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import DocumentRow from '@/components/transporter-profile/DocumentRow';
+import VerificationBanner from '@/components/transporter-profile/VerificationBanner';
 import { transporterProfileApi, usersApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import {
   DOCUMENT_TYPES,
   LICENSE_CATEGORIES,
   VEHICLE_TYPES,
-  describeMissing,
   isNotExpired,
   todayIsoDate,
   useProfileStatus,
@@ -182,30 +182,7 @@ export default function CompleteProfilePage() {
           </p>
         </div>
 
-        {status && (
-          <section
-            className={`rounded-xl border p-4 ${
-              status.complete
-                ? 'bg-success-50 border-success-600/20 text-success-700'
-                : 'bg-warning-50 border-warning-600/20 text-warning-700'
-            }`}
-          >
-            {status.complete ? (
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <CheckCircle2 size={16} /> Tu perfil está completo. Ya podés postularte a cargas.
-              </p>
-            ) : (
-              <div className="text-sm">
-                <p className="font-medium mb-1.5">Te falta completar:</p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  {status.missing.map((code) => (
-                    <li key={code}>{describeMissing(code)}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </section>
-        )}
+        {status && <VerificationBanner status={status} />}
 
         {/* Datos personales */}
         <section className="bg-surface-raised rounded-xl shadow-sm border border-ink-100 p-6">
@@ -264,6 +241,11 @@ export default function CompleteProfilePage() {
                 </p>
               )}
             </div>
+            {status?.approved && (
+              <p className="text-[12px] text-ink-500">
+                Si cambiás el CUIT o la licencia, la constancia de AFIP o la licencia vuelven a revisión.
+              </p>
+            )}
             <button
               type="submit"
               disabled={personalMutation.isPending}
@@ -429,6 +411,12 @@ export default function CompleteProfilePage() {
                 <input type="checkbox" {...vehicleForm.register('bulkLiquid')} /> A granel/líquidos
               </label>
             </div>
+
+            {status?.approved && (
+              <p className="text-[12px] text-ink-500">
+                Si cambiás datos del vehículo, la cédula, el seguro y la VTV vuelven a revisión.
+              </p>
+            )}
 
             {vehicleMutation.isError && (
               <p className="text-danger-600 text-xs">

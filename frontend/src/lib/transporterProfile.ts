@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { transporterProfileApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import type { DocumentType, ProfileStatus, VehicleType } from '@/types';
+import type { DocumentType, ProfileStatus, VehicleType, VerificationState } from '@/types';
 
 export const DOCUMENT_TYPES: { type: DocumentType; label: string }[] = [
   { type: 'DNI_FRONT', label: 'DNI (frente)' },
@@ -48,6 +48,49 @@ const MISSING_LABELS: Record<string, string> = {
 export function describeMissing(code: string): string {
   return MISSING_LABELS[code] ?? code;
 }
+
+export function documentLabel(type: DocumentType): string {
+  return DOCUMENT_TYPES.find((d) => d.type === type)?.label ?? type;
+}
+
+// Texto y tono de cada estado de la verificación — compartido por el banner
+// del panel, la tarjeta de "Mi perfil" y la página de completar perfil, para
+// que el transportista lea lo mismo en todos lados.
+export const VERIFICATION_META: Record<
+  VerificationState,
+  { title: string; description: string; tone: 'warning' | 'danger' | 'info' | 'success' }
+> = {
+  INCOMPLETE: {
+    title: 'Completá tu perfil',
+    description: 'Documentos, vehículo y declaración jurada — sin esto no podés postularte a cargas.',
+    tone: 'warning',
+  },
+  REJECTED: {
+    title: 'Hay documentos rechazados',
+    description: 'Revisá el motivo y volvé a subirlos para que podamos habilitarte.',
+    tone: 'danger',
+  },
+  PENDING_REVIEW: {
+    title: 'Documentación en revisión',
+    description: 'Un administrador está revisando tus documentos. Te avisamos por mail cuando estés habilitado.',
+    tone: 'info',
+  },
+  APPROVED: {
+    title: 'Perfil aprobado',
+    description: 'Tu documentación está verificada. Ya podés postularte a cargas.',
+    tone: 'success',
+  },
+};
+
+export const VERIFICATION_TONE_CLASSES: Record<
+  'warning' | 'danger' | 'info' | 'success',
+  { box: string; text: string }
+> = {
+  warning: { box: 'bg-warning-50 border-warning-600/20', text: 'text-warning-700' },
+  danger: { box: 'bg-danger-50 border-danger-600/20', text: 'text-danger-700' },
+  info: { box: 'bg-info-50 border-info-600/20', text: 'text-info-700' },
+  success: { box: 'bg-success-50 border-success-600/20', text: 'text-success-700' },
+};
 
 // Fecha de hoy en formato YYYY-MM-DD — sirve tanto de `min` para un <input
 // type="date"> como de piso para validar que un vencimiento no sea pasado.

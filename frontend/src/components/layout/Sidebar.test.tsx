@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Sidebar from './Sidebar';
 import { useAuthStore } from '@/store/auth';
-import { messagesApi, postulationsApi, transporterProfileApi } from '@/lib/api';
+import { messagesApi, postulationsApi, transporterProfileApi, transporterReviewApi } from '@/lib/api';
 
 const push = jest.fn();
 const logout = jest.fn();
@@ -20,7 +20,17 @@ jest.mock('@/lib/api', () => ({
   messagesApi: { getUnreadCount: jest.fn() },
   postulationsApi: { getMy: jest.fn() },
   transporterProfileApi: { getStatus: jest.fn() },
+  transporterReviewApi: { getQueue: jest.fn() },
 }));
+
+const status = (state: string, missing: string[] = []) => ({
+  complete: state !== 'INCOMPLETE',
+  approved: state === 'APPROVED',
+  state,
+  missing,
+  pendingReview: [],
+  rejected: [],
+});
 
 const SHIPPER = {
   id: 'u1',
@@ -55,9 +65,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   (messagesApi.getUnreadCount as jest.Mock).mockResolvedValue({ data: { unreadCount: 0 } });
   (postulationsApi.getMy as jest.Mock).mockResolvedValue({ data: [] });
-  (transporterProfileApi.getStatus as jest.Mock).mockResolvedValue({
-    data: { complete: true, missing: [] },
-  });
+  (transporterProfileApi.getStatus as jest.Mock).mockResolvedValue({ data: status('APPROVED') });
+  (transporterReviewApi.getQueue as jest.Mock).mockResolvedValue({ data: [] });
 });
 
 // Una postulación que dejó la pelota del lado del transportista.
@@ -98,7 +107,7 @@ describe('Sidebar', () => {
 
   it('badges "Mi perfil" when the transporter profile is incomplete', async () => {
     (transporterProfileApi.getStatus as jest.Mock).mockResolvedValue({
-      data: { complete: false, missing: ['vehicle'] },
+      data: status('INCOMPLETE', ['vehicle']),
     });
     mockAuth({ user: TRANSPORTER, logout });
     renderSidebar();
@@ -109,7 +118,27 @@ describe('Sidebar', () => {
     });
   });
 
-  it('does not badge "Mi perfil" when the profile is already complete', async () => {
+  it('badges "Mi perfil" when a document was rejected', async () => {
+    (transporterProfileApi.getStatus as jest.Mock).mockResolvedValue({ data: status('REJECTED') });
+    mockAuth({ user: TRANSPORTER, logout });
+    renderSidebar();
+
+    await waitFor(() => {
+      expect(screen.getByText('Mi perfil').closest('a')?.textContent).toContain('!');
+    });
+  });
+
+  it('does not badge "Mi perfil" while the documents wait for the admin', async () => {
+    // En revisión no hay nada que hacer del lado del transportista.
+    (transporterProfileApi.getStatus as jest.Mock).mockResolvedValue({ data: status('PENDING_REVIEW') });
+    mockAuth({ user: TRANSPORTER, logout });
+    renderSidebar();
+
+    await waitFor(() => expect(transporterProfileApi.getStatus).toHaveBeenCalled());
+    expect(screen.getByText('Mi perfil').closest('a')?.textContent).toBe('Mi perfil');
+  });
+
+  it('does not badge "Mi perfil" when the profile is already approved', async () => {
     mockAuth({ user: TRANSPORTER, logout });
     renderSidebar();
 
@@ -138,6 +167,26 @@ describe('Sidebar', () => {
     renderSidebar();
     expect(screen.getByText('Todas las Cargas')).toBeInTheDocument();
     expect(screen.getByText('Usuarios')).toBeInTheDocument();
+    expect(screen.getByText('Verificaciones').closest('a')).toHaveAttribute(
+      'href',
+      '/dashboard/admin/verifications',
+    );
+  });
+
+  it('badges "Verificaciones" with the transporters waiting for review', async () => {
+    (transporterReviewApi.getQueue as jest.Mock).mockResolvedValue({ data: [{ id: 't1' }, { id: 't2' }] });
+    mockAuth({ user: ADMIN, logout });
+    renderSidebar();
+
+    await waitFor(() =>
+      expect(screen.getByText('Verificaciones').closest('a')?.textContent).toContain('2'),
+    );
+  });
+
+  it('only the admin queries the review queue', () => {
+    mockAuth({ user: TRANSPORTER, logout });
+    renderSidebar();
+    expect(transporterReviewApi.getQueue).not.toHaveBeenCalled();
   });
 
   it('shows the role label in the brand block', () => {

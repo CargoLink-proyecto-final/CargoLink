@@ -177,19 +177,19 @@ export default function LoadDetailPage() {
       setShowPostulateModal(false);
       setPostulateError('');
     },
-    // 403 con perfil incompleto: el backend manda `missing[]` con lo que falta.
+    // 403 con perfil no aprobado: el backend manda `state` (INCOMPLETE,
+    // REJECTED, PENDING_REVIEW) y, si está incompleto, `missing[]`.
     onError: (err: any) => {
-      const missing: string[] | undefined = err?.response?.data?.missing;
+      const data = err?.response?.data;
+      const missing: string[] | undefined = data?.missing;
       const message =
-        missing && missing.length > 0
+        data?.state === 'INCOMPLETE' && missing && missing.length > 0
           ? `Completá tu perfil antes de postularte: ${missing.map(describeMissing).join(', ')}.`
-          : err?.response?.data?.message || 'No se pudo enviar la postulación';
+          : data?.message || 'No se pudo enviar la postulación';
       setPostulateError(message);
     },
   });
-  const profileIncompleteError = Boolean(
-    (postulateMutation.error as any)?.response?.data?.missing?.length,
-  );
+  const profileIncompleteError = Boolean((postulateMutation.error as any)?.response?.data?.state);
 
   const withdrawMutation = useMutation({
     mutationFn: (postulationId: string) =>

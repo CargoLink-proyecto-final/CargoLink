@@ -131,7 +131,7 @@ export default function PostulateModal({
             <p>{error}</p>
             {showCompleteProfileLink && (
               <Link href="/profile/complete" className="font-medium underline">
-                Completar perfil
+                Ir a mi perfil
               </Link>
             )}
           </div>

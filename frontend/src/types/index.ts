@@ -44,6 +44,9 @@ export interface TransporterDocument {
   id: string;
   type: DocumentType;
   status: DocumentStatus;
+  // Motivo que escribió el admin al rechazar; null si no fue rechazado.
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,9 +73,62 @@ export interface Vehicle {
   updatedAt: string;
 }
 
+export type VerificationState = 'REJECTED' | 'INCOMPLETE' | 'PENDING_REVIEW' | 'APPROVED';
+
 export interface ProfileStatus {
+  // Cargó todo lo obligatorio (no implica revisión del admin).
   complete: boolean;
+  // Completo y con todos los documentos aprobados — recién ahí puede postularse.
+  approved: boolean;
+  state: VerificationState;
   missing: string[];
+  pendingReview: DocumentType[];
+  rejected: DocumentType[];
+}
+
+// Revisión de documentación por el admin (CU-11)
+export interface ReviewQueueItem {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  company: { id: string; name: string } | null;
+  vehicle: { plate: string; type: VehicleType } | null;
+  state: VerificationState;
+  complete: boolean;
+  pendingCount: number;
+  waitingSince: string;
+}
+
+export interface ReviewDocument extends TransporterDocument {
+  reviewedBy: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface TransporterReviewProfile {
+  user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+    isActive: boolean;
+    createdAt: string;
+    cuit: string | null;
+    licenseCategory: string | null;
+    licenseExpiresAt: string | null;
+    termsAcceptedAt: string | null;
+    termsAcceptedVersion: string | null;
+    company: { id: string; name: string } | null;
+  };
+  vehicle: Vehicle | null;
+  documents: ReviewDocument[];
+  status: ProfileStatus;
+}
+
+export interface DocumentDecision {
+  documentId: string;
+  status: 'APPROVED' | 'REJECTED';
+  reason?: string;
 }
 
 export interface Load {

@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
-import { messagesApi, postulationsApi } from '@/lib/api';
+import { messagesApi, postulationsApi, transporterReviewApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { countAwaitingCarrierReply } from '@/lib/postulations';
 import { useProfileStatus } from '@/lib/transporterProfile';
-import type { PostulationWithLoad } from '@/types';
+import type { PostulationWithLoad, ReviewQueueItem } from '@/types';
 import {
   LayoutDashboard,
   Package,
@@ -23,6 +23,7 @@ import {
   UserCheck,
   UserCog,
   Hand,
+  ShieldCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -54,6 +55,7 @@ const navItems = {
     { href: '/loads', label: 'Todas las Cargas', icon: Package },
     { href: '/trips', label: 'Viajes', icon: Truck },
     { href: '/users', label: 'Usuarios', icon: Users },
+    { href: '/dashboard/admin/verifications', label: 'Verificaciones', icon: ShieldCheck },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
     { href: '/register', label: 'Registro', icon: ClipboardList },
   ],
@@ -100,12 +102,29 @@ function SidebarContent({ user }: { user: AuthUser }) {
   });
 
   const { data: profileStatus } = useProfileStatus();
-  const profileIncomplete = isTransporter && profileStatus ? !profileStatus.complete : false;
+  // Solo pide atención si el transportista tiene algo que hacer: en revisión
+  // espera al admin, no hay acción de su lado.
+  const profileNeedsAction =
+    isTransporter && profileStatus
+      ? profileStatus.state === 'INCOMPLETE' || profileStatus.state === 'REJECTED'
+      : false;
+
+  // Cola de verificación del admin: transportistas con documentos por revisar.
+  const isAdmin = user.role === 'ADMIN';
+  const { data: reviewQueue } = useQuery({
+    queryKey: ['transporter-review-queue'],
+    queryFn: () => transporterReviewApi.getQueue().then((r) => r.data as ReviewQueueItem[]),
+    enabled: isAdmin,
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
+  });
+  const pendingVerifications = reviewQueue?.length ?? 0;
 
   const unreadCount = unreadData?.unreadCount || 0;
   const postulationsAwaitingReply = countAwaitingCarrierReply(myPostulations ?? []);
   // El burger de mobile resume todo lo que pide atención, porque el nav está oculto.
-  const pendingTotal = unreadCount + postulationsAwaitingReply + (profileIncomplete ? 1 : 0);
+  const pendingTotal =
+    unreadCount + postulationsAwaitingReply + pendingVerifications + (profileNeedsAction ? 1 : 0);
   const items = navItems[user.role] || [];
   const handleLogout = () => { logout(); router.push('/auth/login'); };
   const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || '·';
@@ -158,7 +177,9 @@ function SidebarContent({ user }: { user: AuthUser }) {
                   ? unreadCount
                   : item.href === '/postulations'
                     ? postulationsAwaitingReply
-                    : 0;
+                    : item.href === '/dashboard/admin/verifications'
+                      ? pendingVerifications
+                      : 0;
               return (
                 <Link
                   key={item.href}
@@ -211,10 +232,10 @@ function SidebarContent({ user }: { user: AuthUser }) {
             >
               <UserCog size={15} />
               <span className="flex-1">Mi perfil</span>
-              {profileIncomplete && (
+              {profileNeedsAction && (
                 <span
                   className="bg-primary-500 text-white text-[10px] font-semibold rounded-full min-w-[20px] h-[18px] flex items-center justify-center px-1.5"
-                  aria-label="Perfil incompleto"
+                  aria-label="Perfil con acciones pendientes"
                 >
                   !
                 </span>
