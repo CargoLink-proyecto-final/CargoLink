@@ -229,6 +229,10 @@ describe('NewLoadPage — successful create', () => {
         price: 5000,
         originLat: -34.6,
         destLat: -31.42,
+        // "Mercadería general" no sugiere carrocería: sirve cualquiera.
+        requiredBodyType: null,
+        requiresRefrigeration: false,
+        requiresHazmat: false,
       }),
     );
     expect(push).toHaveBeenCalledWith('/dashboard/shipper');

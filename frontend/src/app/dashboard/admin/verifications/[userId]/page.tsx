@@ -8,7 +8,12 @@ import { ArrowLeft, Check, CheckCircle2, Clock, Eye, X, XCircle } from 'lucide-r
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import VerificationBanner from '@/components/transporter-profile/VerificationBanner';
 import { transporterProfileApi, transporterReviewApi } from '@/lib/api';
-import { LICENSE_CATEGORIES, VEHICLE_TYPES, documentLabel } from '@/lib/transporterProfile';
+import {
+  LICENSE_CATEGORIES,
+  bodyTypeLabel,
+  documentLabel,
+  vehicleUnitLabel,
+} from '@/lib/transporterProfile';
 import { cn, formatDate } from '@/lib/utils';
 import type {
   DocumentDecision,
@@ -125,13 +130,8 @@ export default function TransporterReviewPage() {
     });
 
   const licenseLabel = LICENSE_CATEGORIES.find((c) => c.value === user.licenseCategory)?.label;
-  const vehicleType = VEHICLE_TYPES.find((v) => v.value === vehicle?.type)?.label;
   const specs = vehicle
-    ? [
-        vehicle.refrigerated && 'Refrigerado',
-        vehicle.hazardousMaterials && 'Cargas peligrosas',
-        vehicle.bulkLiquid && 'Granel/líquidos',
-      ].filter(Boolean)
+    ? [vehicle.refrigerated && 'Refrigerado', vehicle.hazardousMaterials && 'Cargas peligrosas'].filter(Boolean)
     : [];
   const dimensions =
     vehicle && (vehicle.lengthCm || vehicle.widthCm || vehicle.heightCm)
@@ -156,7 +156,9 @@ export default function TransporterReviewPage() {
     Vehículo: vehicle ? (
       <>
         <DataRow label="Dominio" value={<span className="font-mono">{vehicle.plate}</span>} />
-        <DataRow label="Vehículo" value={`${vehicleType} · ${vehicle.brand} ${vehicle.model} ${vehicle.year}`} />
+        <DataRow label="Vehículo" value={`${vehicle.brand} ${vehicle.model} ${vehicle.year}`} />
+        <DataRow label="Unidad" value={vehicleUnitLabel(vehicle.unit)} />
+        <DataRow label="Carrocería" value={bodyTypeLabel(vehicle.bodyType)} />
         <DataRow label="Capacidad" value={`${vehicle.maxWeightKg.toLocaleString('es-AR')} kg${vehicle.maxVolumeM3 ? ` · ${vehicle.maxVolumeM3} m³` : ''}`} />
         <DataRow label="Medidas (L × A × H)" value={dimensions} />
         <DataRow label="Especificaciones" value={specs.length > 0 ? specs.join(' · ') : 'Carga general'} />
