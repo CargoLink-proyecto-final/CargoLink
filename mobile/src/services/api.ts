@@ -76,6 +76,9 @@ export const usersApi = {
     zoneLat?: number;
     zoneLng?: number;
     zoneRadiusKm?: number;
+    cuit?: string;
+    licenseCategory?: string;
+    licenseExpiresAt?: string;
   }) => api.patch('/users/me', data),
   /**
    * Baja definitiva de la cuenta. Apple la exige dentro de la app para cualquier
@@ -83,6 +86,26 @@ export const usersApi = {
    * fila en vez de borrarla, así el historial de la contraparte no se rompe.
    */
   deleteMe: () => api.delete('/users/me'),
+};
+
+// Perfil de transportista (documentos, vehículo, declaración jurada)
+export const transporterProfileApi = {
+  getStatus: () => api.get('/transporter-profile/status'),
+  listDocuments: () => api.get('/transporter-profile/documents'),
+  // `uri`/`name`/`type` es el formato que React Native espera para adjuntar un
+  // archivo local a un FormData (no un objeto File del navegador).
+  uploadDocument: (type: string, fileUri: string, fileName: string, mimeType: string) => {
+    const form = new FormData();
+    form.append('type', type);
+    form.append('file', { uri: fileUri, name: fileName, type: mimeType } as any);
+    return api.post('/transporter-profile/documents', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  deleteDocument: (id: string) => api.delete(`/transporter-profile/documents/${id}`),
+  getVehicle: () => api.get('/transporter-profile/vehicle'),
+  upsertVehicle: (data: any) => api.put('/transporter-profile/vehicle', data),
+  acceptTerms: (version: string) => api.post('/transporter-profile/terms', { version }),
 };
 
 export const postulationsApi = {

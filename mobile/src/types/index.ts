@@ -16,6 +16,21 @@ export type PostulationStatus =
   | 'REJECTED'
   | 'WITHDRAWN';
 
+export type DocumentType =
+  | 'DNI_FRONT'
+  | 'DNI_BACK'
+  | 'LICENSE_FRONT'
+  | 'LICENSE_BACK'
+  | 'AFIP_CONSTANCIA'
+  | 'VEHICLE_CARD'
+  | 'INSURANCE'
+  | 'VTV';
+export type DocumentStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+// Tamaño de la unidad (informativo: la capacidad la da maxWeightKg).
+export type VehicleUnit = 'CAMIONETA' | 'CHASIS' | 'BALANCIN' | 'SEMIRREMOLQUE';
+// Carrocería: lo que una carga le puede exigir al vehículo.
+export type BodyType = 'CERRADA' | 'ABIERTA' | 'VOLCADORA' | 'CISTERNA';
+
 export interface User {
   id: string;
   email: string;
@@ -32,7 +47,58 @@ export interface User {
   zoneLat?: number;
   zoneLng?: number;
   zoneRadiusKm?: number;
+  // Perfil de transportista (P13)
+  cuit?: string;
+  licenseCategory?: string;
+  licenseExpiresAt?: string;
+  termsAcceptedAt?: string;
   isActive: boolean;
+}
+
+export interface TransporterDocument {
+  id: string;
+  type: DocumentType;
+  status: DocumentStatus;
+  // Motivo que escribió el admin al rechazar; null si no fue rechazado.
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Vehicle {
+  id: string;
+  userId: string;
+  plate: string;
+  brand: string;
+  model: string;
+  year: number;
+  unit: VehicleUnit;
+  bodyType: BodyType;
+  maxWeightKg: number;
+  maxVolumeM3?: number | null;
+  heightCm?: number | null;
+  widthCm?: number | null;
+  lengthCm?: number | null;
+  refrigerated: boolean;
+  hazardousMaterials: boolean;
+  insuranceExpiresAt?: string | null;
+  vtvExpiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type VerificationState = 'REJECTED' | 'INCOMPLETE' | 'PENDING_REVIEW' | 'APPROVED';
+
+export interface ProfileStatus {
+  // Cargó todo lo obligatorio (no implica revisión del admin).
+  complete: boolean;
+  // Completo y con todos los documentos aprobados — recién ahí puede postularse.
+  approved: boolean;
+  state: VerificationState;
+  missing: string[];
+  pendingReview: DocumentType[];
+  rejected: DocumentType[];
 }
 
 export interface Load {
@@ -54,6 +120,10 @@ export interface Load {
   heightCm?: number;
   widthCm?: number;
   lengthCm?: number;
+  // Lo que la carga le exige al vehículo (carrocería null = cualquiera).
+  requiredBodyType?: BodyType | null;
+  requiresRefrigeration?: boolean;
+  requiresHazmat?: boolean;
   pickupDate: string;
   deliveryDate?: string;
   // Opcional: sin precio, la carga sale "a convenir" y lo fija la postulación.

@@ -7,6 +7,8 @@ import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { tripsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { useProfileStatus } from '@/lib/transporterProfile';
+import VerificationBanner from '@/components/transporter-profile/VerificationBanner';
 import { Truck, Package, Clock, CheckCircle, ArrowRight, Gauge, Fuel, Timer, AlertTriangle, Star, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import type { CarrierMetrics, Rating } from '@/types';
@@ -18,6 +20,8 @@ interface MyRatingSummary {
 }
 
 export default function CarrierDashboard() {
+  const { data: profileStatus } = useProfileStatus();
+
   const { data: tripsData, isLoading: tripsLoading } = useQuery({
     queryKey: ['my-trips'],
     queryFn: () => tripsApi.getMy().then((r) => r.data),
@@ -67,6 +71,10 @@ export default function CarrierDashboard() {
             Tus <span className="font-semibold text-primary-700">viajes</span> y oportunidades
           </h1>
         </div>
+
+        {profileStatus && !profileStatus.approved && (
+          <VerificationBanner status={profileStatus} href="/profile/complete" />
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard label="Total de viajes" value={stats.total} icon={Truck} tone="ink" />

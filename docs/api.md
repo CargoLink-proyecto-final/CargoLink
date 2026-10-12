@@ -125,7 +125,10 @@ Source: [`../backend/src/users/users.controller.ts`](../backend/src/users/users.
   "firstName": "...",       // todos opcionales
   "lastName": "...",
   "phone": "...",
-  "companyName": "..."
+  "companyName": "...",
+  "cuit": "20-12345678-3",         // perfil de transportista (P13)
+  "licenseCategory": "E1",
+  "licenseExpiresAt": "2028-01-01"
 }
 ```
 
@@ -162,11 +165,16 @@ Source: [`../backend/src/loads/loads.controller.ts`](../backend/src/loads/loads.
   "volume": 12.5,                               // m³, opcional
   "pickupDate": "2026-06-01T08:00:00Z",
   "deliveryDate": "2026-06-03T18:00:00Z",       // opcional
-  "price": 250000                                // moneda local (no se trackea currency)
+  "price": 250000,                               // moneda local (no se trackea currency)
+  "requiredBodyType": "CERRADA",               // opcional; CERRADA | ABIERTA | VOLCADORA | CISTERNA; null/ausente = cualquiera
+  "requiresRefrigeration": false,              // opcional, default false
+  "requiresHazmat": false                      // opcional, default false
 }
 ```
 
 Response 201 con el load creado, status `PUBLISHED` por defecto, `shipperId` autoseteado al usuario logueado.
+
+**Requisitos de vehículo:** el publicador no elige vehículos, describe lo que necesita su carga: carrocería (`requiredBodyType`), frío y si es peligrosa. El tamaño no se pide: sale de comparar el peso con `maxWeightKg` y el volumen con `maxVolumeM3` (este último solo si los dos datos están). Los clientes sugieren la carrocería según `cargoType` (ej. Electrónica → `CERRADA`, Maquinaria → `ABIERTA`, categorías ambiguas → cualquiera) y el publicador la confirma o la cambia; el backend no aplica sugerencias. Se validan contra el `Vehicle` del transportista al postularse (ver `POST /loads/:loadId/postulations`). Para quitar el requisito de carrocería al editar, mandá `requiredBodyType: null`. Una vez aceptada una postulación, los requisitos quedan bloqueados como el resto de los campos críticos.
 
 ### GET `/loads`, `/loads/available`, `/loads/my` — query params
 
@@ -180,9 +188,10 @@ Response 201 con el load creado, status `PUBLISHED` por defecto, `shipperId` aut
 ?pickupFrom=...&pickupTo=...
 ?deliveryFrom=...&deliveryTo=...
 ?page=1&limit=50
+?compatibleOnly=true      # solo /loads/available: cargas cuyos requisitos cumple el vehículo del transportista
 ```
 
-`/loads/available` fuerza `status=PUBLISHED`. `/loads/my` filtra por shipper logueado.
+`/loads/available` fuerza `status=PUBLISHED`. Con `compatibleOnly=true` filtra por el vehículo del transportista logueado (tipo, specs, peso y volumen); si todavía no cargó vehículo, el filtro se ignora. `/loads/my` filtra por shipper logueado.
 
 Response:
 
@@ -258,6 +267,10 @@ Source: [`../backend/src/postulations/postulations.controller.ts`](../backend/sr
 }
 ```
 
+Requiere perfil de transportista **aprobado** (`ProfileApprovedGuard`, ver [`backend.md`](./backend.md)): completo y con los 8 documentos aprobados por un admin. Si no, `403 Forbidden` con `{ message, state, missing, pendingReview, rejected }` — `state` es `INCOMPLETE`, `REJECTED` o `PENDING_REVIEW` y `message` ya viene redactado para el usuario. Usá `GET /transporter-profile/status` para saberlo de antemano.
+
+El vehículo del transportista tiene que cumplir los requisitos de la carga (`checkVehicleCompatibility` en `backend/src/loads/vehicle-compatibility.ts`). Si no, `400 Bad Request` con `{ message, reasons }`: `reasons` es una lista de `BODY_TYPE`, `REFRIGERATION`, `HAZMAT`, `WEIGHT` y `VOLUME`, y `message` ya viene redactado para el usuario.
+
 Si `proposedPrice` se envía y es <= `load.price`, falla con 400 (regla: el carrier ofrece subir el precio si quiere atraer; la baja se negocia por counter-offer).
 
 Crea postulación con `status=PENDING`. La unique compuesta `(loadId, transporterId)` previene duplicados.
@@ -293,6 +306,101 @@ El transporter acepta la contraoferta vigente. Equivale al flujo de `accept` per
 ### DELETE `/postulations/:id`
 
 El transporter retira. Postulation → `WITHDRAWN`. No libera la unique compuesta — el mismo carrier no puede volver a postularse al mismo load.
+
+## Transporter Profile
+
+Source: [`../backend/src/transporter-profile/transporter-profile.controller.ts`](../backend/src/transporter-profile/transporter-profile.controller.ts). Documentos de identidad/habilitación, vehículo y declaración jurada de un `TRANSPORTER` (P13). Ver el modelo de datos en [`base-de-datos.md`](./base-de-datos.md#vehicle-tabla-vehicles).
+
+| Método | Path | Roles | Descripción |
+|---|---|---|---|
+| POST | `/transporter-profile/documents` | `TRANSPORTER` | Sube/reemplaza un documento (`multipart/form-data`) |
+| GET | `/transporter-profile/documents` | `TRANSPORTER` | Lista mis documentos con su estado |
+| GET | `/transporter-profile/documents/:id/file` | dueño o `ADMIN` | Descarga el archivo (nunca público/estático) |
+| DELETE | `/transporter-profile/documents/:id` | `TRANSPORTER` (dueño) | Borra un documento propio |
+| PUT | `/transporter-profile/vehicle` | `TRANSPORTER` | Crea/reemplaza mi vehículo |
+| GET | `/transporter-profile/vehicle` | `TRANSPORTER` | Mi vehículo o `null` |
+| POST | `/transporter-profile/terms` | `TRANSPORTER` | Acepta la declaración jurada |
+| GET | `/transporter-profile/status` | `TRANSPORTER` | Estado de verificación del perfil (ver abajo) |
+
+### POST `/transporter-profile/documents`
+
+`multipart/form-data` con dos campos: `type` (uno de `DocumentType`, ver abajo) y `file` (JPG/PNG/PDF, ≤5MB). Guarda en disco bajo `UPLOAD_DIR/<userId>/<type>.<ext>` y hace upsert del `Document` — volver a subir el mismo `type` reemplaza al anterior (no acumula versiones), lo vuelve a dejar en `status=PENDING` y limpia la revisión anterior (`rejectionReason`, `reviewedAt`, `reviewedById`).
+
+`DocumentType`: `DNI_FRONT`, `DNI_BACK`, `LICENSE_FRONT`, `LICENSE_BACK`, `AFIP_CONSTANCIA`, `VEHICLE_CARD`, `INSURANCE`, `VTV`. Los 8 son obligatorios para que el perfil cuente como completo.
+
+### GET `/transporter-profile/documents/:id/file`
+
+Sirve el archivo con su `Content-Type`. Nunca es un link estático: exige JWT y valida que quien pide sea el dueño del documento o `ADMIN` — son DNI y licencias.
+
+### PUT `/transporter-profile/vehicle`
+
+```jsonc
+{
+  "plate": "AB123CD",
+  "brand": "Mercedes-Benz",
+  "model": "Actros",
+  "year": 2019,
+  "unit": "CHASIS",              // CAMIONETA | CHASIS | BALANCIN | SEMIRREMOLQUE (informativo)
+  "bodyType": "CERRADA",          // CERRADA | ABIERTA | VOLCADORA | CISTERNA
+  "maxWeightKg": 12000,
+  "maxVolumeM3": 40,              // opcional, espeja Load.volume
+  "heightCm": 250, "widthCm": 240, "lengthCm": 600,  // opcionales, espejan Load.*Cm
+  "refrigerated": false,
+  "hazardousMaterials": false,
+  "insuranceExpiresAt": "2027-01-01",  // opcional
+  "vtvExpiresAt": "2027-01-01"          // opcional
+}
+```
+
+Semántica de reemplazo completo (no parcial). `plate` es único global — `409 Conflict` si ya está registrado por otro transportista.
+
+Si el vehículo ya existía y cambia algún dato, los documentos **aprobados** que lo respaldan (`VEHICLE_CARD`, `INSURANCE`, `VTV`) vuelven a `PENDING`: el admin los aprobó contra los datos viejos. Lo mismo pasa al actualizar el perfil de usuario con otro CUIT (`AFIP_CONSTANCIA`) o con otra categoría o vencimiento de licencia (`LICENSE_FRONT`, `LICENSE_BACK`). Los documentos rechazados no cambian: el problema era el archivo.
+
+### POST `/transporter-profile/terms`
+
+```jsonc
+{ "version": "2026-09-22" }   // versión del texto de la declaración jurada aceptado
+```
+
+Setea `User.termsAcceptedAt = now()` y `termsAcceptedVersion = version` — queda guardado qué versión exacta aceptó cada usuario.
+
+### GET `/transporter-profile/status`
+
+```jsonc
+{
+  "complete": true,                 // cargó todo lo obligatorio
+  "approved": false,                // completo + 8 documentos APPROVED
+  "state": "REJECTED",              // REJECTED | INCOMPLETE | PENDING_REVIEW | APPROVED
+  "missing": [],                    // ej. "cuit", "vehicle", "document:VTV"
+  "pendingReview": ["DNI_FRONT"],
+  "rejected": ["VTV"]
+}
+```
+
+`state` resume el estado en orden de prioridad para el usuario: un rechazo (trae feedback concreto del admin) se muestra antes que lo que falta cargar. Misma lógica (`computeProfileStatus`) que usa el `ProfileApprovedGuard` de `POST /loads/:loadId/postulations`.
+
+## Transporter Reviews (admin)
+
+Source: [`../backend/src/transporter-profile/transporter-review.controller.ts`](../backend/src/transporter-profile/transporter-review.controller.ts). Revisión manual de la documentación de transportistas (CU-11). Todos `ADMIN`. Los archivos se descargan con `GET /transporter-profile/documents/:id/file`.
+
+| Método | Path | Descripción |
+|---|---|---|
+| GET | `/admin/transporter-reviews` | Cola: transportistas con al menos un documento `PENDING`, el que espera hace más tiempo primero |
+| GET | `/admin/transporter-reviews/:userId` | Perfil completo: datos declarados, vehículo, documentos con su revisión y `status` |
+| POST | `/admin/transporter-reviews/:userId` | Aprueba o rechaza documentos |
+
+### POST `/admin/transporter-reviews/:userId`
+
+```jsonc
+{
+  "decisions": [
+    { "documentId": "<uuid>", "status": "APPROVED" },
+    { "documentId": "<uuid>", "status": "REJECTED", "reason": "La foto está borrosa" }  // reason obligatorio al rechazar, max 500
+  ]
+}
+```
+
+La revisión se manda junta (no documento por documento) para que el transportista reciba **un solo mail**: con la lista de rechazos y sus motivos, o el aviso de "perfil aprobado" cuando con esta revisión queda habilitado. Si el mail falla, la revisión igual se guarda. `400` si algún documento no es de ese transportista o hay decisiones repetidas; `404` si el usuario no es `TRANSPORTER`. Devuelve el `status` actualizado.
 
 ## Trips
 

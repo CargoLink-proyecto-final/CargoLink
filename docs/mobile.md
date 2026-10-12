@@ -22,6 +22,10 @@ App iOS + Android construida con Expo (managed workflow). Source en [`../mobile/
 | React Hook Form | 7.49 |
 | date-fns | 3.2 |
 | `@expo/vector-icons` | 14.0 (Ionicons) |
+| expo-image-picker | ~57.0.19 (cámara/galería para documentos) |
+| expo-document-picker | ~57.0.2 (elegir PDF/imagen para documentos) |
+
+> Esta tabla tiene drift conocido con el `package.json` real (ej. Expo SDK, react-native-maps vs MapLibre) — no es parte de esta feature, no se tocó. Las dos filas de arriba son las que sumó P13 y están verificadas contra `mobile/package.json`.
 
 `package.json` completo en [`../mobile/package.json`](../mobile/package.json).
 
@@ -150,15 +154,16 @@ Source: [`../mobile/src/navigation/AppNavigator.tsx`](../mobile/src/navigation/A
 - **CreateLoadScreen** — modal con form para crear; usa Maps para selección de origen/destino.
 
 ### Carrier
-- **DashboardScreen** — KPIs (loads disponibles, trips activos, completados).
+- **DashboardScreen** — KPIs (loads disponibles, trips activos, completados). Muestra un banner "Completá tu perfil" (link a `CompleteProfileScreen`) mientras `GET /transporter-profile/status` devuelva `complete: false`.
 - **AvailableLoadsScreen** — lista de loads `PUBLISHED` con filtros básicos.
+- **CompleteProfileScreen** — perfil de transportista (P13): datos personales (CUIT, licencia), documentos (foto con cámara vía `expo-image-picker` o archivo/PDF vía `expo-document-picker`), vehículo, declaración jurada. Se llega desde el banner del dashboard o desde `ProfileScreen`, **no** es un paso forzado del registro (mismo criterio que la zona de cobertura: editable después, no bloquea el alta) — el bloqueo real vive en el backend, en `ProfileApprovedGuard` al momento de postularse (perfil completo y aprobado por un admin). El banner del dashboard y la tarjeta de estado muestran en qué paso está: incompleto, rechazado (con el motivo de cada documento), en revisión o aprobado.
 
 ### Comunes
 - **TrackingScreen** — mapa con la ruta + posición actual del trip activo. El carrier reporta `PATCH /trips/:id/location` periódicamente con `expo-location`.
 - **ChatListScreen** — conversaciones (GET `/messages/conversations`).
 - **ChatScreen** — chat por trip; suscribe al WS para `newMessage`.
 - **LoadDetailScreen** — detalle de un load, postulación (carrier) o lista de postulations (shipper).
-- **ProfileScreen** — info del user, editar, logout.
+- **ProfileScreen** — info del user, editar, logout. Para `TRANSPORTER` suma un link a `CompleteProfileScreen`.
 - **RatingScreen** — post-trip rating.
 
 ## Cliente API (`src/services/api.ts`)
@@ -194,6 +199,10 @@ No hay response interceptor — un 401 no desloguea automáticamente. Cada panta
 - `messagesApi` — send, getConversations, getConversation (por usuario), markAsRead.
   - ⚠️ Hoy usa rutas estilo `/messages/${receiverId}` y `/messages/conversation/${userId}` — el backend actual maneja chat **por trip** (`/messages/trip/:tripId`). Estos métodos hoy **fallan** contra el backend nuevo. Falta sincronizar al modelo trip-based.
 - `ratingsApi` — create, getUserRatings.
+- `usersApi` — getMe, registerPushToken, clearPushToken, updateMe (incluye `cuit`, `licenseCategory`, `licenseExpiresAt` del perfil de transportista, P13).
+- `transporterProfileApi` — getStatus, listDocuments, uploadDocument (`FormData` con `{ uri, name, type }`, formato RN — no es un `File` de browser), deleteDocument, getVehicle, upsertVehicle, acceptTerms.
+
+> Esta sección tiene drift conocido con `mobile/src/services/api.ts` real (ej. `postulationsApi` sí existe y se usa desde `PostulationsPanel`, pese a la nota de abajo) — no es parte de esta feature, no se tocó a fondo. Las dos filas de arriba (`usersApi`, `transporterProfileApi`) están verificadas contra el archivo real.
 
 (Postulations no está en mobile todavía — falta cubrir el flujo de bidding.)
 
@@ -248,6 +257,33 @@ const subscription = await Location.watchPositionAsync(
 Permisos solicitados:
 - iOS: `NSLocationWhenInUseUsageDescription` (foreground) + `NSLocationAlwaysUsageDescription` (background si activás).
 - Android: `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION`.
+
+### Cámara y archivos (`expo-image-picker` / `expo-document-picker`)
+
+Usadas en **CompleteProfileScreen** para adjuntar cada documento (P13). Primera vez que el repo mobile toca cámara/filesystem — antes no había ningún precedente.
+
+```ts
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+
+// Foto con la cámara
+const perm = await ImagePicker.requestCameraPermissionsAsync();
+if (perm.status === 'granted') {
+  const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+  // result.assets[0].{uri, fileName, mimeType}
+}
+
+// Archivo (PDF o imagen) — la constancia de AFIP normalmente se descarga
+// como PDF, no se fotografía.
+const result = await DocumentPicker.getDocumentAsync({
+  type: ['image/jpeg', 'image/png', 'application/pdf'],
+});
+// result.assets[0].{uri, name, mimeType}
+```
+
+El `uri` local se adjunta a un `FormData` como `{ uri, name, type }` (formato RN, no un `File` de browser) y se sube a `POST /transporter-profile/documents` vía `transporterProfileApi.uploadDocument`.
+
+Permisos: `expo-image-picker` está declarado como plugin en `app.config.js` con textos de `cameraPermission`/`photosPermission` (iOS: `NSCameraUsageDescription`/`NSPhotoLibraryUsageDescription`; Android: `CAMERA` en `android.permissions`). `expo-document-picker` no pide permiso — usa el selector de archivos del sistema.
 
 ### Mapas (`react-native-maps`)
 

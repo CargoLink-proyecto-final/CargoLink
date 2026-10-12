@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { DocumentDecision } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002/api';
 
@@ -146,6 +147,37 @@ export const companiesApi = {
     page?: number;
     limit?: number;
   }) => api.get('/companies/me/trips', { params }),
+};
+
+// Transporter profile (documentos, vehículo, declaración jurada)
+export const transporterProfileApi = {
+  getStatus: () => api.get('/transporter-profile/status'),
+  listDocuments: () => api.get('/transporter-profile/documents'),
+  uploadDocument: (type: string, file: File) => {
+    const form = new FormData();
+    form.append('type', type);
+    form.append('file', file);
+    return api.post('/transporter-profile/documents', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  deleteDocument: (id: string) => api.delete(`/transporter-profile/documents/${id}`),
+  // El endpoint exige auth (son DNI y licencias) — no se puede linkear directo
+  // como <a href>, hay que traerlo como blob y abrirlo con una object URL.
+  getDocumentFile: (id: string) =>
+    api.get(`/transporter-profile/documents/${id}/file`, { responseType: 'blob' }),
+  getVehicle: () => api.get('/transporter-profile/vehicle'),
+  upsertVehicle: (data: any) => api.put('/transporter-profile/vehicle', data),
+  acceptTerms: (version: string) => api.post('/transporter-profile/terms', { version }),
+};
+
+// Revisión de documentación de transportistas (solo ADMIN). Los archivos se
+// abren con transporterProfileApi.getDocumentFile, que también admite al ADMIN.
+export const transporterReviewApi = {
+  getQueue: () => api.get('/admin/transporter-reviews'),
+  getProfile: (userId: string) => api.get(`/admin/transporter-reviews/${userId}`),
+  review: (userId: string, decisions: DocumentDecision[]) =>
+    api.post(`/admin/transporter-reviews/${userId}`, { decisions }),
 };
 
 // Postulations

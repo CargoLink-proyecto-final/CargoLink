@@ -44,6 +44,41 @@ enum PostulationStatus {
   WITHDRAWN
 }
 
+enum DocumentType {
+  DNI_FRONT
+  DNI_BACK
+  LICENSE_FRONT
+  LICENSE_BACK
+  AFIP_CONSTANCIA
+  VEHICLE_CARD
+  INSURANCE
+  VTV
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Tamaño de la unidad. Es informativo: lo que decide si una carga entra es
+// maxWeightKg / maxVolumeM3, no la unidad.
+enum VehicleUnit {
+  CAMIONETA
+  CHASIS
+  BALANCIN
+  SEMIRREMOLQUE
+}
+
+// Carrocería: lo que la carga le exige al vehículo (ver Load.requiredBodyType).
+// CERRADA = furgón/sider, ABIERTA = playo/plataforma, VOLCADORA = batea/tolva.
+enum BodyType {
+  CERRADA
+  ABIERTA
+  VOLCADORA
+  CISTERNA
+}
+
 model User {
   id                        String    @id @default(uuid())
   email                     String    @unique
@@ -67,6 +102,16 @@ model User {
   // usuario: el último dispositivo que se registró gana. Soportar varios
   // dispositivos a la vez requeriría una tabla aparte.
   expoPushToken             String?   @map("expo_push_token")
+  // Perfil de transportista (P13): documentación de identidad/habilitación +
+  // vehículo. CUIT/CUIL y datos de la licencia son atributos del conductor
+  // (no del archivo escaneado que los respalda, ver model Document). La
+  // declaración jurada se registra con versión + timestamp para poder
+  // demostrar qué texto exacto aceptó cada usuario si hace falta más adelante.
+  cuit                      String?   @map("cuit")
+  licenseCategory           String?   @map("license_category")
+  licenseExpiresAt          DateTime? @map("license_expires_at")
+  termsAcceptedAt           DateTime? @map("terms_accepted_at")
+  termsAcceptedVersion      String?   @map("terms_accepted_version")
   isActive                  Boolean   @default(true) @map("is_active")
   // Baja definitiva pedida por el propio usuario (distinta de `isActive`, que es
   // una desactivación administrativa y reversible). Cuando se setea, los datos
@@ -112,6 +157,13 @@ model User {
   roleChangesReceived RoleChangeLog[] @relation("RoleChangeTarget")
   roleChangesMade     RoleChangeLog[] @relation("RoleChangeAuthor")
 
+  // Perfil de transportista: vehículo propio + documentos subidos
+  vehicle   Vehicle?
+  documents Document[] @relation("DocumentOwner")
+
+  // Documentos de transportistas que este admin aprobó o rechazó
+  reviewedDocuments Document[] @relation("DocumentReviewer")
+
   @@index([companyId])
   // Cada registro de dispositivo desasocia el token de su dueño anterior con un
   // `where: { expoPushToken: token }`. Sin índice eso es un seq scan sobre users.
@@ -156,42 +208,49 @@ model Load {
   shipperId String @map("shipper_id")
   shipper   User   @relation("ShipperLoads", fields: [shipperId], references: [id])
 
-  title         String
-  description   String?
-  originAddress String     @map("origin_address")
-  originLat     Float      @map("origin_lat")
-  originLng     Float      @map("origin_lng")
-  destAddress   String     @map("dest_address")
-  destLat       Float      @map("dest_lat")
-  destLng       Float      @map("dest_lng")
+  title                 String
+  description           String?
+  originAddress         String     @map("origin_address")
+  originLat             Float      @map("origin_lat")
+  originLng             Float      @map("origin_lng")
+  destAddress           String     @map("dest_address")
+  destLat               Float      @map("dest_lat")
+  destLng               Float      @map("dest_lng")
   // Ciudad del padrón oficial. Opcional: las cargas anteriores al padrón (y las
   // que llegan desde mobile con dirección libre) se resuelven por backfill best
   // effort y pueden quedar en null.
-  originCityId  String?    @map("origin_city_id")
-  originCity    City?      @relation("LoadOriginCity", fields: [originCityId], references: [id])
-  destCityId    String?    @map("dest_city_id")
-  destCity      City?      @relation("LoadDestCity", fields: [destCityId], references: [id])
-  cargoType     String     @map("cargo_type")
-  weight        Float
-  volume        Float?
+  originCityId          String?    @map("origin_city_id")
+  originCity            City?      @relation("LoadOriginCity", fields: [originCityId], references: [id])
+  destCityId            String?    @map("dest_city_id")
+  destCity              City?      @relation("LoadDestCity", fields: [destCityId], references: [id])
+  cargoType             String     @map("cargo_type")
+  weight                Float
+  volume                Float?
   // Información logística del bulto (opcional) — habilita evaluar
   // compatibilidad entre cargas para compartir un mismo viaje.
-  packageCount  Int?       @map("package_count")
-  heightCm      Float?     @map("height_cm")
-  widthCm       Float?     @map("width_cm")
-  lengthCm      Float?     @map("length_cm")
-  pickupDate    DateTime   @map("pickup_date")
-  deliveryDate  DateTime?  @map("delivery_date")
+  packageCount          Int?       @map("package_count")
+  heightCm              Float?     @map("height_cm")
+  widthCm               Float?     @map("width_cm")
+  lengthCm              Float?     @map("length_cm")
+  // Lo que la carga le exige al vehículo. El publicador describe su
+  // mercadería (la categoría sugiere valores) en vez de elegir vehículos: el
+  // tamaño sale del peso/volumen. Carrocería null = cualquiera. Se valida
+  // contra el Vehicle al postularse (ver loads/vehicle-compatibility.ts).
+  requiredBodyType      BodyType?  @map("required_body_type")
+  requiresRefrigeration Boolean    @default(false) @map("requires_refrigeration")
+  requiresHazmat        Boolean    @default(false) @map("requires_hazmat")
+  pickupDate            DateTime   @map("pickup_date")
+  deliveryDate          DateTime?  @map("delivery_date")
   // Opcional: si el publicador no fija precio, la carga sale "a convenir" y el
   // precio lo define la postulación del transportista (proposedPrice, que en ese
   // caso pasa a ser obligatorio).
-  price         Float?
+  price                 Float?
   // Columna retirada del producto: ya no se lee ni se escribe desde ninguna capa.
   // Se deja para no correr una migración destructiva sobre datos existentes.
-  maxBudget     Float?     @map("max_budget")
-  status        LoadStatus @default(PUBLISHED)
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
+  maxBudget             Float?     @map("max_budget")
+  status                LoadStatus @default(PUBLISHED)
+  createdAt             DateTime   @default(now()) @map("created_at")
+  updatedAt             DateTime   @updatedAt @map("updated_at")
 
   trip         Trip?
   postulations Postulation[]
@@ -302,6 +361,75 @@ model RoleChangeLog {
 
   @@index([userId])
   @@map("role_change_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Perfil de transportista (P13): vehículo + documentación de identidad y
+// habilitación. Mientras un admin no apruebe esto, un TRANSPORTER no puede postularse
+// a una carga (ver ProfileApprovedGuard) — pero el resto de la app queda
+// accesible igual.
+// ---------------------------------------------------------------------------
+
+model Vehicle {
+  id     String @id @default(uuid())
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  plate    String      @unique
+  brand    String
+  model    String
+  year     Int
+  unit     VehicleUnit
+  bodyType BodyType    @map("body_type")
+
+  maxWeightKg Float  @map("max_weight_kg")
+  maxVolumeM3 Float? @map("max_volume_m3")
+  heightCm    Float? @map("height_cm")
+  widthCm     Float? @map("width_cm")
+  lengthCm    Float? @map("length_cm")
+
+  refrigerated       Boolean @default(false)
+  hazardousMaterials Boolean @default(false) @map("hazardous_materials")
+
+  // Vencimientos del vehículo (no del archivo escaneado): atributos propios
+  // del vehículo, independientes de si el Document de tipo INSURANCE/VTV que
+  // lo respalda está PENDING/APPROVED/REJECTED.
+  insuranceExpiresAt DateTime? @map("insurance_expires_at")
+  vtvExpiresAt       DateTime? @map("vtv_expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("vehicles")
+}
+
+model Document {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation("DocumentOwner", fields: [userId], references: [id])
+
+  type    DocumentType
+  fileUrl String         @map("file_url")
+  status  DocumentStatus @default(PENDING)
+
+  // Revisión del admin (CU-11). Se limpian cuando el documento vuelve a
+  // PENDING (re-subida o cambio de los datos que respalda): el motivo de un
+  // rechazo viejo no aplica a un archivo nuevo.
+  rejectionReason String?   @map("rejection_reason")
+  reviewedAt      DateTime? @map("reviewed_at")
+  reviewedById    String?   @map("reviewed_by_id")
+  reviewedBy      User?     @relation("DocumentReviewer", fields: [reviewedById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Un solo documento vigente por tipo y usuario — volver a subir el mismo
+  // tipo reemplaza (upsert), no acumula versiones.
+  @@unique([userId, type])
+  @@index([userId])
+  // La cola de revisión del admin filtra por documentos PENDING.
+  @@index([status])
+  @@map("documents")
 }
 
 // ---------------------------------------------------------------------------

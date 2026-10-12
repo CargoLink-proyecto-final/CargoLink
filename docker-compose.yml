@@ -37,8 +37,11 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      UPLOAD_DIR: /app/uploads
     ports:
       - "3001:3001"
+    volumes:
+      - uploads:/app/uploads
 
   frontend:
     build:
@@ -53,3 +56,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

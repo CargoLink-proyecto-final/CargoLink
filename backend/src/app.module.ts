@@ -11,6 +11,7 @@ import { MessagesModule } from './messages/messages.module';
 import { RatingsModule } from './ratings/ratings.module';
 import { GeoModule } from './geo/geo.module';
 import { CompaniesModule } from './companies/companies.module';
+import { TransporterProfileModule } from './transporter-profile/transporter-profile.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { CompaniesModule } from './companies/companies.module';
     RatingsModule,
     CompaniesModule,
     GeoModule,
+    TransporterProfileModule,
   ],
 })
 export class AppModule {}

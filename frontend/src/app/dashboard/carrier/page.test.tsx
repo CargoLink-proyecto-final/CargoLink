@@ -18,11 +18,15 @@ jest.mock('@/components/layout/Sidebar', () => ({
 
 jest.mock('@/lib/api', () => ({
   tripsApi: { getMy: jest.fn(), getMetrics: jest.fn() },
+  ratingsApi: { getUserRatings: jest.fn() },
+  transporterProfileApi: { getStatus: jest.fn() },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { tripsApi } = require('@/lib/api') as {
+const { tripsApi, ratingsApi, transporterProfileApi } = require('@/lib/api') as {
   tripsApi: Record<string, jest.Mock>;
+  ratingsApi: Record<string, jest.Mock>;
+  transporterProfileApi: Record<string, jest.Mock>;
 };
 
 function mockAuth(state: Record<string, unknown>) {
@@ -38,6 +42,15 @@ function renderWithClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
+const profileStatus = (state: string, missing: string[] = []) => ({
+  complete: state !== 'INCOMPLETE',
+  approved: state === 'APPROVED',
+  state,
+  missing,
+  pendingReview: [],
+  rejected: [],
+});
+
 const metrics = {
   avgKmPerLiter: 3.5,
   litersThisMonth: 200,
@@ -50,6 +63,8 @@ const metrics = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockAuth({ isAuthenticated: true, user: { id: 'c1', role: 'TRANSPORTER' } });
+  ratingsApi.getUserRatings.mockResolvedValue({ data: { ratings: [], averageScore: 0, totalRatings: 0 } });
+  transporterProfileApi.getStatus.mockResolvedValue({ data: profileStatus('APPROVED') });
 });
 
 describe('CarrierDashboard', () => {
@@ -157,5 +172,42 @@ describe('CarrierDashboard', () => {
     expect(
       screen.queryByRole('heading', { name: /Mis postulaciones/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows a banner prompting to complete the profile when it is incomplete', async () => {
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+    transporterProfileApi.getStatus.mockResolvedValue({
+      data: profileStatus('INCOMPLETE', ['vehicle']),
+    });
+
+    renderWithClient(<CarrierDashboard />);
+
+    expect(await screen.findByText('Completá tu perfil')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Ir a mi perfil/ })).toHaveAttribute(
+      'href',
+      '/profile/complete',
+    );
+  });
+
+  it('tells the carrier the documents are under review while the admin checks them', async () => {
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+    transporterProfileApi.getStatus.mockResolvedValue({ data: profileStatus('PENDING_REVIEW') });
+
+    renderWithClient(<CarrierDashboard />);
+
+    expect(await screen.findByText('Documentación en revisión')).toBeInTheDocument();
+    expect(screen.queryByText('Completá tu perfil')).not.toBeInTheDocument();
+  });
+
+  it('hides the profile banner once the profile is approved', async () => {
+    tripsApi.getMy.mockResolvedValue({ data: { trips: [] } });
+    tripsApi.getMetrics.mockResolvedValue({ data: metrics });
+
+    renderWithClient(<CarrierDashboard />);
+
+    await screen.findByText('Sin viajes activos');
+    expect(screen.queryByText('Completá tu perfil')).not.toBeInTheDocument();
   });
 });

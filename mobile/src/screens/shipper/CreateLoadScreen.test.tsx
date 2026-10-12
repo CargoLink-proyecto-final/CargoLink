@@ -178,6 +178,67 @@ describe('CreateLoadScreen', () => {
     expect(mockedLoadsApi.create.mock.calls[0][0].volume).toBe(20);
   });
 
+  describe('lo que necesita la carga', () => {
+    it('sends no requirements for an ambiguous category (any body type)', async () => {
+      (loadsApi.create as jest.Mock).mockResolvedValue({ data: {} });
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      render(<CreateLoadScreen navigation={navigation} />);
+
+      fillAllRequired('Materiales de construcción');
+      fireEvent.press(screen.getByText('Crear Carga'));
+
+      await waitFor(() =>
+        expect(loadsApi.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            requiredBodyType: null,
+            requiresRefrigeration: false,
+            requiresHazmat: false,
+          }),
+        ),
+      );
+    });
+
+    it('suggests the body type from the cargo category', async () => {
+      (loadsApi.create as jest.Mock).mockResolvedValue({ data: {} });
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      render(<CreateLoadScreen navigation={navigation} />);
+
+      fillAllRequired('Electrónica y tecnología');
+      await waitFor(() =>
+        expect(screen.getByText('Sugerida según el tipo de carga, podés cambiarla.')).toBeTruthy(),
+      );
+      fireEvent.press(screen.getByText('Crear Carga'));
+
+      await waitFor(() =>
+        expect(loadsApi.create).toHaveBeenCalledWith(
+          expect.objectContaining({ requiredBodyType: 'CERRADA' }),
+        ),
+      );
+    });
+
+    it('keeps the body type the shipper picks by hand, plus cold and hazmat', async () => {
+      (loadsApi.create as jest.Mock).mockResolvedValue({ data: {} });
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      render(<CreateLoadScreen navigation={navigation} />);
+
+      fillAllRequired('Electrónica y tecnología');
+      fireEvent.press(screen.getByText('Cisterna'));
+      fireEvent.press(screen.getByText('Necesita frío'));
+      fireEvent.press(screen.getByText('Carga peligrosa'));
+      fireEvent.press(screen.getByText('Crear Carga'));
+
+      await waitFor(() =>
+        expect(loadsApi.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            requiredBodyType: 'CISTERNA',
+            requiresRefrigeration: true,
+            requiresHazmat: true,
+          }),
+        ),
+      );
+    });
+  });
+
   describe('form dinámico — información del bulto', () => {
     it('is hidden until a cargo type is chosen', () => {
       render(<CreateLoadScreen navigation={navigation} />);

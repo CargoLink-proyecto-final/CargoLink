@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     'Qué datos recopila CargoLink, para qué los usa, con quién los comparte y cómo eliminarlos.',
 };
 
-const LAST_UPDATED = '28 de septiembre de 2026';
+const LAST_UPDATED = '11 de octubre de 2026';
 const CONTACT_EMAIL = 'soportecargolink@gmail.com';
 
 interface SectionProps {
@@ -63,6 +63,14 @@ export default function PrivacyPolicyPage() {
             <strong className="font-medium text-ink-800">De tu cuenta:</strong> nombre y apellido,
             correo electrónico, contraseña (guardada siempre como hash, nunca en texto claro),
             teléfono, rol, y si sos publicador de carga, el nombre y el rubro de tu empresa.
+          </p>
+          <p>
+            <strong className="font-medium text-ink-800">Si sos transportista, para validar tu
+            perfil:</strong> tu CUIT, la categoría y el vencimiento de tu licencia, los datos de tu
+            vehículo (patente, marca, modelo, capacidad y vencimientos del seguro y la VTV) y las
+            fotos o PDF de tu DNI, tu licencia, tu constancia de AFIP, la cédula del vehículo, el
+            seguro y la VTV. Esos archivos sólo los ven vos y un administrador de CargoLink que los
+            revisa; nunca se publican ni se comparten con quien publica cargas.
           </p>
           <p>
             <strong className="font-medium text-ink-800">De tu actividad:</strong> las cargas que
@@ -143,7 +151,8 @@ export default function PrivacyPolicyPage() {
           <p>
             Al eliminarla borramos tu nombre, tu correo, tu teléfono, el nombre y el rubro que
             declaraste, tu zona de trabajo y el identificador de notificaciones, y tu contraseña
-            queda inservible. Tus postulaciones abiertas se retiran. Si administrabas una empresa en
+            queda inservible. Si sos transportista, también borramos tu CUIT, los datos de tu
+            licencia y de tu vehículo, y los documentos que subiste. Tus postulaciones abiertas se retiran. Si administrabas una empresa en
             la plataforma, también se borra su nombre y sus integrantes quedan desvinculados. La
             cuenta no se puede recuperar —ni vos ni un administrador— y tu correo vuelve a quedar
             libre para registrarte de nuevo si algún día querés volver.

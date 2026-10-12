@@ -18,6 +18,7 @@ import MyLoadsScreen from '../screens/shipper/MyLoadsScreen';
 // Carrier Screens
 import CarrierDashboard from '../screens/carrier/DashboardScreen';
 import AvailableLoadsScreen from '../screens/carrier/AvailableLoadsScreen';
+import CompleteProfileScreen from '../screens/carrier/CompleteProfileScreen';
 
 // Common Screens
 import LoadDetailScreen from '../screens/common/LoadDetailScreen';
@@ -171,6 +172,11 @@ export default function AppNavigator() {
               name="Rating"
               component={RatingScreen}
               options={{ headerShown: true, title: 'Calificar Viaje' }}
+            />
+            <Stack.Screen
+              name="CompleteProfile"
+              component={CompleteProfileScreen}
+              options={{ headerShown: true, title: 'Completar perfil' }}
             />
           </>
         )}
