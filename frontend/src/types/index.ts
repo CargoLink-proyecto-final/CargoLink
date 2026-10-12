@@ -6,6 +6,18 @@ export type LoadStatus = 'PUBLISHED' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' |
 export type TripStatus = 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type PostulationStatus = 'PENDING' | 'NEGOTIATING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
 
+export type DocumentType =
+  | 'DNI_FRONT'
+  | 'DNI_BACK'
+  | 'LICENSE_FRONT'
+  | 'LICENSE_BACK'
+  | 'AFIP_CONSTANCIA'
+  | 'VEHICLE_CARD'
+  | 'INSURANCE'
+  | 'VTV';
+export type DocumentStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type VehicleType = 'CAMION' | 'CAMIONETA' | 'FURGON' | 'SEMIRREMOLQUE' | 'BATEA' | 'OTRO';
+
 export interface User {
   id: string;
   email: string;
@@ -19,8 +31,104 @@ export interface User {
   zoneLat?: number;
   zoneLng?: number;
   zoneRadiusKm?: number;
+  // Perfil de transportista (P13)
+  cuit?: string;
+  licenseCategory?: string;
+  licenseExpiresAt?: string;
+  termsAcceptedAt?: string;
   isActive: boolean;
   createdAt: string;
+}
+
+export interface TransporterDocument {
+  id: string;
+  type: DocumentType;
+  status: DocumentStatus;
+  // Motivo que escribió el admin al rechazar; null si no fue rechazado.
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Vehicle {
+  id: string;
+  userId: string;
+  plate: string;
+  brand: string;
+  model: string;
+  year: number;
+  type: VehicleType;
+  maxWeightKg: number;
+  maxVolumeM3?: number | null;
+  heightCm?: number | null;
+  widthCm?: number | null;
+  lengthCm?: number | null;
+  refrigerated: boolean;
+  hazardousMaterials: boolean;
+  bulkLiquid: boolean;
+  insuranceExpiresAt?: string | null;
+  vtvExpiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type VerificationState = 'REJECTED' | 'INCOMPLETE' | 'PENDING_REVIEW' | 'APPROVED';
+
+export interface ProfileStatus {
+  // Cargó todo lo obligatorio (no implica revisión del admin).
+  complete: boolean;
+  // Completo y con todos los documentos aprobados — recién ahí puede postularse.
+  approved: boolean;
+  state: VerificationState;
+  missing: string[];
+  pendingReview: DocumentType[];
+  rejected: DocumentType[];
+}
+
+// Revisión de documentación por el admin (CU-11)
+export interface ReviewQueueItem {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  company: { id: string; name: string } | null;
+  vehicle: { plate: string; type: VehicleType } | null;
+  state: VerificationState;
+  complete: boolean;
+  pendingCount: number;
+  waitingSince: string;
+}
+
+export interface ReviewDocument extends TransporterDocument {
+  reviewedBy: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface TransporterReviewProfile {
+  user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+    isActive: boolean;
+    createdAt: string;
+    cuit: string | null;
+    licenseCategory: string | null;
+    licenseExpiresAt: string | null;
+    termsAcceptedAt: string | null;
+    termsAcceptedVersion: string | null;
+    company: { id: string; name: string } | null;
+  };
+  vehicle: Vehicle | null;
+  documents: ReviewDocument[];
+  status: ProfileStatus;
+}
+
+export interface DocumentDecision {
+  documentId: string;
+  status: 'APPROVED' | 'REJECTED';
+  reason?: string;
 }
 
 export interface Load {

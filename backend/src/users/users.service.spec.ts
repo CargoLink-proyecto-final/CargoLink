@@ -1,4 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { rm } from 'fs/promises';
+import { join, resolve } from 'path';
 import {
   BadRequestException,
   ConflictException,
@@ -9,6 +12,8 @@ import { Role } from '@prisma/client';
 import { PUBLIC_USER_SELECT, UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+
+jest.mock('fs/promises', () => ({ rm: jest.fn().mockResolvedValue(undefined) }));
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -25,6 +30,8 @@ describe('UsersService', () => {
     load: { count: jest.Mock };
     trip: { count: jest.Mock };
     roleChangeLog: { create: jest.Mock; findMany: jest.Mock };
+    document: { updateMany: jest.Mock; deleteMany: jest.Mock };
+    vehicle: { deleteMany: jest.Mock };
     company: { findUnique: jest.Mock; update: jest.Mock };
     postulation: { updateMany: jest.Mock };
     companyJoinRequest: { updateMany: jest.Mock };
@@ -57,6 +64,8 @@ describe('UsersService', () => {
       load: { count: jest.fn() },
       trip: { count: jest.fn() },
       roleChangeLog: { create: jest.fn(), findMany: jest.fn() },
+      document: { updateMany: jest.fn(), deleteMany: jest.fn() },
+      vehicle: { deleteMany: jest.fn() },
       company: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
       postulation: { updateMany: jest.fn() },
       companyJoinRequest: { updateMany: jest.fn() },
@@ -64,7 +73,7 @@ describe('UsersService', () => {
       // sus resultados resueltos; `deleteOwnAccount` pasa un callback que recibe
       // el cliente transaccional. El mock le devuelve el mismo `prisma`, así los
       // asserts miran los mismos jest.fn().
-      $transaction: jest.fn((arg: any) =>
+      $transaction: jest.fn((arg: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
         typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
       ),
     };
@@ -75,6 +84,7 @@ describe('UsersService', () => {
         UsersService,
         { provide: PrismaService, useValue: prisma },
         { provide: MailService, useValue: mailService },
+        { provide: ConfigService, useValue: { get: () => '/srv/uploads' } },
       ],
     }).compile();
 
@@ -292,6 +302,54 @@ describe('UsersService', () => {
       });
       expect(result.firstName).toBe('Updated');
     });
+
+    const verifiedData = {
+      cuit: '20-12345678-3',
+      licenseCategory: 'E1',
+      licenseExpiresAt: new Date('2027-01-01'),
+    };
+
+    it('does not touch documents when no verified data changed', async () => {
+      prisma.user.findUnique.mockResolvedValue(verifiedData);
+      prisma.user.update.mockResolvedValue({ ...baseUser, ...verifiedData, phone: '+999' });
+
+      await service.update('user-1', { phone: '+999' });
+
+      expect(prisma.document.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('sends the approved AFIP constancia back to review when the CUIT changes', async () => {
+      prisma.user.findUnique.mockResolvedValue(verifiedData);
+      prisma.user.update.mockResolvedValue({ ...baseUser, ...verifiedData, cuit: '27-87654321-4' });
+
+      await service.update('user-1', { cuit: '27-87654321-4' });
+
+      expect(prisma.document.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.document.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-1', type: { in: ['AFIP_CONSTANCIA'] }, status: 'APPROVED' },
+          data: expect.objectContaining({ status: 'PENDING', rejectionReason: null }),
+        }),
+      );
+    });
+
+    it('sends the approved license back to review when its expiry changes', async () => {
+      prisma.user.findUnique.mockResolvedValue(verifiedData);
+      prisma.user.update.mockResolvedValue({
+        ...baseUser,
+        ...verifiedData,
+        licenseExpiresAt: new Date('2029-01-01'),
+      });
+
+      await service.update('user-1', { licenseExpiresAt: '2029-01-01' });
+
+      expect(prisma.document.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.document.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ type: { in: ['LICENSE_FRONT', 'LICENSE_BACK'] } }),
+        }),
+      );
+    });
   });
 
   describe('hasActiveOperations', () => {
@@ -424,6 +482,44 @@ describe('UsersService', () => {
 
       await expect(service.deleteOwnAccount('user-1')).rejects.toThrow(ConflictException);
       expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.document.deleteMany).not.toHaveBeenCalled();
+      expect(rm).not.toHaveBeenCalled();
+    });
+
+    // La política de privacidad promete borrar los datos personales: los de
+    // validación del transportista también lo son.
+    it('clears the transporter validation fields', async () => {
+      const data = await deleteData();
+
+      expect(data.cuit).toBeNull();
+      expect(data.licenseCategory).toBeNull();
+      expect(data.licenseExpiresAt).toBeNull();
+    });
+
+    it('deletes the uploaded documents and the vehicle', async () => {
+      await service.deleteOwnAccount('user-1');
+
+      expect(prisma.document.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(prisma.vehicle.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+    });
+
+    it('removes the document files from disk', async () => {
+      await service.deleteOwnAccount('user-1');
+
+      expect(rm).toHaveBeenCalledWith(join(resolve('/srv/uploads'), 'user-1'), {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    // El disco no es parte de la transacción: si falla, la baja ya está hecha
+    // y no tiene sentido devolverle un error al usuario.
+    it('still completes the deletion when the files cannot be removed', async () => {
+      (rm as jest.Mock).mockRejectedValueOnce(new Error('EACCES'));
+
+      await expect(service.deleteOwnAccount('user-1')).resolves.toEqual(
+        expect.objectContaining({ deleted: true }),
+      );
     });
 
     // Sin esto el dador podía aceptar la postulación de alguien que ya no existe:

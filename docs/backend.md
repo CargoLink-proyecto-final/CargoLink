@@ -68,6 +68,12 @@ backend/src/
 │   ├── companies.service.ts
 │   ├── companies.module.ts
 │   └── dto/                   # create-join-request, decide-join-request
+├── transporter-profile/        # /transporter-profile — documentos, vehículo, declaración jurada (P13)
+│   ├── transporter-profile.controller.ts
+│   ├── transporter-profile.service.ts
+│   ├── transporter-profile.module.ts
+│   ├── profile-completeness.ts  # computeProfileStatus — única fuente de verdad de "qué falta"
+│   └── dto/                   # upload-document, upsert-vehicle, accept-terms
 ├── mail/                      # Nodemailer wrapper
 │   ├── mail.service.ts
 │   └── mail.module.ts
@@ -80,7 +86,8 @@ backend/src/
     │   └── roles.decorator.ts
     ├── guards/
     │   ├── jwt-auth.guard.ts
-    │   └── roles.guard.ts
+    │   ├── roles.guard.ts
+    │   └── profile-approved.guard.ts  # bloquea POST /loads/:id/postulations si el perfil no está aprobado
     ├── filters/
     │   └── http-exception.filter.ts
     ├── metrics.ts             # computeFuelAndDeliveryMetrics (km/litro, on-time)
@@ -194,6 +201,17 @@ Campos relevantes en `Postulation`:
 
 Unique compuesto `(loadId, transporterId)` — un mismo carrier no puede postularse dos veces al mismo load. Si retiró una postulación (`WITHDRAWN`), tampoco puede crear otra (la unique sigue ahí; habría que dropearla antes para soportar ese caso).
 
+### Transporter Profile (`src/transporter-profile/`)
+
+Endpoints listados en [`api.md`](./api.md#transporter-profile). Documentos de identidad/habilitación (DNI, licencia, seguro, VTV, etc.), vehículo y declaración jurada de un `TRANSPORTER` — perfil que un admin tiene que aprobar antes de que el transportista pueda postularse a una carga (ver `ProfileApprovedGuard` más abajo).
+
+Puntos de diseño:
+- `computeProfileStatus` (`profile-completeness.ts`) es una función pura, sin dependencias de Nest/Prisma — la comparten el guard, `GET /transporter-profile/status` y la cola del admin, así nunca divergen sobre "qué le falta a un transportista". `loadProfileStatus` (`profile-status.ts`) junta las piezas desde la DB y la llama.
+- Upload de archivos: primera vez que el repo usa `multer` (vía `FileInterceptor`, storage en memoria + `fileFilter` que solo acepta `image/jpeg`, `image/png`, `application/pdf`, límite 5MB). El archivo se escribe a mano en `UPLOAD_DIR/<userId>/<type>.<ext>` — no hay carpeta estática pública, `GET /transporter-profile/documents/:id/file` es el único punto de acceso y valida ownership.
+- `Document` es genérico (`DocumentType` enum + `fileUrl` + `status`) en vez de una tabla por tipo de documento — agregar un tipo nuevo es un valor más del enum.
+- Revisión por el admin (CU-11): `TransporterReviewController` + `TransporterReviewService` en el mismo módulo, bajo `/admin/transporter-reviews`. El admin aprueba o rechaza cada documento con motivo y el transportista recibe un único mail por revisión (`MailService.sendDocumentsRejectedEmail` / `sendProfileApprovedEmail`).
+- Re-revisión: si el transportista cambia un dato que un documento aprobado respalda (vehículo → cédula/seguro/VTV, CUIT → AFIP, licencia → frente/dorso), ese documento vuelve a `PENDING` (`sendApprovedDocumentsBackToReview`). Re-subir un archivo también lo vuelve a `PENDING` y limpia el motivo de rechazo.
+
 ### Trips (`src/trips/`)
 
 | Endpoint | Método | Roles |
@@ -306,6 +324,17 @@ Si no hay `@Roles(...)` declarado, deja pasar. Se encadena después de `JwtAuthG
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('CARGO_GENERATOR')
 ```
+
+### `ProfileApprovedGuard`
+
+Bloquea una acción si el perfil del transportista no está aprobado: tiene que estar completo (documentos + vehículo + declaración jurada, ver [`api.md`](./api.md#transporter-profile)) y con los 8 documentos aprobados por un admin. Ver cargas sigue permitido; solo se bloquea postularse. Inyecta `PrismaService` directamente (es `@Global()`, no hace falta importar `PrismaModule`) y reusa `loadProfileStatus` — la misma lectura que usa `GET /transporter-profile/status`, para que el guard y el endpoint de estado nunca diverjan. No es global: se aplica solo donde importa (hoy, `POST /loads/:loadId/postulations`):
+
+```ts
+@UseGuards(RolesGuard, ProfileApprovedGuard)
+@Roles('TRANSPORTER')
+```
+
+Si no está aprobado, tira `ForbiddenException({ message, state, missing, pendingReview, rejected })` — los campos extra sobreviven en la respuesta gracias a que `GlobalExceptionFilter` copia cualquier campo extra del body de la excepción.
 
 ### `@Roles(...roles)`
 

@@ -27,6 +27,10 @@ module.exports = () => ({
         // algo que la revisión de Apple pregunta.
         NSLocationWhenInUseUsageDescription:
           'CargoLink usa tu ubicación para mostrar el seguimiento del viaje en tiempo real.',
+        NSCameraUsageDescription:
+          'CargoLink usa la cámara para fotografiar tus documentos (DNI, licencia, etc.) al completar tu perfil.',
+        NSPhotoLibraryUsageDescription:
+          'CargoLink accede a tus fotos para que puedas subir documentos desde la galería.',
         // Permite http:// contra el backend local durante desarrollo; en prod
         // las URLs del VPS (vía Cloudflare Tunnel) son https y no se apoya en esta excepción.
         NSAppTransportSecurity: {
@@ -43,7 +47,7 @@ module.exports = () => ({
       // POST_NOTIFICATIONS no la agrega el plugin de expo-notifications: sin
       // declararla, en Android 13+ (API 33) `requestPermissionsAsync()` no
       // muestra el diálogo y las notificaciones de chat nunca aparecen.
-      permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'POST_NOTIFICATIONS'],
+      permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'POST_NOTIFICATIONS', 'CAMERA'],
       // El mapa lo dibuja MapLibre con tiles de OpenStreetMap, así que no hay
       // bloque `config.googleMaps`: Android no necesita ninguna API key.
     },
@@ -71,6 +75,13 @@ module.exports = () => ({
         {
           icon: './assets/notification-icon.png',
           color: '#2563EB',
+        },
+      ],
+      [
+        'expo-image-picker',
+        {
+          photosPermission: 'CargoLink accede a tus fotos para que puedas subir documentos desde la galería.',
+          cameraPermission: 'CargoLink usa la cámara para fotografiar tus documentos al completar tu perfil.',
         },
       ],
       // Baja el SDK nativo de MapLibre (Android: org.maplibre.gl, iOS: SPM) en

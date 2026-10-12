@@ -16,6 +16,18 @@ export type PostulationStatus =
   | 'REJECTED'
   | 'WITHDRAWN';
 
+export type DocumentType =
+  | 'DNI_FRONT'
+  | 'DNI_BACK'
+  | 'LICENSE_FRONT'
+  | 'LICENSE_BACK'
+  | 'AFIP_CONSTANCIA'
+  | 'VEHICLE_CARD'
+  | 'INSURANCE'
+  | 'VTV';
+export type DocumentStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type VehicleType = 'CAMION' | 'CAMIONETA' | 'FURGON' | 'SEMIRREMOLQUE' | 'BATEA' | 'OTRO';
+
 export interface User {
   id: string;
   email: string;
@@ -32,7 +44,58 @@ export interface User {
   zoneLat?: number;
   zoneLng?: number;
   zoneRadiusKm?: number;
+  // Perfil de transportista (P13)
+  cuit?: string;
+  licenseCategory?: string;
+  licenseExpiresAt?: string;
+  termsAcceptedAt?: string;
   isActive: boolean;
+}
+
+export interface TransporterDocument {
+  id: string;
+  type: DocumentType;
+  status: DocumentStatus;
+  // Motivo que escribió el admin al rechazar; null si no fue rechazado.
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Vehicle {
+  id: string;
+  userId: string;
+  plate: string;
+  brand: string;
+  model: string;
+  year: number;
+  type: VehicleType;
+  maxWeightKg: number;
+  maxVolumeM3?: number | null;
+  heightCm?: number | null;
+  widthCm?: number | null;
+  lengthCm?: number | null;
+  refrigerated: boolean;
+  hazardousMaterials: boolean;
+  bulkLiquid: boolean;
+  insuranceExpiresAt?: string | null;
+  vtvExpiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type VerificationState = 'REJECTED' | 'INCOMPLETE' | 'PENDING_REVIEW' | 'APPROVED';
+
+export interface ProfileStatus {
+  // Cargó todo lo obligatorio (no implica revisión del admin).
+  complete: boolean;
+  // Completo y con todos los documentos aprobados — recién ahí puede postularse.
+  approved: boolean;
+  state: VerificationState;
+  missing: string[];
+  pendingReview: DocumentType[];
+  rejected: DocumentType[];
 }
 
 export interface Load {

@@ -1,5 +1,6 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsFutureDate } from '../../common/validators/is-future-date.validator';
 
 // Actualización parcial del propio perfil. Todos los campos son opcionales (sólo se
 // actualiza lo que viene), pero si vienen NO pueden quedar vacíos: cubre el criterio
@@ -52,4 +53,23 @@ export class UpdateProfileDto {
   @IsNumber({}, { message: 'El radio de la zona debe ser un número' })
   @Min(0, { message: 'El radio no puede ser negativo' })
   zoneRadiusKm?: number;
+
+  // Datos de habilitación del transportista (P13), editables desde el perfil.
+  @ApiProperty({ example: '20-12345678-3', required: false })
+  @IsOptional()
+  @IsString({ message: 'El CUIT/CUIL debe ser texto' })
+  @IsNotEmpty({ message: 'El CUIT/CUIL no puede quedar vacío' })
+  cuit?: string;
+
+  @ApiProperty({ example: 'E1', required: false })
+  @IsOptional()
+  @IsString({ message: 'La categoría de licencia debe ser texto' })
+  @IsNotEmpty({ message: 'La categoría de licencia no puede quedar vacía' })
+  licenseCategory?: string;
+
+  @ApiProperty({ example: '2027-05-01', required: false })
+  @IsOptional()
+  @IsDateString({}, { message: 'El vencimiento de la licencia debe ser una fecha válida' })
+  @IsFutureDate({ message: 'La licencia está vencida — poné la fecha del próximo vencimiento' })
+  licenseExpiresAt?: string;
 }

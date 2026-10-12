@@ -9,6 +9,7 @@ import RatingModal from '@/components/ratings/RatingModal';
 import { loadsApi, postulationsApi, ratingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useRoute } from '@/lib/useRoute';
+import { describeMissing } from '@/lib/transporterProfile';
 import Link from 'next/link';
 import { formatCurrency, formatPrice, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import {
@@ -125,6 +126,7 @@ export default function LoadDetailPage() {
   const id = params.id as string;
   const [showPostulateModal, setShowPostulateModal] = useState(false);
   const [showRating, setShowRating] = useState(false);
+  const [postulateError, setPostulateError] = useState('');
 
   const { data: load, isLoading } = useQuery({
     queryKey: ['load', id],
@@ -173,8 +175,21 @@ export default function LoadDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['my-postulation', id, user?.id] });
       queryClient.invalidateQueries({ queryKey: ['postulations', id] });
       setShowPostulateModal(false);
+      setPostulateError('');
+    },
+    // 403 con perfil no aprobado: el backend manda `state` (INCOMPLETE,
+    // REJECTED, PENDING_REVIEW) y, si está incompleto, `missing[]`.
+    onError: (err: any) => {
+      const data = err?.response?.data;
+      const missing: string[] | undefined = data?.missing;
+      const message =
+        data?.state === 'INCOMPLETE' && missing && missing.length > 0
+          ? `Completá tu perfil antes de postularte: ${missing.map(describeMissing).join(', ')}.`
+          : data?.message || 'No se pudo enviar la postulación';
+      setPostulateError(message);
     },
   });
+  const profileIncompleteError = Boolean((postulateMutation.error as any)?.response?.data?.state);
 
   const withdrawMutation = useMutation({
     mutationFn: (postulationId: string) =>
@@ -490,8 +505,16 @@ export default function LoadDetailPage() {
         <PostulateModal
           listedPrice={load.price}
           submitting={postulateMutation.isPending}
-          onClose={() => setShowPostulateModal(false)}
-          onSubmit={(payload) => postulateMutation.mutate(payload)}
+          error={postulateError}
+          showCompleteProfileLink={profileIncompleteError}
+          onClose={() => {
+            setShowPostulateModal(false);
+            setPostulateError('');
+          }}
+          onSubmit={(payload) => {
+            setPostulateError('');
+            postulateMutation.mutate(payload);
+          }}
         />
       )}
 
