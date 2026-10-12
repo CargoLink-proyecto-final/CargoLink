@@ -198,6 +198,14 @@ export default function LoginPage() {
               Creá una nueva
             </Link>
           </p>
+
+          {/* La App Store exige que la política sea accesible sin credenciales,
+              así que el link vive en las pantallas públicas. */}
+          <p className="mt-6 text-center text-[11px] text-ink-400">
+            <Link href="/privacidad" className="hover:text-ink-600 hover:underline">
+              Política de privacidad
+            </Link>
+          </p>
         </div>
       </section>
     </div>

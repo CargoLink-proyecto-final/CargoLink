@@ -3,10 +3,12 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
+import { ChatBroadcaster } from './chat-broadcaster';
 
 describe('MessagesService', () => {
   let service: MessagesService;
   let prisma: {
+    user: { findUnique: jest.Mock };
     trip: { findUnique: jest.Mock; findMany: jest.Mock };
     message: {
       create: jest.Mock;
@@ -17,6 +19,7 @@ describe('MessagesService', () => {
     };
   };
   let push: { notify: jest.Mock };
+  let broadcaster: { register: jest.Mock; emitNewMessage: jest.Mock };
 
   const carrierId = 'carrier-1';
   const shipperId = 'shipper-1';
@@ -31,6 +34,9 @@ describe('MessagesService', () => {
 
   beforeEach(async () => {
     prisma = {
+      // `validateTripParticipant` chequea que la cuenta siga activa: el gateway
+      // de sockets no valida JWT, así que ese corte vive acá.
+      user: { findUnique: jest.fn().mockResolvedValue({ isActive: true }) },
       trip: { findUnique: jest.fn(), findMany: jest.fn() },
       message: {
         create: jest.fn(),
@@ -41,12 +47,14 @@ describe('MessagesService', () => {
       },
     };
     push = { notify: jest.fn().mockResolvedValue(undefined) };
+    broadcaster = { register: jest.fn(), emitNewMessage: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessagesService,
         { provide: PrismaService, useValue: prisma },
         { provide: PushService, useValue: push },
+        { provide: ChatBroadcaster, useValue: broadcaster },
       ],
     }).compile();
 
@@ -76,6 +84,29 @@ describe('MessagesService', () => {
       expect(result).toBe(created);
     });
 
+    // El bug que arregla esto: el emit vivía en el handler del socket, así que un
+    // mensaje escrito desde el web (que entra por REST) no llegaba en vivo a la
+    // app y la conversación quedaba congelada del otro lado.
+    it('broadcasts the message whatever path it came in through', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      const created = { id: 'msg-1', content: 'hello' };
+      prisma.message.create.mockResolvedValue(created);
+
+      await service.create(carrierId, tripId, 'hello');
+
+      expect(broadcaster.emitNewMessage).toHaveBeenCalledWith(tripId, created);
+    });
+
+    it('does not broadcast a message it refused to persist', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+
+      await expect(service.create('stranger', tripId, 'x')).rejects.toThrow(
+        ForbiddenException,
+      );
+
+      expect(broadcaster.emitNewMessage).not.toHaveBeenCalled();
+    });
+
     it('creates a message from the shipper to the carrier (receiver flips)', async () => {
       prisma.trip.findUnique.mockResolvedValue(baseTrip);
       prisma.message.create.mockResolvedValue({ id: 'msg-2' });
@@ -103,6 +134,18 @@ describe('MessagesService', () => {
     it('throws ForbiddenException when sender is not a participant', async () => {
       prisma.trip.findUnique.mockResolvedValue(baseTrip);
       await expect(service.create('stranger', tripId, 'x')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    // El gateway de sockets no valida JWT — toma el userId del handshake — así
+    // que una cuenta eliminada seguía escribiendo en la room del viaje.
+    it('throws ForbiddenException when the sender account is no longer active', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      prisma.user.findUnique.mockResolvedValue({ isActive: false });
+
+      await expect(service.create(carrierId, tripId, 'x')).rejects.toThrow(
         ForbiddenException,
       );
       expect(prisma.message.create).not.toHaveBeenCalled();

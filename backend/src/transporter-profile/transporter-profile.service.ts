@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { mkdir, unlink, writeFile } from 'fs/promises';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { DocumentType, Vehicle } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertVehicleDto } from './dto/upsert-vehicle.dto';
@@ -17,6 +17,7 @@ import {
   loadProfileStatus,
   sendApprovedDocumentsBackToReview,
 } from './profile-status';
+import { resolveUploadDir } from './upload-dir';
 
 // Únicos formatos que aceptamos para documentos: fotos y PDF (la constancia
 // de AFIP suele descargarse como PDF, no se fotografía).
@@ -34,10 +35,7 @@ export class TransporterProfileService {
     private prisma: PrismaService,
     configService: ConfigService,
   ) {
-    // Absoluto siempre: `res.sendFile` (usado para servir el archivo) lo exige,
-    // y en Docker UPLOAD_DIR ya viene absoluto (/app/uploads) — esto solo
-    // importa para el default relativo de dev local.
-    this.uploadDir = resolve(configService.get<string>('UPLOAD_DIR', './uploads'));
+    this.uploadDir = resolveUploadDir(configService);
   }
 
   async uploadDocument(userId: string, type: DocumentType, file: Express.Multer.File) {
