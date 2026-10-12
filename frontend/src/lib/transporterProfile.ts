@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { transporterProfileApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import type { DocumentType, ProfileStatus, VehicleType, VerificationState } from '@/types';
+import type { BodyType, DocumentType, ProfileStatus, VehicleUnit, VerificationState } from '@/types';
 
 export const DOCUMENT_TYPES: { type: DocumentType; label: string }[] = [
   { type: 'DNI_FRONT', label: 'DNI (frente)' },
@@ -27,14 +27,27 @@ export const LICENSE_CATEGORIES: { value: string; label: string }[] = [
   { value: 'E2', label: 'E2 — Maquinaria especial no agrícola' },
 ];
 
-export const VEHICLE_TYPES: { value: VehicleType; label: string }[] = [
-  { value: 'CAMION', label: 'Camión' },
-  { value: 'CAMIONETA', label: 'Camioneta' },
-  { value: 'FURGON', label: 'Furgón' },
-  { value: 'SEMIRREMOLQUE', label: 'Semirremolque' },
-  { value: 'BATEA', label: 'Batea' },
-  { value: 'OTRO', label: 'Otro' },
+export const VEHICLE_UNITS: { value: VehicleUnit; label: string; hint: string }[] = [
+  { value: 'CAMIONETA', label: 'Camioneta', hint: 'Utilitario o pick-up' },
+  { value: 'CHASIS', label: 'Chasis', hint: 'Camión simple' },
+  { value: 'BALANCIN', label: 'Balancín', hint: 'Camión de doble eje trasero' },
+  { value: 'SEMIRREMOLQUE', label: 'Semirremolque', hint: 'Tractor con semi' },
 ];
+
+export const BODY_TYPES: { value: BodyType; label: string; hint: string }[] = [
+  { value: 'CERRADA', label: 'Cerrada', hint: 'Furgón o sider: protege de lluvia y robo' },
+  { value: 'ABIERTA', label: 'Abierta', hint: 'Playo o plataforma: carga por arriba o con grúa' },
+  { value: 'VOLCADORA', label: 'Volcadora', hint: 'Batea o tolva: granel sólido (arena, piedra, granos)' },
+  { value: 'CISTERNA', label: 'Cisterna', hint: 'Líquidos a granel' },
+];
+
+export function vehicleUnitLabel(unit: VehicleUnit): string {
+  return VEHICLE_UNITS.find((u) => u.value === unit)?.label ?? unit;
+}
+
+export function bodyTypeLabel(bodyType: BodyType): string {
+  return BODY_TYPES.find((b) => b.value === bodyType)?.label ?? bodyType;
+}
 
 const MISSING_LABELS: Record<string, string> = {
   cuit: 'CUIT/CUIL',

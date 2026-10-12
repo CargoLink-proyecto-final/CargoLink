@@ -9,7 +9,12 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { loadsApi, tripsApi, postulationsApi } from '../../services/api';
+import { loadsApi, tripsApi, postulationsApi, transporterProfileApi } from '../../services/api';
+import {
+  describeRequirements,
+  requirementsOf,
+  vehicleIncompatibilities,
+} from '../../lib/vehicleRequirements';
 import { useAuthStore } from '../../store/auth';
 import {
   formatCurrency,
@@ -19,7 +24,7 @@ import {
   getStatusLabel,
 } from '../../lib/labels';
 import PostulationsPanel from '../../components/PostulationsPanel';
-import { Load, Postulation } from '../../types';
+import { Load, Postulation, Vehicle } from '../../types';
 
 /**
  * `undefined` en vez de NaN cuando el campo quedó vacío o mal tipeado.
@@ -44,6 +49,9 @@ export default function LoadDetailScreen({ route, navigation }: any) {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  // Vehículo propio, para avisar antes de postularse si no cumple los
+  // requisitos de la carga (el backend igual lo bloquea).
+  const [myVehicle, setMyVehicle] = useState<Vehicle | null>(null);
 
   const fetchLoad = useCallback(async () => {
     try {
@@ -74,6 +82,13 @@ export default function LoadDetailScreen({ route, navigation }: any) {
 
   useEffect(() => { fetchLoad(); }, [fetchLoad]);
   useEffect(() => { fetchMyPostulation(); }, [fetchMyPostulation]);
+  useEffect(() => {
+    if (user?.role !== 'TRANSPORTER') return;
+    transporterProfileApi
+      .getVehicle()
+      .then((res) => setMyVehicle(res.data ?? null))
+      .catch(() => setMyVehicle(null));
+  }, [user?.role]);
 
   // Al volver de calificar, la carga ya tiene el rating nuevo y el botón tiene
   // que desaparecer; RatingScreen sólo hace goBack, no avisa nada.
@@ -220,6 +235,8 @@ export default function LoadDetailScreen({ route, navigation }: any) {
     !load.trip.ratings?.some((r) => r.fromUserId === user.id);
   const hasDimensions =
     load.heightCm != null || load.widthCm != null || load.lengthCm != null;
+  const requirementLabels = describeRequirements(requirementsOf(load));
+  const incompatibilities = myVehicle ? vehicleIncompatibilities(load, myVehicle) : [];
 
   return (
     <ScrollView style={styles.container}>
@@ -294,8 +311,23 @@ export default function LoadDetailScreen({ route, navigation }: any) {
               </Text>
             </View>
           )}
+          <View style={[styles.gridItem, { width: '100%' }]}>
+            <Text style={styles.gridLabel}>Vehículo requerido</Text>
+            <Text style={styles.gridValue}>
+              {requirementLabels.length > 0 ? requirementLabels.join(' · ') : 'Cualquiera'}
+            </Text>
+          </View>
         </View>
       </View>
+
+      {user?.role === 'TRANSPORTER' && load.status === 'PUBLISHED' && !myPostulation && incompatibilities.length > 0 && (
+        <View style={styles.incompatibleBox}>
+          <Text style={styles.incompatibleTitle}>Tu vehículo no cumple los requisitos de esta carga</Text>
+          {incompatibilities.map((reason) => (
+            <Text key={reason} style={styles.incompatibleItem}>• {reason}</Text>
+          ))}
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Publicador de carga</Text>
@@ -323,9 +355,13 @@ export default function LoadDetailScreen({ route, navigation }: any) {
             decide. `POST /trips/accept/:loadId` quedó como override de ADMIN. */}
         {user?.role === 'TRANSPORTER' && load.status === 'PUBLISHED' && !myPostulation && !postulating && (
           <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#22c55e' }]}
+            style={[
+              styles.actionBtn,
+              { backgroundColor: '#22c55e' },
+              incompatibilities.length > 0 && { opacity: 0.5 },
+            ]}
             onPress={() => setPostulating(true)}
-            disabled={actionLoading}
+            disabled={actionLoading || incompatibilities.length > 0}
           >
             <Text style={styles.actionBtnText}>Postularme</Text>
           </TouchableOpacity>
@@ -480,6 +516,11 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 14, fontWeight: '500', color: '#374151' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   gridItem: { width: '45%' },
+  incompatibleBox: {
+    backgroundColor: '#fee2e2', borderRadius: 12, padding: 14, marginBottom: 12,
+  },
+  incompatibleTitle: { color: '#b91c1c', fontWeight: '600', marginBottom: 4 },
+  incompatibleItem: { color: '#7f1d1d', fontSize: 13 },
   gridLabel: { fontSize: 12, color: '#9ca3af' },
   gridValue: { fontSize: 15, fontWeight: '600', marginTop: 2 },
   input: {

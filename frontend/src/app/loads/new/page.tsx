@@ -9,6 +9,8 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import ProvinceCombobox from '@/components/geo/ProvinceCombobox';
 import CityCombobox, { City } from '@/components/geo/CityCombobox';
 import { loadsApi } from '@/lib/api';
+import VehicleRequirementsFields from '@/components/loads/VehicleRequirementsFields';
+import { EMPTY_REQUIREMENTS, type VehicleRequirements } from '@/lib/vehicleRequirements';
 import { geocodeStructured, reverseGeocode, type NominatimAddressDetail } from '@/lib/routing';
 
 // Leaflet touches window — load client-side only.
@@ -203,6 +205,7 @@ function toLocalDatetimeString(date: Date): string {
 export default function NewLoadPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [vehicleRequirements, setVehicleRequirements] = useState<VehicleRequirements>(EMPTY_REQUIREMENTS);
   const [error, setError] = useState('');
   const [originMode, setOriginMode] = useState<LocationMode>('address');
   const [destMode, setDestMode] = useState<LocationMode>('address');
@@ -454,6 +457,7 @@ export default function NewLoadPage() {
         deliveryDate: data.deliveryDate,
         // Vacío = "a convenir": no mandamos el campo en vez de un 0 engañoso.
         price: data.price ? Number(data.price) : undefined,
+        ...vehicleRequirements,
         originAddress: origin.address,
         originLat: origin.lat,
         originLng: origin.lng,
@@ -574,6 +578,12 @@ export default function NewLoadPage() {
                 </div>
               </div>
             )}
+
+            <VehicleRequirementsFields
+              value={vehicleRequirements}
+              onChange={setVehicleRequirements}
+              cargoType={cargoTypeValue}
+            />
           </div>
 
           {/* Los inputs de cada modo se construyen solo cuando su pestaña está

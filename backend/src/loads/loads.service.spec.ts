@@ -23,6 +23,9 @@ describe('LoadsService', () => {
     user: {
       findUnique: jest.Mock;
     };
+    vehicle: {
+      findUnique: jest.Mock;
+    };
     city: {
       findMany: jest.Mock;
       count: jest.Mock;
@@ -57,6 +60,9 @@ describe('LoadsService', () => {
       },
       user: {
         findUnique: jest.fn(),
+      },
+      vehicle: {
+        findUnique: jest.fn().mockResolvedValue(null),
       },
       city: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -323,6 +329,37 @@ describe('LoadsService', () => {
         prioritizeZone: { lat: -31.42, lng: -64.18 },
         hidePostulationCount: true,
       });
+    });
+
+    it('filters by the carrier vehicle when compatibleOnly is set', async () => {
+      const vehicle = { userId: 'carrier-1', bodyType: 'CERRADA', maxWeightKg: 12000 };
+      prisma.user.findUnique.mockResolvedValue({ zoneLat: null, zoneLng: null });
+      prisma.vehicle.findUnique.mockResolvedValue(vehicle);
+      const spy = jest.spyOn(service, 'findAll').mockResolvedValue({} as any);
+
+      await service.findAvailable('carrier-1', { compatibleOnly: true });
+
+      expect(prisma.vehicle.findUnique).toHaveBeenCalledWith({ where: { userId: 'carrier-1' } });
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ compatibleWith: vehicle }));
+      expect(spy.mock.calls[0][0]).not.toHaveProperty('compatibleOnly');
+    });
+
+    it('lists everything when compatibleOnly is set but the carrier has no vehicle', async () => {
+      prisma.user.findUnique.mockResolvedValue({ zoneLat: null, zoneLng: null });
+      const spy = jest.spyOn(service, 'findAll').mockResolvedValue({} as any);
+
+      await service.findAvailable('carrier-1', { compatibleOnly: true });
+
+      expect(spy.mock.calls[0][0]?.compatibleWith).toBeUndefined();
+    });
+
+    it('does not look up the vehicle unless asked', async () => {
+      prisma.user.findUnique.mockResolvedValue({ zoneLat: null, zoneLng: null });
+      jest.spyOn(service, 'findAll').mockResolvedValue({} as any);
+
+      await service.findAvailable('carrier-1', {});
+
+      expect(prisma.vehicle.findUnique).not.toHaveBeenCalled();
     });
   });
 

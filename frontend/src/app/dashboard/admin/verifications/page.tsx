@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ShieldCheck, Truck } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { transporterReviewApi } from '@/lib/api';
-import { VEHICLE_TYPES } from '@/lib/transporterProfile';
+import { bodyTypeLabel, vehicleUnitLabel } from '@/lib/transporterProfile';
 import { formatDate } from '@/lib/utils';
 import type { ReviewQueueItem } from '@/types';
 
@@ -72,7 +72,7 @@ export default function VerificationsQueuePage() {
           {queue.map((item, i) => {
             const state = QUEUE_STATE_LABEL[item.state];
             const vehicleType = item.vehicle
-              ? VEHICLE_TYPES.find((v) => v.value === item.vehicle?.type)?.label
+              ? `${vehicleUnitLabel(item.vehicle.unit)} ${bodyTypeLabel(item.vehicle.bodyType).toLowerCase()}`
               : null;
             return (
               <Link

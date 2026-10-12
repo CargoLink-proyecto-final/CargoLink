@@ -75,13 +75,13 @@ describe('TransporterReviewService', () => {
         {
           id: 'recent',
           ...completeUser,
-          vehicle: { plate: 'AA111AA', type: 'CAMION' },
+          vehicle: { plate: 'AA111AA', unit: 'CHASIS', bodyType: 'ABIERTA' },
           documents: [{ type: DocumentType.DNI_FRONT, status: DocumentStatus.PENDING, updatedAt: newer }],
         },
         {
           id: 'waiting',
           ...completeUser,
-          vehicle: { plate: 'BB222BB', type: 'FURGON' },
+          vehicle: { plate: 'BB222BB', unit: 'CHASIS', bodyType: 'CERRADA' },
           documents: REQUIRED_DOCUMENT_TYPES.map((type) => ({
             type,
             status: DocumentStatus.PENDING,

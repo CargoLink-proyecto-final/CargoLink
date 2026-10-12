@@ -6,10 +6,16 @@ import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import RatingModal from '@/components/ratings/RatingModal';
-import { loadsApi, postulationsApi, ratingsApi } from '@/lib/api';
+import { loadsApi, postulationsApi, ratingsApi, transporterProfileApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useRoute } from '@/lib/useRoute';
 import { describeMissing } from '@/lib/transporterProfile';
+import {
+  describeRequirements,
+  hasRequirements,
+  requirementsOf,
+  vehicleIncompatibilities,
+} from '@/lib/vehicleRequirements';
 import Link from 'next/link';
 import { formatCurrency, formatPrice, formatDate, getStatusColor, getSolicitudStageLabel } from '@/lib/utils';
 import {
@@ -21,11 +27,13 @@ import {
   MessageSquare,
   Hand,
   Star,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import PostulationsPanel from '@/components/postulations/PostulationsPanel';
 import PostulateModal from '@/components/postulations/PostulateModal';
 import StatusBadge from '@/components/ui/StatusBadge';
-import type { PostulationWithLoad } from '@/types';
+import type { PostulationWithLoad, Vehicle } from '@/types';
 
 const MapView = dynamic(() => import('@/components/maps/MapView'), { ssr: false });
 
@@ -168,6 +176,14 @@ export default function LoadDetailPage() {
     enabled: !!user && isTransporter,
   });
 
+  // Vehículo propio, para avisar antes de postularse si no cumple los
+  // requisitos de la carga (el backend igual lo bloquea).
+  const { data: myVehicle } = useQuery<Vehicle | null>({
+    queryKey: ['transporter-vehicle'],
+    queryFn: () => transporterProfileApi.getVehicle().then((r) => r.data),
+    enabled: !!user && isTransporter,
+  });
+
   const postulateMutation = useMutation({
     mutationFn: (payload: { message?: string; proposedPrice?: number }) =>
       postulationsApi.create(id, payload),
@@ -259,6 +275,9 @@ export default function LoadDetailPage() {
     isTransporter &&
     load.status === 'PUBLISHED' &&
     (!myPostulation || myPostulation.status === 'WITHDRAWN');
+  const requirements = requirementsOf(load);
+  const incompatibilities = myVehicle ? vehicleIncompatibilities(load, myVehicle) : [];
+  const vehicleBlocked = incompatibilities.length > 0;
   const canWithdraw =
     isTransporter &&
     load.status === 'PUBLISHED' &&
@@ -281,7 +300,9 @@ export default function LoadDetailPage() {
             {canPostulate && (
               <button
                 onClick={() => setShowPostulateModal(true)}
-                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                disabled={vehicleBlocked}
+                title={vehicleBlocked ? 'Tu vehículo no cumple los requisitos de esta carga' : undefined}
+                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Postularme
               </button>
@@ -430,6 +451,24 @@ export default function LoadDetailPage() {
           </div>
         )}
 
+        {canPostulate && myVehicle && vehicleBlocked && (
+          <div className="rounded-lg bg-danger-50 border border-danger-600/20 p-4 text-sm text-danger-700" role="alert">
+            <p className="font-medium flex items-center gap-2">
+              <AlertTriangle size={16} /> Tu vehículo no cumple los requisitos de esta carga
+            </p>
+            <ul className="list-disc list-inside mt-1.5 space-y-0.5">
+              {incompatibilities.map((reason) => (
+                <li key={reason}>{reason.charAt(0).toUpperCase() + reason.slice(1)}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {canPostulate && myVehicle && !vehicleBlocked && hasRequirements(requirements) && (
+          <p className="flex items-center gap-2 text-sm text-success-700">
+            <CheckCircle2 size={16} /> Tu vehículo cumple los requisitos de esta carga.
+          </p>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
             <h2 className="font-semibold flex items-center gap-2"><Package size={18} /> Detalles de la Carga</h2>
@@ -443,6 +482,12 @@ export default function LoadDetailPage() {
                 <div><span className="text-gray-500">Dimensiones:</span> <span className="font-medium">{[load.heightCm, load.widthCm, load.lengthCm].map((d) => (d != null ? d : '—')).join(' × ')} cm</span></div>
               )}
               <div><span className="text-gray-500">Precio:</span> <span className="font-medium text-primary-600">{formatPrice(load.price)}</span></div>
+              <div className="sm:col-span-2">
+                <span className="text-gray-500">Vehículo requerido:</span>{' '}
+                <span className="font-medium">
+                  {hasRequirements(requirements) ? describeRequirements(requirements).join(' · ') : 'Cualquiera'}
+                </span>
+              </div>
             </div>
           </div>
 

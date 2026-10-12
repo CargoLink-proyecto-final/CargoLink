@@ -51,7 +51,7 @@ export class TransporterReviewService {
         licenseExpiresAt: true,
         termsAcceptedAt: true,
         company: { select: { id: true, name: true } },
-        vehicle: { select: { plate: true, type: true } },
+        vehicle: { select: { plate: true, unit: true, bodyType: true } },
         documents: { select: { type: true, status: true, updatedAt: true } },
       },
     });

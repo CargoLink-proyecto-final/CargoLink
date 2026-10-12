@@ -11,13 +11,14 @@ import { useAuthStore } from '@/store/auth';
 import {
   DOCUMENT_TYPES,
   LICENSE_CATEGORIES,
-  VEHICLE_TYPES,
+  BODY_TYPES,
+  VEHICLE_UNITS,
   isNotExpired,
   todayIsoDate,
   useProfileStatus,
 } from '@/lib/transporterProfile';
 import { ClipboardCheck, CheckCircle2 } from 'lucide-react';
-import type { DocumentType, TransporterDocument, User, Vehicle, VehicleType } from '@/types';
+import type { BodyType, DocumentType, TransporterDocument, User, Vehicle, VehicleUnit } from '@/types';
 
 const inputClass =
   'w-full px-4 py-2.5 bg-surface-raised border border-ink-200 rounded-lg text-[14px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition';
@@ -38,7 +39,8 @@ interface VehicleForm {
   brand: string;
   model: string;
   year: number;
-  type: VehicleType;
+  unit: VehicleUnit;
+  bodyType: BodyType;
   maxWeightKg: number;
   maxVolumeM3?: number;
   heightCm?: number;
@@ -46,7 +48,6 @@ interface VehicleForm {
   lengthCm?: number;
   refrigerated: boolean;
   hazardousMaterials: boolean;
-  bulkLiquid: boolean;
   insuranceExpiresAt?: string;
   vtvExpiresAt?: string;
 }
@@ -110,10 +111,10 @@ export default function CompleteProfilePage() {
   // --- Vehículo ---
   const vehicleForm = useForm<VehicleForm>({
     defaultValues: {
-      type: 'CAMION',
+      unit: 'CHASIS',
+      bodyType: 'CERRADA',
       refrigerated: false,
       hazardousMaterials: false,
-      bulkLiquid: false,
     },
   });
   useEffect(() => {
@@ -123,7 +124,8 @@ export default function CompleteProfilePage() {
         brand: vehicle.brand,
         model: vehicle.model,
         year: vehicle.year,
-        type: vehicle.type,
+        unit: vehicle.unit,
+        bodyType: vehicle.bodyType,
         maxWeightKg: vehicle.maxWeightKg,
         maxVolumeM3: vehicle.maxVolumeM3 ?? undefined,
         heightCm: vehicle.heightCm ?? undefined,
@@ -131,7 +133,6 @@ export default function CompleteProfilePage() {
         lengthCm: vehicle.lengthCm ?? undefined,
         refrigerated: vehicle.refrigerated,
         hazardousMaterials: vehicle.hazardousMaterials,
-        bulkLiquid: vehicle.bulkLiquid,
         insuranceExpiresAt: vehicle.insuranceExpiresAt ? vehicle.insuranceExpiresAt.slice(0, 10) : undefined,
         vtvExpiresAt: vehicle.vtvExpiresAt ? vehicle.vtvExpiresAt.slice(0, 10) : undefined,
       });
@@ -296,14 +297,27 @@ export default function CompleteProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-ink-700 mb-1.5">Tipo de vehículo</label>
-                <select className={inputClass} {...vehicleForm.register('type', { required: true })}>
-                  {VEHICLE_TYPES.map((v) => (
-                    <option key={v.value} value={v.value}>
-                      {v.label}
+                <label className="block text-[12px] font-medium text-ink-700 mb-1.5">Unidad</label>
+                <select className={inputClass} {...vehicleForm.register('unit', { required: true })}>
+                  {VEHICLE_UNITS.map((u) => (
+                    <option key={u.value} value={u.value}>
+                      {u.label} — {u.hint}
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[12px] font-medium text-ink-700 mb-1.5">Carrocería</label>
+                <select className={inputClass} {...vehicleForm.register('bodyType', { required: true })}>
+                  {BODY_TYPES.map((b) => (
+                    <option key={b.value} value={b.value}>
+                      {b.label} — {b.hint}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[12px] text-ink-500 mt-1">
+                  Las cargas que piden otra carrocería no van a estar disponibles para vos.
+                </p>
               </div>
               <div>
                 <label className="block text-[12px] font-medium text-ink-700 mb-1.5">Marca</label>
@@ -406,9 +420,6 @@ export default function CompleteProfilePage() {
               </label>
               <label className="flex items-center gap-2 text-[13px] text-ink-700">
                 <input type="checkbox" {...vehicleForm.register('hazardousMaterials')} /> Cargas peligrosas
-              </label>
-              <label className="flex items-center gap-2 text-[13px] text-ink-700">
-                <input type="checkbox" {...vehicleForm.register('bulkLiquid')} /> A granel/líquidos
               </label>
             </div>
 

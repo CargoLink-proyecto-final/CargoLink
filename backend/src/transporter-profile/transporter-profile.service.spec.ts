@@ -172,7 +172,8 @@ describe('TransporterProfileService', () => {
       brand: 'Mercedes-Benz',
       model: 'Actros',
       year: 2019,
-      type: 'CAMION',
+      unit: 'CHASIS',
+      bodyType: 'CERRADA',
       maxWeightKg: 12000,
     } as any;
 

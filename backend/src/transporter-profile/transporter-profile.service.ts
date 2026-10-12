@@ -166,7 +166,8 @@ const VEHICLE_FIELDS = [
   'brand',
   'model',
   'year',
-  'type',
+  'unit',
+  'bodyType',
   'maxWeightKg',
   'maxVolumeM3',
   'heightCm',
@@ -174,7 +175,6 @@ const VEHICLE_FIELDS = [
   'lengthCm',
   'refrigerated',
   'hazardousMaterials',
-  'bulkLiquid',
   'insuranceExpiresAt',
   'vtvExpiresAt',
 ] as const satisfies readonly (keyof Vehicle)[];

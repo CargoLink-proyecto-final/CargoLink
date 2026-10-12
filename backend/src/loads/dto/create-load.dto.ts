@@ -1,5 +1,18 @@
-import { IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { BodyType } from '@prisma/client';
 import { CARGO_TYPES } from '../cargo-types.constant';
 
 export class CreateLoadDto {
@@ -89,6 +102,27 @@ export class CreateLoadDto {
   @IsNumber({}, { message: 'El largo debe ser un número' })
   @Min(0, { message: 'El largo no puede ser negativo' })
   lengthCm?: number;
+
+  @ApiPropertyOptional({
+    enum: BodyType,
+    nullable: true,
+    example: 'CERRADA',
+    description: 'Carrocería que exige la carga. null o ausente = cualquiera.',
+  })
+  @IsOptional()
+  @IsEnum(BodyType, { message: 'La carrocería no es válida' })
+  requiredBodyType?: BodyType | null;
+
+  @ApiPropertyOptional({ example: false, description: 'Requiere vehículo refrigerado' })
+  @IsOptional()
+  @IsBoolean({ message: 'El requisito de refrigeración debe ser verdadero o falso' })
+  requiresRefrigeration?: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Requiere habilitación para cargas peligrosas' })
+  @IsOptional()
+  @IsBoolean({ message: 'El requisito de cargas peligrosas debe ser verdadero o falso' })
+  requiresHazmat?: boolean;
+
 
   @ApiProperty({ example: '2024-02-15T10:00:00Z' })
   @IsDateString({}, { message: 'La fecha de recogida debe ser una fecha válida' })

@@ -26,7 +26,10 @@ export type DocumentType =
   | 'INSURANCE'
   | 'VTV';
 export type DocumentStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type VehicleType = 'CAMION' | 'CAMIONETA' | 'FURGON' | 'SEMIRREMOLQUE' | 'BATEA' | 'OTRO';
+// Tamaño de la unidad (informativo: la capacidad la da maxWeightKg).
+export type VehicleUnit = 'CAMIONETA' | 'CHASIS' | 'BALANCIN' | 'SEMIRREMOLQUE';
+// Carrocería: lo que una carga le puede exigir al vehículo.
+export type BodyType = 'CERRADA' | 'ABIERTA' | 'VOLCADORA' | 'CISTERNA';
 
 export interface User {
   id: string;
@@ -70,7 +73,8 @@ export interface Vehicle {
   brand: string;
   model: string;
   year: number;
-  type: VehicleType;
+  unit: VehicleUnit;
+  bodyType: BodyType;
   maxWeightKg: number;
   maxVolumeM3?: number | null;
   heightCm?: number | null;
@@ -78,7 +82,6 @@ export interface Vehicle {
   lengthCm?: number | null;
   refrigerated: boolean;
   hazardousMaterials: boolean;
-  bulkLiquid: boolean;
   insuranceExpiresAt?: string | null;
   vtvExpiresAt?: string | null;
   createdAt: string;
@@ -117,6 +120,10 @@ export interface Load {
   heightCm?: number;
   widthCm?: number;
   lengthCm?: number;
+  // Lo que la carga le exige al vehículo (carrocería null = cualquiera).
+  requiredBodyType?: BodyType | null;
+  requiresRefrigeration?: boolean;
+  requiresHazmat?: boolean;
   pickupDate: string;
   deliveryDate?: string;
   // Opcional: sin precio, la carga sale "a convenir" y lo fija la postulación.

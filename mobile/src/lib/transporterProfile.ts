@@ -3,7 +3,7 @@
 
 import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
-import { DocumentType, VehicleType, VerificationState } from '../types';
+import { BodyType, DocumentType, VehicleUnit, VerificationState } from '../types';
 
 export const DOCUMENT_TYPES: { type: DocumentType; label: string }[] = [
   { type: 'DNI_FRONT', label: 'DNI (frente)' },
@@ -21,14 +21,23 @@ export const DOCUMENT_TYPES: { type: DocumentType; label: string }[] = [
 // (A*, no cargan) y las de transporte de pasajeros (D*, no aplican a CargoLink).
 export const LICENSE_CATEGORIES: string[] = ['B1', 'B2', 'C1', 'C2', 'C3', 'E1', 'E2'];
 
-export const VEHICLE_TYPES: { value: VehicleType; label: string }[] = [
-  { value: 'CAMION', label: 'Camión' },
+export const VEHICLE_UNITS: { value: VehicleUnit; label: string }[] = [
   { value: 'CAMIONETA', label: 'Camioneta' },
-  { value: 'FURGON', label: 'Furgón' },
+  { value: 'CHASIS', label: 'Chasis' },
+  { value: 'BALANCIN', label: 'Balancín' },
   { value: 'SEMIRREMOLQUE', label: 'Semirremolque' },
-  { value: 'BATEA', label: 'Batea' },
-  { value: 'OTRO', label: 'Otro' },
 ];
+
+export const BODY_TYPES: { value: BodyType; label: string; hint: string }[] = [
+  { value: 'CERRADA', label: 'Cerrada', hint: 'Furgón o sider' },
+  { value: 'ABIERTA', label: 'Abierta', hint: 'Playo o plataforma' },
+  { value: 'VOLCADORA', label: 'Volcadora', hint: 'Batea o tolva, granel sólido' },
+  { value: 'CISTERNA', label: 'Cisterna', hint: 'Líquidos a granel' },
+];
+
+export function bodyTypeLabel(bodyType: BodyType): string {
+  return BODY_TYPES.find((b) => b.value === bodyType)?.label ?? bodyType;
+}
 
 const MISSING_LABELS: Record<string, string> = {
   cuit: 'CUIT/CUIL',

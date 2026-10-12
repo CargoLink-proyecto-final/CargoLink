@@ -14,6 +14,10 @@ import {
 } from '@prisma/client';
 import { CreatePostulationDto } from './dto/create-postulation.dto';
 import { CounterOfferDto } from './dto/counter-offer.dto';
+import {
+  checkVehicleCompatibility,
+  describeIncompatibility,
+} from '../loads/vehicle-compatibility';
 
 const TRANSPORTER_SELECT = {
   id: true,
@@ -37,6 +41,19 @@ export class PostulationsService {
     }
     if (load.shipperId === transporterId) {
       throw new ForbiddenException('No podés postularte a tu propia carga');
+    }
+    // El ProfileApprovedGuard ya exige vehículo, pero el chequeo no depende
+    // de que el guard esté aplicado.
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { userId: transporterId } });
+    if (!vehicle) {
+      throw new BadRequestException('Cargá tu vehículo antes de postularte');
+    }
+    const reasons = checkVehicleCompatibility(load, vehicle);
+    if (reasons.length > 0) {
+      throw new BadRequestException({
+        message: `Tu vehículo no cumple los requisitos de esta carga: ${describeIncompatibility(reasons, load)}.`,
+        reasons,
+      });
     }
     // Carga "a convenir": sin precio publicado no hay nada que aceptar en
     // silencio, así que el transportista tiene que poner el suyo.
