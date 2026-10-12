@@ -168,7 +168,11 @@ export class AuthService {
     const opaqueResponse = {
       message: 'Si existe una cuenta sin verificar para ese correo, te enviamos un nuevo enlace.',
     };
-    if (!user || user.emailVerified) return opaqueResponse;
+    // `!isActive` cubre las cuentas eliminadas, que quedan con emailVerified en
+    // false: sin este corte se generaba un token y se intentaba mandar un mail a
+    // la dirección placeholder `@cargolink.invalid`, garantizando un bounce
+    // contra el SMTP de producción.
+    if (!user || user.emailVerified || !user.isActive) return opaqueResponse;
 
     const verificationToken = randomBytes(32).toString('hex');
     const verificationExp = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);

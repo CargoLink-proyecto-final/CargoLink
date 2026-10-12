@@ -27,6 +27,7 @@ import ChatListScreen from '../screens/common/ChatListScreen';
 import ChatScreen from '../screens/common/ChatScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import RatingScreen from '../screens/common/RatingScreen';
+import UnsupportedRoleScreen from '../screens/common/UnsupportedRoleScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -83,6 +84,54 @@ function CarrierTabs() {
   );
 }
 
+/**
+ * Roles que la app no cubre (ADMIN, COMPANY_ADMIN): un aviso y el perfil.
+ * El perfil importa porque ahí están cerrar sesión y eliminar la cuenta.
+ */
+function UnsupportedRoleTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons
+            name={route.name === 'Profile' ? 'person' : 'information-circle'}
+            size={size}
+            color={color}
+          />
+        ),
+        tabBarActiveTintColor: '#2563eb',
+        headerShown: false,
+      })}
+    >
+      <Tab.Screen
+        name="Info"
+        component={UnsupportedRoleScreen}
+        options={{ title: 'CargoLink' }}
+      />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Perfil' }} />
+    </Tab.Navigator>
+  );
+}
+
+/**
+ * Cada rol a su interfaz, explícito y no por descarte.
+ *
+ * Antes era `role === 'TRANSPORTER' ? CarrierTabs : ShipperTabs`, así que ADMIN
+ * y COMPANY_ADMIN —rol que develop agregó después— caían en la de dador de
+ * carga, cuyo panel pega a `GET /loads/my`, restringido a CARGO_GENERATOR: veían
+ * un 403 sin explicación.
+ */
+function tabsForRole(role?: string) {
+  switch (role) {
+    case 'TRANSPORTER':
+      return CarrierTabs;
+    case 'CARGO_GENERATOR':
+      return ShipperTabs;
+    default:
+      return UnsupportedRoleTabs;
+  }
+}
+
 export default function AppNavigator() {
   const { isAuthenticated, user, isLoading } = useAuthStore();
 
@@ -99,10 +148,7 @@ export default function AppNavigator() {
           </>
         ) : (
           <>
-            <Stack.Screen
-              name="Main"
-              component={user?.role === 'TRANSPORTER' ? CarrierTabs : ShipperTabs}
-            />
+            <Stack.Screen name="Main" component={tabsForRole(user?.role)} />
             <Stack.Screen
               name="LoadDetail"
               component={LoadDetailScreen}

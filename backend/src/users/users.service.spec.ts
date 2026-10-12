@@ -20,11 +20,15 @@ describe('UsersService', () => {
       findMany: jest.Mock;
       count: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
     };
     load: { count: jest.Mock };
     trip: { count: jest.Mock };
     roleChangeLog: { create: jest.Mock; findMany: jest.Mock };
     document: { updateMany: jest.Mock };
+    company: { findUnique: jest.Mock; update: jest.Mock };
+    postulation: { updateMany: jest.Mock };
+    companyJoinRequest: { updateMany: jest.Mock };
     $transaction: jest.Mock;
   };
 
@@ -49,13 +53,19 @@ describe('UsersService', () => {
         findMany: jest.fn(),
         count: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
       load: { count: jest.fn() },
       trip: { count: jest.fn() },
       roleChangeLog: { create: jest.fn(), findMany: jest.fn() },
       document: { updateMany: jest.fn() },
-      // El service usa $transaction([...]) (array de resultados) y también la
-      // forma interactiva $transaction(async (tx) => ...), con el mismo mock como tx.
+      company: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
+      postulation: { updateMany: jest.fn() },
+      companyJoinRequest: { updateMany: jest.fn() },
+      // Dos formas conviven: `changeRole` pasa un array de operaciones y espera
+      // sus resultados resueltos; `deleteOwnAccount` pasa un callback que recibe
+      // el cliente transaccional. El mock le devuelve el mismo `prisma`, así los
+      // asserts miran los mismos jest.fn().
       $transaction: jest.fn((arg: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
         typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
       ),
@@ -394,9 +404,155 @@ describe('UsersService', () => {
     });
   });
 
+  // Requisito de la App Store: la baja la pide el usuario y no se puede recuperar.
+  // Lo que se verifica acá es que no quede ningún dato personal en la fila.
+  describe('deleteOwnAccount', () => {
+    const deleteData = async () => {
+      await service.deleteOwnAccount('user-1');
+      return prisma.user.update.mock.calls[0][0].data;
+    };
+
+    beforeEach(() => {
+      prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: true });
+      prisma.load.count.mockResolvedValue(0);
+      prisma.trip.count.mockResolvedValue(0);
+      prisma.user.update.mockResolvedValue({ ...baseUser, isActive: false });
+    });
+
+    it('anonymizes every personal field', async () => {
+      const data = await deleteData();
+
+      expect(data.firstName).toBe('Usuario');
+      expect(data.lastName).toBe('eliminado');
+      expect(data.phone).toBeNull();
+      expect(data.companyName).toBeNull();
+      expect(data.industry).toBeNull();
+      expect(data.avatarUrl).toBeNull();
+      expect(data.zoneLat).toBeNull();
+      expect(data.zoneLng).toBeNull();
+      expect(data.zoneRadiusKm).toBeNull();
+    });
+
+    it('frees the real email and keeps the column unique', async () => {
+      const data = await deleteData();
+
+      expect(data.email).toBe('deleted-user-1@cargolink.invalid');
+      expect(data.email).not.toContain(baseUser.email);
+    });
+
+    it('leaves a password hash that no known value can match', async () => {
+      const data = await deleteData();
+
+      expect(data.password).not.toBe(baseUser.password);
+      // bcrypt, no un string vacío ni el hash original.
+      expect(data.password).toMatch(/^\$2[aby]\$/);
+    });
+
+    it('cuts live sessions and stops push', async () => {
+      const data = await deleteData();
+
+      // El guard revalida contra la DB en cada request y rechaza !isActive, así
+      // que esto invalida los JWT vivos sin esperar a que expiren.
+      expect(data.isActive).toBe(false);
+      expect(data.deletedAt).toBeInstanceOf(Date);
+      expect(data.expoPushToken).toBeNull();
+      expect(data.companyId).toBeNull();
+    });
+
+    it('clears the reset and verification tokens', async () => {
+      const data = await deleteData();
+
+      expect(data.resetToken).toBeNull();
+      expect(data.resetTokenExp).toBeNull();
+      expect(data.emailVerificationToken).toBeNull();
+      expect(data.emailVerificationTokenExp).toBeNull();
+      expect(data.emailVerified).toBe(false);
+    });
+
+    it('refuses while the account has active operations', async () => {
+      prisma.load.count.mockResolvedValue(1);
+
+      await expect(service.deleteOwnAccount('user-1')).rejects.toThrow(ConflictException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    // Sin esto el dador podía aceptar la postulación de alguien que ya no existe:
+    // se abría un viaje asignado a una cuenta muerta y la carga quedaba trabada.
+    it('withdraws the postulations that were still open', async () => {
+      await service.deleteOwnAccount('user-1');
+
+      expect(prisma.postulation.updateMany).toHaveBeenCalledWith({
+        where: {
+          transporterId: 'user-1',
+          status: { in: ['PENDING', 'NEGOTIATING'] },
+        },
+        data: { status: 'WITHDRAWN' },
+      });
+    });
+
+    it('runs the whole deletion in a single transaction', async () => {
+      await service.deleteOwnAccount('user-1');
+
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    describe('cuando administraba una empresa', () => {
+      beforeEach(() => {
+        prisma.company.findUnique.mockResolvedValue({ id: 'company-1' });
+      });
+
+      it('anonymizes the company and detaches its members', async () => {
+        await service.deleteOwnAccount('user-1');
+
+        expect(prisma.company.update).toHaveBeenCalledWith({
+          where: { id: 'company-1' },
+          data: { name: 'Empresa eliminada' },
+        });
+        expect(prisma.user.updateMany).toHaveBeenCalledWith({
+          where: { companyId: 'company-1' },
+          data: { companyId: null },
+        });
+      });
+
+      it('rejects the join requests left pending', async () => {
+        await service.deleteOwnAccount('user-1');
+
+        expect(prisma.companyJoinRequest.updateMany).toHaveBeenCalledWith({
+          where: { companyId: 'company-1', status: 'PENDING' },
+          data: { status: 'REJECTED', decidedAt: expect.any(Date) },
+        });
+      });
+    });
+
+    it('leaves companies alone when the user owned none', async () => {
+      await service.deleteOwnAccount('user-1');
+
+      expect(prisma.company.update).not.toHaveBeenCalled();
+      expect(prisma.companyJoinRequest.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the user does not exist', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(service.deleteOwnAccount('missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('reactivate', () => {
+    // La política de privacidad promete que la baja no se puede revertir, así que
+    // ni un admin puede: sin este guard la fila volvía a operar.
+    it('refuses to revive an account deleted by its owner', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...baseUser,
+        isActive: false,
+        deletedAt: new Date('2026-09-28'),
+      });
+
+      await expect(service.reactivate('user-1')).rejects.toThrow(ConflictException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
     it('sets isActive=true', async () => {
-      prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: false });
+      prisma.user.findUnique.mockResolvedValue({ ...baseUser, isActive: false, deletedAt: null });
       prisma.user.update.mockResolvedValue({ ...baseUser, isActive: true });
 
       const result = await service.reactivate('user-1');
