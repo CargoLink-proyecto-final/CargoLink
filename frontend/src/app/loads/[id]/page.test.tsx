@@ -34,6 +34,7 @@ jest.mock('@/lib/api', () => ({
     acceptOffer: jest.fn(),
     counterOffer: jest.fn(),
   },
+  transporterProfileApi: { getVehicle: jest.fn() },
 }));
 
 // useRoute fetches an OSRM route — neutralize it.
@@ -42,9 +43,18 @@ jest.mock('@/lib/useRoute', () => ({ useRoute: () => [] }));
 jest.mock('@/store/auth', () => ({ useAuthStore: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { loadsApi, postulationsApi } = require('@/lib/api') as {
+const { loadsApi, postulationsApi, transporterProfileApi } = require('@/lib/api') as {
   loadsApi: Record<string, jest.Mock>;
   postulationsApi: Record<string, jest.Mock>;
+  transporterProfileApi: Record<string, jest.Mock>;
+};
+
+const VEHICLE = {
+  bodyType: 'ABIERTA',
+  refrigerated: false,
+  hazardousMaterials: false,
+  maxWeightKg: 12000,
+  maxVolumeM3: null,
 };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { useAuthStore } = require('@/store/auth') as { useAuthStore: jest.Mock };
@@ -97,6 +107,7 @@ function renderPage() {
 beforeEach(() => {
   jest.clearAllMocks();
   postulationsApi.getMy.mockResolvedValue({ data: [] });
+  transporterProfileApi.getVehicle.mockResolvedValue({ data: VEHICLE });
 });
 
 describe('LoadDetailPage — fetch + render', () => {
@@ -173,6 +184,41 @@ describe('LoadDetailPage — transporter actions', () => {
     await user.click(submit);
 
     await waitFor(() => expect(postulationsApi.create).toHaveBeenCalledWith('l1', expect.anything()));
+  });
+
+  it('shows the vehicle requirements of the load', async () => {
+    mockUser({ id: 's1', role: 'CARGO_GENERATOR' });
+    loadsApi.getById.mockResolvedValue({
+      data: makeLoad({ requiredBodyType: 'CERRADA', requiresRefrigeration: true }),
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('Carrocería cerrada · Refrigerado')).toBeInTheDocument();
+  });
+
+  it('disables Postularme and explains why when the vehicle does not meet the requirements', async () => {
+    mockUser({ id: 't1', role: 'TRANSPORTER' });
+    loadsApi.getById.mockResolvedValue({
+      data: makeLoad({ requiredBodyType: 'CERRADA', requiresRefrigeration: true }),
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('Tu vehículo no cumple los requisitos de esta carga')).toBeInTheDocument();
+    expect(screen.getByText('Requiere carrocería cerrada (la tuya es abierta)')).toBeInTheDocument();
+    expect(screen.getByText('Requiere vehículo refrigerado')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Postularme' })).toBeDisabled();
+  });
+
+  it('confirms the vehicle fits when the load has requirements it meets', async () => {
+    mockUser({ id: 't1', role: 'TRANSPORTER' });
+    loadsApi.getById.mockResolvedValue({ data: makeLoad({ requiredBodyType: 'ABIERTA' }) });
+
+    renderPage();
+
+    expect(await screen.findByText('Tu vehículo cumple los requisitos de esta carga.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Postularme' })).toBeEnabled();
   });
 
   it('hides Postularme when the transporter already has an active postulation', async () => {

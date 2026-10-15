@@ -15,6 +15,7 @@ import {
   computeMoneyMetrics,
   round2,
 } from '../common/metrics';
+import { compatibleLoadsWhere, VehicleCapabilities } from './vehicle-compatibility';
 
 type AuthUser = { id: string; role: string };
 
@@ -58,6 +59,8 @@ type LoadListParams = {
   // Cuántos se postularon es información del publicador: al transportista no
   // se le expone, ni siquiera en el payload, para no filtrar la competencia.
   hidePostulationCount?: boolean;
+  // Si viene, solo cargas cuyos requisitos cumple este vehículo.
+  compatibleWith?: VehicleCapabilities;
 };
 
 function applyDateRange(where: any, field: string, from?: string, to?: string) {
@@ -96,6 +99,11 @@ const CRITICAL_LOAD_FIELDS = [
   'pickupDate',
   'deliveryDate',
   'price',
+  // Cambiar los requisitos de vehículo después de aceptar dejaría al
+  // transportista asignado con un vehículo que ya no cumple.
+  'requiredBodyType',
+  'requiresRefrigeration',
+  'requiresHazmat',
 ] as const;
 
 @Injectable()
@@ -173,6 +181,12 @@ export class LoadsService {
     applyDateRange(where, 'createdAt', params?.createdFrom, params?.createdTo);
     applyDateRange(where, 'pickupDate', params?.pickupFrom, params?.pickupTo);
     applyDateRange(where, 'deliveryDate', params?.deliveryFrom, params?.deliveryTo);
+    if (params?.compatibleWith) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        ...compatibleLoadsWhere(params.compatibleWith),
+      ];
+    }
 
     const include = {
       shipper: { select: { id: true, firstName: true, lastName: true, companyName: true } },
@@ -286,21 +300,30 @@ export class LoadsService {
 
   async findAvailable(
     carrierId: string,
-    params?: Omit<LoadListParams, 'status' | 'prioritizeZone' | 'shipperId'>,
+    params?: Omit<LoadListParams, 'status' | 'prioritizeZone' | 'shipperId' | 'compatibleWith'> & {
+      compatibleOnly?: boolean;
+    },
   ) {
-    const carrier = await this.prisma.user.findUnique({
-      where: { id: carrierId },
-      select: { zoneLat: true, zoneLng: true },
-    });
+    const { compatibleOnly, ...listParams } = params ?? {};
+    const [carrier, vehicle] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: carrierId },
+        select: { zoneLat: true, zoneLng: true },
+      }),
+      // Sin vehículo cargado el filtro no aplica: se listan todas (igual no
+      // puede postularse hasta completar el perfil).
+      compatibleOnly ? this.prisma.vehicle.findUnique({ where: { userId: carrierId } }) : null,
+    ]);
     const prioritizeZone =
       carrier?.zoneLat != null && carrier?.zoneLng != null
         ? { lat: carrier.zoneLat, lng: carrier.zoneLng }
         : undefined;
     return this.findAll({
-      ...params,
+      ...listParams,
       status: LoadStatus.PUBLISHED,
       prioritizeZone,
       hidePostulationCount: true,
+      compatibleWith: vehicle ?? undefined,
     });
   }
 

@@ -45,8 +45,11 @@ Variables de entorno inyectadas al contenedor:
 | `SMTP_USER` | `${SMTP_USER:-}` | vacío |
 | `SMTP_PASSWORD` | `${SMTP_PASSWORD:-}` | vacío |
 | `SMTP_FROM` | `${SMTP_FROM:-}` | vacío → `CargoLink <no-reply@cargolink.local>` (hardcoded en `MailService`) |
+| `UPLOAD_DIR` | `/app/uploads` | ruta dentro del contenedor donde se guardan los documentos de transportista (DNI, licencia, etc.) subidos vía `POST /transporter-profile/documents` |
 
 `POSTGRES_PASSWORD` y `JWT_SECRET` están marcados con `:?` — Compose aborta si están vacíos.
+
+El servicio `backend` monta además el volumen `uploads:/app/uploads` (ver § Volúmenes) — sin él, los documentos subidos se pierden en cada rebuild/redeploy porque el filesystem del contenedor es efímero.
 
 ### Servicio `frontend`
 
@@ -65,9 +68,10 @@ Variables de entorno inyectadas al contenedor:
 ```yaml
 volumes:
   pgdata:
+  uploads:
 ```
 
-Named volume manejado por Docker. Ubicación física en el host depende del driver (en Mac/Windows está dentro de la VM de Docker Desktop).
+Named volumes manejados por Docker. Ubicación física en el host depende del driver (en Mac/Windows está dentro de la VM de Docker Desktop). `uploads` persiste los documentos de transportista subidos por `backend` (montado en `/app/uploads`); igual que `pgdata`, sobrevive a `docker compose down` (no a `down -v`). Como `deploy/vps/compose.prod.yml`/`compose.dev.yml` son overrides que heredan `volumes` del `docker-compose.yml` base, no hace falta declararlo aparte para el VPS.
 
 ## Backend Dockerfile
 
@@ -210,6 +214,7 @@ CMD ["node", "server.js"]
 | `SMTP_USER` | backend | No | vacío | Usuario SMTP; **si `SMTP_HOST` está set pero `SMTP_USER` vacío, también cae a Ethereal** |
 | `SMTP_PASSWORD` | backend | No | vacío | Password SMTP |
 | `SMTP_FROM` | backend | No | `CargoLink <no-reply@cargolink.local>` | Header From |
+| `UPLOAD_DIR` | backend | No | `./uploads` local / `/app/uploads` en Docker | Directorio donde se guardan los documentos de transportista subidos |
 | `NEXT_PUBLIC_API_URL` | frontend (build) | No | `http://localhost:3001/api` | Base URL que el bundle JS usa para llamar al backend |
 
 ## Comandos comunes

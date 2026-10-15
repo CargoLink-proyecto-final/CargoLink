@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -8,6 +8,12 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { loadsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import Link from 'next/link';
+import VehicleRequirementsFields from '@/components/loads/VehicleRequirementsFields';
+import {
+  EMPTY_REQUIREMENTS,
+  requirementsOf,
+  type VehicleRequirements,
+} from '@/lib/vehicleRequirements';
 
 // Debe reflejar exactamente la taxonomía fija que valida el backend
 // (@IsIn en CreateLoadDto) y que usan loads/new y loads (filtro) — un
@@ -60,6 +66,7 @@ export default function EditLoadPage() {
   const id = params.id as string;
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<LoadForm>();
+  const [vehicleRequirements, setVehicleRequirements] = useState<VehicleRequirements>(EMPTY_REQUIREMENTS);
 
   const { data: load, isLoading } = useQuery({
     queryKey: ['load', id],
@@ -88,13 +95,16 @@ export default function EditLoadPage() {
         deliveryDate: toDatetimeLocal(load.deliveryDate),
         price: load.price ?? undefined,
       });
+      setVehicleRequirements(requirementsOf(load));
     }
   }, [load, reset]);
 
   const updateMutation = useMutation({
     // `price: null` es un valor válido del payload: vacía el precio y devuelve
     // la carga a "a convenir".
-    mutationFn: (payload: Partial<Omit<LoadForm, 'price'>> & { price?: number | null }) =>
+    mutationFn: (
+      payload: Partial<Omit<LoadForm, 'price'>> & Partial<VehicleRequirements> & { price?: number | null },
+    ) =>
       loadsApi.update(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['load', id] });
@@ -133,6 +143,7 @@ export default function EditLoadPage() {
       lengthCm: data.lengthCm ? Number(data.lengthCm) : undefined,
       // Vaciar el campo devuelve la carga a "a convenir".
       price: data.price ? Number(data.price) : null,
+      ...vehicleRequirements,
     });
   };
 
@@ -263,6 +274,13 @@ export default function EditLoadPage() {
                 <input type="number" step="0.1" placeholder="Largo" {...register('lengthCm')} disabled={isLocked} className={inputClass} />
               </div>
             </div>
+
+            <VehicleRequirementsFields
+              value={vehicleRequirements}
+              onChange={setVehicleRequirements}
+              autoSuggest={false}
+              disabled={isLocked}
+            />
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">

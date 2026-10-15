@@ -2,6 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PostulationStatus } from '@prisma/client';
 import { PostulationsController } from './postulations.controller';
 import { PostulationsService } from './postulations.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+// ProfileApprovedGuard (aplicado en create()) sólo se ejecuta cuando Nest
+// procesa una request real vía HTTP — llamar a los métodos del controller
+// directamente (como hacen estos tests) lo salta por completo. Pero como es
+// una guard class y no un token, Nest igual necesita poder instanciarla al
+// compilar el módulo de test, así que su dependencia (PrismaService) tiene
+// que estar disponible como provider aunque nunca se use acá.
 
 describe('PostulationsController', () => {
   let controller: PostulationsController;
@@ -28,7 +36,10 @@ describe('PostulationsController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PostulationsController],
-      providers: [{ provide: PostulationsService, useValue: service }],
+      providers: [
+        { provide: PostulationsService, useValue: service },
+        { provide: PrismaService, useValue: {} },
+      ],
     }).compile();
 
     controller = module.get<PostulationsController>(PostulationsController);

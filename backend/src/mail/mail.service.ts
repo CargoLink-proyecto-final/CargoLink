@@ -101,4 +101,64 @@ export class MailService {
     const preview = nodemailer.getTestMessageUrl(info);
     if (preview) this.logger.log(`Password reset email preview: ${preview}`);
   }
+
+  // Aviso al transportista de que un admin rechazó uno o más documentos (CU-11).
+  async sendDocumentsRejectedEmail(
+    to: string,
+    firstName: string,
+    rejected: { label: string; reason: string }[],
+  ): Promise<void> {
+    const frontend = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+    const link = `${frontend}/profile/complete`;
+    const transporter = await this.getTransporter();
+    const info = await transporter.sendMail({
+      from: this.fromAddress,
+      to,
+      subject: 'Revisá tu documentación en CargoLink',
+      text:
+        `Hola ${firstName},\n\n` +
+        `Revisamos tu documentación y hay documentos que tenés que volver a subir:\n\n` +
+        rejected.map((r) => `- ${r.label}: ${r.reason}`).join('\n') +
+        `\n\nPodés corregirlos desde tu perfil: ${link}\n`,
+      html:
+        `<p>Hola ${escapeHtml(firstName)},</p>` +
+        `<p>Revisamos tu documentación y hay documentos que tenés que volver a subir:</p>` +
+        `<ul>${rejected
+          .map((r) => `<li><strong>${escapeHtml(r.label)}</strong>: ${escapeHtml(r.reason)}</li>`)
+          .join('')}</ul>` +
+        `<p>Podés corregirlos desde tu perfil: <a href="${link}">${link}</a></p>`,
+    });
+    const preview = nodemailer.getTestMessageUrl(info);
+    if (preview) this.logger.log(`Documents rejected email preview: ${preview}`);
+  }
+
+  // Aviso de que el perfil quedó aprobado y ya puede postularse a cargas.
+  async sendProfileApprovedEmail(to: string, firstName: string): Promise<void> {
+    const frontend = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+    const link = `${frontend}/loads`;
+    const transporter = await this.getTransporter();
+    const info = await transporter.sendMail({
+      from: this.fromAddress,
+      to,
+      subject: 'Tu perfil de transportista fue aprobado',
+      text:
+        `Hola ${firstName},\n\n` +
+        `Aprobamos tu documentación. Ya podés postularte a cargas: ${link}\n`,
+      html:
+        `<p>Hola ${escapeHtml(firstName)},</p>` +
+        `<p>Aprobamos tu documentación. Ya podés postularte a cargas: <a href="${link}">${link}</a></p>`,
+    });
+    const preview = nodemailer.getTestMessageUrl(info);
+    if (preview) this.logger.log(`Profile approved email preview: ${preview}`);
+  }
+}
+
+// El motivo de rechazo lo escribe un admin a mano: no se interpola crudo en HTML.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

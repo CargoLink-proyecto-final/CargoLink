@@ -28,7 +28,7 @@ POSTGRES_PASSWORD=<algo-seguro>
 JWT_SECRET=<string-largo-y-aleatorio>
 ```
 
-Las demás vars (`POSTGRES_USER`, `POSTGRES_DB`, `JWT_EXPIRATION`, `CORS_ORIGIN`, `FRONTEND_URL`) tienen defaults razonables para dev. El bloque SMTP podés dejarlo vacío — el backend usa Ethereal Email automáticamente como fallback de dev (no envía emails reales, solo loguea URLs de preview). Detalle completo de variables en [`docker.md`](./docker.md).
+Las demás vars (`POSTGRES_USER`, `POSTGRES_DB`, `JWT_EXPIRATION`, `CORS_ORIGIN`, `FRONTEND_URL`, `UPLOAD_DIR`) tienen defaults razonables para dev. El bloque SMTP podés dejarlo vacío — el backend usa Ethereal Email automáticamente como fallback de dev (no envía emails reales, solo loguea URLs de preview). Detalle completo de variables en [`docker.md`](./docker.md).
 
 ### 2. Levantar el stack
 

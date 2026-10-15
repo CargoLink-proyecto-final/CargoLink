@@ -12,6 +12,7 @@ import { Search, Filter, X, MapPin, Flag, ChevronDown, Plus, ArrowRight } from '
 import { LoadStatus } from '@/types';
 import CityCombobox, { City } from '@/components/geo/CityCombobox';
 import { geoApi } from '@/lib/api';
+import { describeRequirements, requirementsOf } from '@/lib/vehicleRequirements';
 
 interface DateRange { from: string; to: string }
 const EMPTY_RANGE: DateRange = { from: '', to: '' };
@@ -53,6 +54,8 @@ export default function LoadsPage() {
   // Un solo panel de tramo abierto a la vez: abrir uno cierra el otro.
   const [openLeg, setOpenLeg] = useState<Leg | null>(null);
   const [page, setPage] = useState(1);
+  // Solo transportista: oculta las cargas cuyos requisitos no cumple su vehículo.
+  const [compatibleOnly, setCompatibleOnly] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
@@ -71,7 +74,7 @@ export default function LoadsPage() {
       'loads', statusFilter, cargoType, debouncedSearch, page,
       pickupRange.from, pickupRange.to,
       deliveryRange.from, deliveryRange.to,
-      pickupCity?.id, deliveryCity?.id,
+      pickupCity?.id, deliveryCity?.id, compatibleOnly,
     ],
     queryFn: () => {
       const params: any = { page, limit: 20 };
@@ -84,6 +87,7 @@ export default function LoadsPage() {
       if (deliveryRange.to) params.deliveryTo = deliveryRange.to;
       if (pickupCity) params.originCityId = pickupCity.id;
       if (deliveryCity) params.destCityId = deliveryCity.id;
+      if (compatibleOnly) params.compatibleOnly = 'true';
       if (user?.role === 'CARGO_GENERATOR') return loadsApi.getMy(params).then((r) => r.data);
       if (user?.role === 'TRANSPORTER')     return loadsApi.getAvailable(params).then((r) => r.data);
       return loadsApi.getAll(params).then((r) => r.data);
@@ -177,6 +181,16 @@ export default function LoadsPage() {
                   {statuses.map((s) => <option key={s} value={s}>{getSolicitudStageLabel(s)}</option>)}
                 </select>
               )}
+              {user?.role === 'TRANSPORTER' && (
+                <label className="flex items-center gap-2 text-[13px] text-ink-700 whitespace-nowrap px-1">
+                  <input
+                    type="checkbox"
+                    checked={compatibleOnly}
+                    onChange={(e) => { setCompatibleOnly(e.target.checked); setPage(1); }}
+                  />
+                  Solo compatibles con mi vehículo
+                </label>
+              )}
               {/* Un toggle por tramo: cada panel agrupa fecha + ciudad de ese tramo */}
               <LegToggle
                 label="Recogida"
@@ -249,6 +263,11 @@ export default function LoadsPage() {
                             {load.title}
                             <ArrowRight size={13} className="opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition" />
                           </Link>
+                          {describeRequirements(requirementsOf(load)).length > 0 && (
+                            <p className="text-[11.5px] text-ink-500 mt-0.5">
+                              Requiere: {describeRequirements(requirementsOf(load)).join(' · ')}
+                            </p>
+                          )}
                         </td>
                         <td className="px-5 py-3.5 text-ink-600 max-w-[120px] sm:max-w-[220px] truncate">{load.originAddress}</td>
                         <td className="px-5 py-3.5 text-ink-600 max-w-[120px] sm:max-w-[220px] truncate">{load.destAddress}</td>

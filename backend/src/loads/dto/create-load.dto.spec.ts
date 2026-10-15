@@ -53,3 +53,36 @@ describe('CreateLoadDto — price', () => {
     expect(errors.find((e) => e.property === 'price')).toBeDefined();
   });
 });
+
+describe('CreateLoadDto — vehicle requirements', () => {
+  it('accepts a list of vehicle types and the spec flags', async () => {
+    const errors = await validate(
+      baseLoad({
+        requiredBodyType: 'CERRADA',
+        requiresRefrigeration: true,
+        requiresHazmat: false,
+      } as Partial<CreateLoadDto>),
+    );
+    const requirementFields = [
+      'requiredBodyType',
+      'requiresRefrigeration',
+      'requiresHazmat',
+    ];
+    expect(errors.filter((e) => requirementFields.includes(e.property))).toHaveLength(0);
+  });
+
+  it('rejects an unknown body type', async () => {
+    const errors = await validate(baseLoad({ requiredBodyType: 'FURGON' } as unknown as Partial<CreateLoadDto>));
+    expect(errors.find((e) => e.property === 'requiredBodyType')?.constraints).toHaveProperty('isEnum');
+  });
+
+  it('accepts null to mean any body type', async () => {
+    const errors = await validate(baseLoad({ requiredBodyType: null }));
+    expect(errors.find((e) => e.property === 'requiredBodyType')).toBeUndefined();
+  });
+
+  it('rejects a non-boolean spec flag', async () => {
+    const errors = await validate(baseLoad({ requiresRefrigeration: 'si' } as unknown as Partial<CreateLoadDto>));
+    expect(errors.find((e) => e.property === 'requiresRefrigeration')).toBeDefined();
+  });
+});

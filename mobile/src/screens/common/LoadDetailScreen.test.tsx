@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import LoadDetailScreen from './LoadDetailScreen';
-import { loadsApi, tripsApi, postulationsApi } from '../../services/api';
+import { loadsApi, tripsApi, postulationsApi, transporterProfileApi } from '../../services/api';
 
 jest.mock('../../services/api', () => ({
   loadsApi: {
@@ -20,6 +20,18 @@ jest.mock('../../services/api', () => ({
     listForLoad: jest.fn(),
     acceptOffer: jest.fn(),
     withdraw: jest.fn(),
+  },
+  // Vehículo del transportista: por defecto cumple los requisitos de baseLoad.
+  transporterProfileApi: {
+    getVehicle: jest.fn().mockResolvedValue({
+      data: {
+        bodyType: 'ABIERTA',
+        refrigerated: false,
+        hazardousMaterials: false,
+        maxWeightKg: 12000,
+        maxVolumeM3: null,
+      },
+    }),
   },
 }));
 
@@ -379,6 +391,43 @@ describe('LoadDetailScreen', () => {
       onFocus();
 
       await waitFor(() => expect(loadsApi.getById).toHaveBeenCalledTimes(2));
+    });
+  });
+
+  describe('requisitos de vehículo', () => {
+    it('shows "Cualquiera" when the load has no requirements', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+
+      const { getByText } = render(<LoadDetailScreen route={makeRoute()} navigation={makeNav()} />);
+
+      await waitFor(() => expect(getByText('Cualquiera')).toBeTruthy());
+    });
+
+    it('blocks Postularme and explains why when the vehicle does not fit', async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({
+        data: { ...baseLoad, requiredBodyType: 'CERRADA', requiresRefrigeration: true },
+      });
+
+      const { getByText } = render(<LoadDetailScreen route={makeRoute()} navigation={makeNav()} />);
+
+      await waitFor(() =>
+        expect(getByText('Tu vehículo no cumple los requisitos de esta carga')).toBeTruthy(),
+      );
+      expect(getByText('Carrocería cerrada · Refrigerado')).toBeTruthy();
+      expect(getByText('• Requiere carrocería cerrada (la tuya es abierta)')).toBeTruthy();
+      expect(getByText('• Requiere vehículo refrigerado')).toBeTruthy();
+      fireEvent.press(getByText('Postularme'));
+      expect(() => getByText('Enviar postulación')).toThrow();
+    });
+
+    it('does not query the vehicle for a shipper', async () => {
+      mockUser = { id: 'shipper1', role: 'CARGO_GENERATOR', firstName: 'Sam', lastName: 'Shipper' };
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: baseLoad });
+
+      const { getByText } = render(<LoadDetailScreen route={makeRoute()} navigation={makeNav()} />);
+
+      await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
+      expect(transporterProfileApi.getVehicle).not.toHaveBeenCalled();
     });
   });
 

@@ -61,6 +61,8 @@ src/app/
 │   └── check-email/page.tsx                # /auth/check-email  (paso intermedio post-register)
 ├── dashboard/
 │   ├── admin/page.tsx                      # /dashboard/admin
+│   ├── admin/verifications/page.tsx        # /dashboard/admin/verifications — cola de verificación de transportistas
+│   ├── admin/verifications/[userId]/page.tsx # detalle: aprobar/rechazar documentos con motivo
 │   ├── carrier/page.tsx                    # /dashboard/carrier
 │   └── shipper/page.tsx                    # /dashboard/shipper
 ├── loads/
@@ -77,6 +79,9 @@ src/app/
 │   └── trip/[tripId]/page.tsx              # /messages/trip/[tripId] — chat
 ├── trips/
 │   └── [id]/page.tsx                       # /trips/[id] — detalle
+├── profile/
+│   ├── page.tsx                            # /profile — datos propios (todos los roles)
+│   └── complete/page.tsx                   # /profile/complete — perfil de transportista (P13): documentos, vehículo, declaración jurada
 ├── register/
 │   └── page.tsx                            # /register — registro de loads cerrados + export
 └── users/
@@ -97,6 +102,7 @@ src/components/
 ├── maps/                      # MapView (tracking), LocationPicker (crear load)
 ├── metrics/                   # FuelMarginCard (margen con precio de gasoil local)
 ├── postulations/              # PostulationsPanel, PostulationCard, PostulateModal
+├── transporter-profile/       # DocumentRow — fila de upload de un documento (foto/PDF + estado)
 ├── register/                  # RegisterList, RegisterRow, RegisterFilters, MessageThread
 ├── trips/                     # trip cards
 └── ui/                        # StatCard, StatusBadge — primitives de diseño
@@ -176,6 +182,8 @@ Cada uno es un objeto con métodos que retornan promesas de Axios:
 - `ratingsApi` — create, getUserRatings.
 - `postulationsApi` — create, getForLoad, getMy, accept, counterOffer, acceptOffer, withdraw.
 - `companiesApi` — list, getMyMembership, requestToJoin, cancelJoinRequest, leave, getMyCompany, getDrivers, removeDriver, getDriverStats, getRequests, decideRequest, getTrips. Ver [`empresas.md`](./empresas.md).
+- `transporterProfileApi` — getStatus, listDocuments, uploadDocument (multipart), deleteDocument, getDocumentFile (`responseType: 'blob'` — el endpoint exige auth, no se puede linkear directo como `<a href>`), getVehicle, upsertVehicle, acceptTerms. Consumido por `/profile/complete`, el aviso en `/profile`, el badge del link "Mi perfil" del sidebar y el banner del dashboard del carrier, todos vía `useProfileStatus()` (`src/lib/transporterProfile.ts`). A propósito **no** tiene su propio ítem en el nav del sidebar — vive dentro de "Mi perfil" en lugar de sumar una pestaña más. El badge de "Mi perfil" solo aparece cuando el transportista tiene algo que hacer (`INCOMPLETE` o `REJECTED`); en revisión no hay acción de su lado. Los textos de cada estado viven en `VERIFICATION_META` y los muestra `VerificationBanner`.
+- `transporterReviewApi` (solo `ADMIN`) — getQueue, getProfile, review. Consumido por `/dashboard/admin/verifications` y por el ítem "Verificaciones" del sidebar del admin, que muestra cuántos transportistas esperan revisión.
 
 Los componentes los usan envueltos en `useQuery` / `useMutation` de TanStack Query.
 

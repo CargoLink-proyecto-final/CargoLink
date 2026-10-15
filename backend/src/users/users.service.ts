@@ -6,7 +6,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
+import { rm } from 'fs/promises';
+import { join } from 'path';
 import { hash } from 'bcrypt';
 import {
   JoinRequestStatus,
@@ -18,6 +21,12 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { RegisterDto } from '../auth/dto/register.dto';
+import {
+  CUIT_DOCUMENT_TYPES,
+  LICENSE_DOCUMENT_TYPES,
+} from '../transporter-profile/profile-completeness';
+import { sendApprovedDocumentsBackToReview } from '../transporter-profile/profile-status';
+import { resolveUploadDir } from '../transporter-profile/upload-dir';
 
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
@@ -69,6 +78,10 @@ export const PUBLIC_USER_SELECT = {
   zoneLat: true,
   zoneLng: true,
   zoneRadiusKm: true,
+  cuit: true,
+  licenseCategory: true,
+  licenseExpiresAt: true,
+  termsAcceptedAt: true,
   isActive: true,
   emailVerified: true,
   companyId: true,
@@ -79,10 +92,15 @@ export const PUBLIC_USER_SELECT = {
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
+  private readonly uploadDir: string;
+
   constructor(
     private prisma: PrismaService,
     private mailService: MailService,
-  ) {}
+    configService: ConfigService,
+  ) {
+    this.uploadDir = resolveUploadDir(configService);
+  }
 
   async create(data: RegisterDto & { password: string }) {
     // firstName/lastName son opcionales en el DTO (las cuentas de empresa no los
@@ -130,11 +148,39 @@ export class UsersService {
     return { users, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async update(id: string, data: Partial<{ firstName: string; lastName: string; phone: string; companyName: string; industry: string; zoneLat: number; zoneLng: number; zoneRadiusKm: number }>) {
-    return this.prisma.user.update({
+  async update(id: string, data: Partial<{ firstName: string; lastName: string; phone: string; companyName: string; industry: string; zoneLat: number; zoneLng: number; zoneRadiusKm: number; cuit: string; licenseCategory: string; licenseExpiresAt: string }>) {
+    // Prisma exige un DateTime ISO completo; el DTO solo valida "es una fecha"
+    // (acepta "2028-01-01" sin hora), así que lo normalizamos acá.
+    const { licenseExpiresAt, ...rest } = data;
+    const before = await this.prisma.user.findUnique({
       where: { id },
-      data,
-      select: PUBLIC_USER_SELECT,
+      select: { cuit: true, licenseCategory: true, licenseExpiresAt: true },
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: {
+          ...rest,
+          ...(licenseExpiresAt !== undefined ? { licenseExpiresAt: new Date(licenseExpiresAt) } : {}),
+        },
+        select: PUBLIC_USER_SELECT,
+      });
+
+      // La constancia de AFIP y la licencia se aprobaron contra los datos
+      // viejos: si el transportista los cambia, vuelven a revisión del admin.
+      if (before) {
+        if (updated.cuit !== before.cuit) {
+          await sendApprovedDocumentsBackToReview(tx, id, CUIT_DOCUMENT_TYPES);
+        }
+        if (
+          updated.licenseCategory !== before.licenseCategory ||
+          updated.licenseExpiresAt?.getTime() !== before.licenseExpiresAt?.getTime()
+        ) {
+          await sendApprovedDocumentsBackToReview(tx, id, LICENSE_DOCUMENT_TYPES);
+        }
+      }
+      return updated;
     });
   }
 
@@ -245,6 +291,11 @@ export class UsersService {
           zoneLat: null,
           zoneLng: null,
           zoneRadiusKm: null,
+          // Datos de validación del transportista: identifican a la persona
+          // tanto como el nombre.
+          cuit: null,
+          licenseCategory: null,
+          licenseExpiresAt: null,
           // Corta las push al dispositivo y lo desvincula de la empresa.
           expoPushToken: null,
           companyId: null,
@@ -257,6 +308,12 @@ export class UsersService {
           deletedAt: new Date(),
         },
       });
+
+      // DNI, licencia, constancia de AFIP, cédula, seguro y VTV, y el vehículo
+      // con su patente: a diferencia de viajes y calificaciones, nada de esto
+      // le pertenece a otra parte, así que se borra en vez de anonimizarse.
+      await tx.document.deleteMany({ where: { userId: id } });
+      await tx.vehicle.deleteMany({ where: { userId: id } });
 
       // Retira las postulaciones abiertas. Sin esto el dador de carga podría
       // aceptar la postulación de alguien que ya no existe: se abriría un viaje
@@ -290,6 +347,15 @@ export class UsersService {
         });
       }
     });
+
+    // Los archivos se borran después del commit: el disco no participa de la
+    // transacción, y borrarlos antes dejaría filas apuntando a nada si la
+    // transacción fallara. Si el borrado falla, la cuenta igual quedó dada de
+    // baja; se loguea para limpiar a mano en vez de devolverle un error al
+    // usuario por algo que ya no puede reintentar.
+    await rm(join(this.uploadDir, id), { recursive: true, force: true }).catch((err) =>
+      this.logger.error(`No se pudieron borrar los documentos de la cuenta ${id}`, err as Error),
+    );
 
     this.logger.log(`Cuenta ${id} eliminada y anonimizada a pedido del usuario`);
     // No devuelve el usuario: ya no hay nada que el cliente pueda mostrar, y el

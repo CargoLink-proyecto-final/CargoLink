@@ -8,13 +8,16 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { tripsApi } from '../../services/api';
+import { Ionicons } from '@expo/vector-icons';
+import { tripsApi, transporterProfileApi } from '../../services/api';
 import { getSolicitudStageColor, getSolicitudStageLabel } from '../../lib/labels';
-import { Trip } from '../../types';
+import { ProfileStatus, Trip } from '../../types';
+import { VERIFICATION_META } from '../../lib/transporterProfile';
 
 export default function CarrierDashboard({ navigation }: any) {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [profileStatus, setProfileStatus] = useState<ProfileStatus | null>(null);
 
   const fetchTrips = async () => {
     try {
@@ -25,7 +28,13 @@ export default function CarrierDashboard({ navigation }: any) {
     }
   };
 
-  useEffect(() => { fetchTrips(); }, []);
+  useEffect(() => {
+    fetchTrips();
+    transporterProfileApi
+      .getStatus()
+      .then((res) => setProfileStatus(res.data))
+      .catch((err) => console.error(err));
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -43,6 +52,23 @@ export default function CarrierDashboard({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Mis Viajes</Text>
+
+      {profileStatus && !profileStatus.approved && (() => {
+        const meta = VERIFICATION_META[profileStatus.state];
+        return (
+          <TouchableOpacity
+            style={[styles.profileBanner, { backgroundColor: meta.background }]}
+            onPress={() => navigation.navigate('CompleteProfile')}
+          >
+            <Ionicons name={meta.icon} size={20} color={meta.color} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.profileBannerTitle, { color: meta.color }]}>{meta.title}</Text>
+              <Text style={styles.profileBannerText}>{meta.description}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={meta.color} />
+          </TouchableOpacity>
+        );
+      })()}
 
       <View style={styles.statsRow}>
         {[
@@ -101,6 +127,12 @@ export default function CarrierDashboard({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb', padding: 16 },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
+  profileBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fef3c7', borderRadius: 12, padding: 14, marginBottom: 16,
+  },
+  profileBannerTitle: { fontSize: 14, fontWeight: '600', color: '#b45309' },
+  profileBannerText: { fontSize: 12, color: '#374151', marginTop: 2 },
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   statCard: {
     flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 12,

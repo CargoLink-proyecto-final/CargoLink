@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller, Control } from 'react-hook-form';
 import { loadsApi } from '../../services/api';
 import { CARGO_TYPES, showsPackageDetails } from '../../constants/cargo';
+import { BODY_TYPES } from '../../lib/transporterProfile';
+import {
+  EMPTY_REQUIREMENTS,
+  suggestedBodyType,
+  VehicleRequirements,
+} from '../../lib/vehicleRequirements';
+import { BodyType } from '../../types';
+
+const BODY_OPTIONS: { value: BodyType | null; label: string }[] = [
+  { value: null, label: 'Cualquiera' },
+  ...BODY_TYPES,
+];
 
 interface LoadForm {
   title: string;
@@ -87,10 +99,23 @@ function Field({
 
 export default function CreateLoadScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
+  const [requirements, setRequirements] = useState<VehicleRequirements>(EMPTY_REQUIREMENTS);
   const { control, handleSubmit, reset, watch } = useForm<LoadForm>();
 
   const cargoType = watch('cargoType');
   const showPackage = showsPackageDetails(cargoType);
+
+  // La categoría sugiere la carrocería mientras el publicador no la haya
+  // tocado a mano (ver lib/vehicleRequirements).
+  const requirementsTouched = useRef(false);
+  useEffect(() => {
+    if (requirementsTouched.current || !cargoType) return;
+    setRequirements((prev) => ({ ...prev, requiredBodyType: suggestedBodyType(cargoType) }));
+  }, [cargoType]);
+  const changeRequirements = (patch: Partial<VehicleRequirements>) => {
+    requirementsTouched.current = true;
+    setRequirements((prev) => ({ ...prev, ...patch }));
+  };
 
   const onSubmit = async (data: LoadForm) => {
     setLoading(true);
@@ -117,9 +142,12 @@ export default function CreateLoadScreen({ navigation }: any) {
         deliveryDate: new Date(data.deliveryDate).toISOString(),
         // Vacío = "a convenir": no mandamos el campo en vez de un 0 engañoso.
         price: optionalNumber(data.price),
+        ...requirements,
       });
       Alert.alert('Éxito', 'Carga creada exitosamente');
       reset();
+      requirementsTouched.current = false;
+      setRequirements(EMPTY_REQUIREMENTS);
       navigation.navigate('Dashboard');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.message || 'Error al crear la carga');
@@ -207,6 +235,54 @@ export default function CreateLoadScreen({ navigation }: any) {
               </Text>
             </View>
           )}
+
+          {/* El publicador describe lo que necesita su carga; el tamaño del
+              vehículo sale del peso y el volumen. */}
+          <View style={styles.subSection}>
+            <Text style={styles.subSectionTitle}>Lo que necesita tu carga</Text>
+            <Text style={styles.label}>Carrocería</Text>
+            <View style={styles.chips}>
+              {BODY_OPTIONS.map(({ value, label }) => {
+                const selected = requirements.requiredBodyType === value;
+                return (
+                  <TouchableOpacity
+                    key={value ?? 'ANY'}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                    onPress={() => changeRequirements({ requiredBodyType: value })}
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {!requirementsTouched.current && !!cargoType && (
+              <Text style={styles.helper}>Sugerida según el tipo de carga, podés cambiarla.</Text>
+            )}
+            <View style={styles.chips}>
+              {(
+                [
+                  ['requiresRefrigeration', 'Necesita frío'],
+                  ['requiresHazmat', 'Carga peligrosa'],
+                ] as const
+              ).map(([key, label]) => {
+                const selected = requirements[key];
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                    onPress={() => changeRequirements({ [key]: !selected })}
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.helper}>
+              No hace falta elegir el tamaño del vehículo: se calcula con el peso y el volumen.
+            </Text>
+          </View>
         </View>
 
         <View style={styles.section}>
