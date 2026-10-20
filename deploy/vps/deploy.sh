@@ -41,6 +41,8 @@ http_is() {
 main() {
   local env_name="${1:-}" sha="${2:-}"
   local app_dir branch
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
   case "$env_name" in
     prod) app_dir="${CARGOLINK_PROD_DIR:-$HOME/cargolink}"; branch=main ;;
@@ -157,6 +159,21 @@ main() {
     summary "- Rollback: ver docs/deployment.md § Rollback"
     die "Healthcheck falló tras ${timeout}s (frontend=$fe_ok api=$api_ok)"
   fi
+
+  # ── 6b. Smoke test del módulo trips (solo lectura) ──
+  # La cuenta de smoke es opcional y sale del .env del entorno (SMOKE_EMAIL /
+  # SMOKE_PASSWORD); sin ella corren solo los checks sin autenticación.
+  group "Smoke test trips"
+  local smoke_ok=true
+  (
+    set -a
+    # shellcheck disable=SC1090
+    source <(grep -E '^SMOKE_(EMAIL|PASSWORD)=' .env || true)
+    set +a
+    bash "$script_dir/smoke.sh" "$base_url"
+  ) || smoke_ok=false
+  endgroup
+  $smoke_ok || die "El smoke test post-deploy falló; ver el resumen del job y docs/deployment.md § Rollback"
 
   # ── 7. Limpieza ──
   group "Limpieza de imágenes huérfanas y build cache viejo"
