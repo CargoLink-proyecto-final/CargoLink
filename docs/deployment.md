@@ -18,6 +18,7 @@ CargoLink corre en un **VPS propio** (`ubuntu-tesis01`) con Docker Compose: **pr
 | Backup pre-deploy (prod) | ✅ `deploy.sh` corre `~/backups/backup.sh` antes de levantar la versión nueva |
 | Backup diario | ✅ cron 03:00, `pg_dump -Fc` de las dos bases (14 copias de prod, 7 de dev). Restore probado |
 | Healthcheck post-deploy | ✅ `/` → 200 y `/api/geo/provinces` → 401 por la URL pública |
+| Smoke test post-deploy | ✅ `smoke.sh` sobre el módulo trips (solo lectura) |
 | Rollback | ⚠️ manual: imágenes `:previous` + restore si hubo migración (ver § Rollback) |
 | Logs / métricas | ⚠️ solo `docker compose logs`; no hay métricas |
 | Backups fuera del host | ❌ los dumps viven en el mismo disco del VPS |
@@ -232,7 +233,9 @@ Si hacés rollback a una imagen `:previous` construida antes de ese fix, el 502 
 
 ## Smoke test post-deploy
 
-El healthcheck es automático; lo funcional sigue siendo manual:
+Después del healthcheck, `deploy.sh` corre [`smoke.sh`](../deploy/vps/smoke.sh) sobre el módulo de viajes. Es de solo lectura; los checks autenticados usan `SMOKE_EMAIL`/`SMOKE_PASSWORD` del `.env` del entorno si están definidas. Si falla, el deploy queda en rojo. Detalle en [`calidad/pruebas-carga.md`](./calidad/pruebas-carga.md#smoke-test-post-deploy).
+
+El resto sigue siendo manual:
 
 1. Login con una cuenta demo y con la cuenta admin.
 2. `GET /api/users/me` con el token devuelve el user.
