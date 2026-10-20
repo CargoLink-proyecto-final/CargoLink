@@ -114,7 +114,9 @@ jobs:
           path: frontend/coverage/
           retention-days: 30
 
+      # Compila aunque fallen los tests: así un test en rojo no tapa un error de build.
       - name: Build
+        if: ${{ !cancelled() }}
         run: npm run build
 
   sonarcloud:
