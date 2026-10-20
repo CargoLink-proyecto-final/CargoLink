@@ -5,7 +5,12 @@
  *
  * Es best-effort: devuelve null si OSRM no responde o no hay ruta. El caller
  * decide qué hacer con el null (en nuestro caso, guardar distancia desconocida).
+ *
+ * La URL base se puede apuntar a otra instancia con OSRM_URL (los tests de
+ * integración levantan un OSRM falso local para no salir a la red).
  */
+const DEFAULT_OSRM_URL = 'https://router.project-osrm.org';
+
 export async function fetchRouteDistanceKm(
   originLat: number,
   originLng: number,
@@ -14,7 +19,8 @@ export async function fetchRouteDistanceKm(
 ): Promise<number | null> {
   try {
     // OSRM espera las coordenadas como lng,lat (invertidas respecto a lat,lng).
-    const url = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=false`;
+    const baseUrl = process.env.OSRM_URL ?? DEFAULT_OSRM_URL;
+    const url = `${baseUrl}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=false`;
 
     const res = await fetch(url);
     if (!res.ok) return null;
