@@ -12,6 +12,15 @@ on:
   pull_request:
     branches: [develop]
   workflow_dispatch:
+    inputs:
+      k6_profile:
+        description: 'Perfil de carga de k6 (stress ~3 min, soak = esfuerzo sostenido)'
+        type: choice
+        options: [stress, soak]
+        default: stress
+      soak_duration:
+        description: 'Duración de la meseta del perfil soak'
+        default: 10m
 
 permissions:
   contents: read
@@ -151,3 +160,90 @@ jobs:
       - name: Aviso sin token
         if: ${{ env.SONAR_TOKEN == '' }}
         run: echo "::warning::SONAR_TOKEN no configurado; se omite el análisis de SonarCloud."
+
+  stress:
+    name: Stress · k6 sobre tracking de viajes
+    runs-on: ubuntu-latest
+    needs: [backend]
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cargolink
+          POSTGRES_PASSWORD: cargolink
+          POSTGRES_DB: cargolink
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cargolink"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Credenciales descartables: la DB vive solo durante el job.
+      DATABASE_URL: postgresql://cargolink:cargolink@localhost:5432/cargolink
+      JWT_SECRET: ci-stress-only
+      PORT: 3001
+      K6_PROFILE: ${{ inputs.k6_profile || 'stress' }}
+      SOAK_DURATION: ${{ inputs.soak_duration || '10m' }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run build
+
+      - name: Migraciones y seed
+        run: |
+          npx prisma migrate deploy
+          node dist/prisma/seed.js
+
+      - name: Levantar el backend
+        run: |
+          nohup node dist/src/main > "$RUNNER_TEMP/backend.log" 2>&1 &
+          # Sin token la API responde 401: prueba que Nest levantó y enruta.
+          for _ in $(seq 1 60); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:3001/api/geo/provinces)" = 401 ] && exit 0
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/backend.log"
+          exit 1
+
+      - name: Fixture (viaje IN_PROGRESS)
+        run: echo "TRIP_ID=$(node dist/prisma/k6-fixture.js)" >> "$GITHUB_ENV"
+
+      - name: k6 (${{ env.K6_PROFILE }})
+        working-directory: .
+        run: |
+          # Sin pipefail el tee taparía el exit code de k6 cuando falla un umbral.
+          set -o pipefail
+          mkdir -p k6-results
+          docker run --rm --network host -u "$(id -u)" \
+            -v "$PWD:/work" -w /work \
+            -e BASE_URL=http://localhost:3001/api \
+            -e TRIP_ID -e PROFILE="$K6_PROFILE" -e SOAK_DURATION \
+            grafana/k6:0.54.0 run \
+            --summary-trend-stats "avg,min,med,max,p(90),p(95),p(99)" \
+            --summary-export "k6-results/$K6_PROFILE.json" \
+            tests/k6/trips-location.js | tee "k6-results/$K6_PROFILE.txt"
+
+      - name: Resumen de k6
+        if: ${{ !cancelled() }}
+        working-directory: .
+        run: node .github/scripts/k6-summary.js "k6-results/$K6_PROFILE.json" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: k6-${{ env.K6_PROFILE }}
+          path: k6-results/
+          retention-days: 30
