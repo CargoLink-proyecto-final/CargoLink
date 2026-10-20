@@ -66,6 +66,24 @@ El fixture corre dentro del contenedor del backend, así usa la DB de compose au
 
 ## Resultados
 
+### Primera corrida en el pipeline (2026-10-20)
+
+Perfil `stress` en `ubuntu-latest` ([run 39488546108](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39488546108), rama `test/trips-k6-smoke`):
+
+| Métrica | Valor |
+|---|---|
+| Requests | 5.990 (29,8 req/s) |
+| VUs máximos | 50 |
+| Latencia media | 10,5 ms |
+| p90 | 17,5 ms |
+| p95 | 19,3 ms |
+| p99 | 22,8 ms |
+| Máxima | 74,5 ms |
+| Tasa de error | 0,00 % |
+| Checks OK | 100 % (11.978/11.978) |
+
+Los cuatro umbrales pasan.
+
 ### Línea base local (2026-10-20)
 
 Perfil `stress`, stack de docker compose en la notebook de desarrollo (Windows + Docker Desktop):
