@@ -56,6 +56,7 @@ push a develop o main
              │     GET /                    → 200
              │     GET /api/geo/provinces   → 401 (sin token)
              │     si falla: ps + logs del backend/frontend y el job queda en rojo
+             ├── smoke.sh del módulo trips (solo lectura; si falla, job en rojo)
              └── docker image prune + builder prune (cache > 7 días)
 ```
 
@@ -109,7 +110,7 @@ Estructura mínima: Summary, Commits, Test plan y Checklist. La completa el coma
 
 ## Caveats
 
-- **El deploy no corre tests.** Solo falla si falla el build, el backup, el `up` o el healthcheck. Mergear código roto es posible; lo mitigan `/pr` + `qa-engineer`.
+- **El deploy no corre tests unitarios** (eso lo hace `ci.yml` en el PR). Solo falla si falla el build, el backup, el `up`, el healthcheck o el smoke test. Mergear código roto es posible; lo mitigan `/pr` + `qa-engineer`.
 - **Las migraciones no corren en el pipeline**: se aplican al arrancar el backend. Un error de migración se descubre en el healthcheck, después del backup.
 - **Si el runner está offline**, el job queda encolado (GitHub lo descarta a las 24 h). Estado: *Settings → Actions → Runners*. Plan B: correr el script a mano.
 - **Build en el mismo host que prod**: durante unos 7 minutos compite por CPU con los contenedores en uso.

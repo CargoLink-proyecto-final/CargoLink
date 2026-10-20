@@ -7,3 +7,6 @@
 # diff con duplicados del código real.
 * [0-9].*
 * [0-9]
+
+# Resultados locales de k6 (tests/k6/run-local.sh)
+k6-results/
