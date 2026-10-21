@@ -13,7 +13,8 @@
 #   3. build de backend y frontend con los contenedores viejos sirviendo
 #   4. [solo prod] backup de la DB — las migraciones corren solas al arrancar
 #   5. up -d --no-build (recrea solo lo que cambió)
-#   6. healthcheck contra la URL pública (a través de Cloudflare)
+#   6. healthcheck contra la URL pública (a través de Cloudflare), smoke del
+#      módulo trips y [solo dev] el E2E de trips (e2e-trips.mjs)
 #   7. limpieza de imágenes huérfanas y build cache viejo
 #
 # Nunca hace `down` ni borra volúmenes.
@@ -168,12 +169,38 @@ main() {
   (
     set -a
     # shellcheck disable=SC1090
-    source <(grep -E '^SMOKE_(EMAIL|PASSWORD)=' .env || true)
+    source <(grep -E '^(SMOKE_(EMAIL|PASSWORD)|E2E_PASSWORD)=' .env || true)
     set +a
+    # Sin cuenta de smoke propia, usa la del transportista del E2E (dev).
+    if [[ -z "${SMOKE_EMAIL:-}" && -n "${E2E_PASSWORD:-}" ]]; then
+      export SMOKE_EMAIL=e2e-carrier@cargolink.test SMOKE_PASSWORD="$E2E_PASSWORD"
+    fi
     bash "$script_dir/smoke.sh" "$base_url"
   ) || smoke_ok=false
   endgroup
   $smoke_ok || die "El smoke test post-deploy falló; ver el resumen del job y docs/deployment.md § Rollback"
+
+  # ── 6c. E2E del módulo trips (solo dev: escribe datos) ──
+  # Corre dentro del contenedor del backend, que ya tiene node y E2E_PASSWORD
+  # (el seed creó las cuentas con esa misma password). Pega contra la URL
+  # pública, igual que un usuario, y al cerrar el viaje usa OSRM real.
+  if [[ "$env_name" == "dev" ]]; then
+    group "E2E trips (carga → postulación → viaje → OSRM → calificación)"
+    local e2e_out e2e_ok=true
+    e2e_out=$(mktemp)
+    if grep -qE '^E2E_PASSWORD=.+' .env; then
+      "${dc[@]}" exec -T backend node --input-type=module - "$base_url" \
+        <"$script_dir/e2e-trips.mjs" 2>&1 | tee "$e2e_out" || e2e_ok=false
+      summary "### E2E trips — $base_url"
+      summary "$(sed -e 's/^  ok   /- ✅ /' -e 's/^  FAIL /- ❌ /' "$e2e_out")"
+    else
+      echo "  skip E2E (sin E2E_PASSWORD en .env)"
+      summary "- ⏭️ E2E trips omitido (sin E2E_PASSWORD en .env)"
+    fi
+    rm -f "$e2e_out"
+    endgroup
+    $e2e_ok || die "El E2E post-deploy falló; ver el resumen del job"
+  fi
 
   # ── 7. Limpieza ──
   group "Limpieza de imágenes huérfanas y build cache viejo"

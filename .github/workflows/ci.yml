@@ -26,8 +26,10 @@ permissions:
   contents: read
   pull-requests: read
 
+# El evento va en el grupo para que un push a develop no cancele un soak
+# lanzado a mano (workflow_dispatch) sobre la misma rama.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:

@@ -138,6 +138,7 @@ Viven en el `.env` de cada clone (ver [`docker.md`](./docker.md) para la tabla c
 | `JWT_SECRET` | `openssl rand -base64 64`. Distinto entre prod y dev. |
 | `CORS_ORIGIN`, `FRONTEND_URL` | `https://$APP_HOST`. `FRONTEND_URL` la usan los emails de verify/reset. |
 | `ADMIN_PASSWORD` | Obligatoria en prod. Si queda vacía, el seed usa un fallback versionado en el repo. |
+| `E2E_PASSWORD` | **Solo dev.** Crea las cuentas del E2E post-deploy y lo habilita. En prod no se define. |
 | `SMTP_*` | Cuenta real (Gmail soportecargolink@gmail.com con app password). |
 | `NEXT_PUBLIC_API_URL` | No va en el `.env`: es build-arg y lo arma el override. |
 
@@ -234,6 +235,8 @@ Si hacés rollback a una imagen `:previous` construida antes de ese fix, el 502 
 ## Smoke test post-deploy
 
 Después del healthcheck, `deploy.sh` corre [`smoke.sh`](../deploy/vps/smoke.sh) sobre el módulo de viajes. Es de solo lectura; los checks autenticados usan `SMOKE_EMAIL`/`SMOKE_PASSWORD` del `.env` del entorno si están definidas. Si falla, el deploy queda en rojo. Detalle en [`calidad/pruebas-carga.md`](./calidad/pruebas-carga.md#smoke-test-post-deploy).
+
+En dev, después del smoke corre además el E2E del módulo de viajes ([`e2e-trips.mjs`](../deploy/vps/e2e-trips.mjs)): publica una carga, la asigna, hace el viaje completo con OSRM real y lo califica. Necesita `E2E_PASSWORD` en el `.env`; sin ella se saltea. Detalle en [`calidad/integracion-osrm-e2e.md`](./calidad/integracion-osrm-e2e.md).
 
 El resto sigue siendo manual:
 
