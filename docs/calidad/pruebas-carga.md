@@ -103,9 +103,25 @@ Los cuatro umbrales pasan con mucho margen: el p95 es 23 veces menor que el lím
 
 **Para el informe:** los números que valen son los del *job summary* del CI (la consigna pide que coincidan con el pipeline). Este local sirve como referencia.
 
+### Esfuerzo sostenido en el pipeline (2026-10-21)
+
+Perfil `soak` en `ubuntu-latest`, lanzado a mano desde Actions sobre `develop` ([run 39602779633](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39602779633), `soak_duration=10m`): 20 VUs (40 % de `MAX_VUS`) sostenidos durante 11 min 30 s, contando la rampa.
+
+| Métrica | Resultado | Umbral | |
+|---|---|---|---|
+| Requests a `location` | 12.736 (18,5 req/s) | — | |
+| Tasa de error | 0,00 % (0 de 12.736) | < 1 % | ✅ |
+| p95 | 16,94 ms | < 500 ms | ✅ |
+| p99 | 20,60 ms | < 1000 ms | ✅ |
+| Latencia media / máxima | 11,59 ms / 67,34 ms | — | |
+| Checks OK | 100 % (25.472 de 25.472) | > 99 % | ✅ |
+
+Los cuatro umbrales pasan. La latencia no crece a lo largo de la corrida: el p95 del soak (16,9 ms) es del mismo orden que el del stress (19,3 ms con 50 VUs). No aparecen señales de fuga de memoria ni de conexiones a la DB en 10 minutos de carga constante.
+
+El primer intento ([run 39601790852](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39601790852)) quedó cancelado a los pocos minutos. Lo canceló el CI que disparó un merge a `develop`, porque los dos compartían el grupo de concurrencia. Se corrigió en #162, que pasó a separar el grupo por evento.
+
 ### Pendiente
 
-- Correr `soak` desde Actions y registrar el resultado.
 - Subir `MAX_VUS` hasta encontrar el punto de quiebre (dónde el p95 cruza los 500 ms), para tener un límite de capacidad documentado.
 
 ---
