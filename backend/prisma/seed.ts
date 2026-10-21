@@ -2,6 +2,7 @@ import { PrismaClient, Role, JoinRequestStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { seedGeo } from './seed-geo';
 import { backfillLoadCities } from './backfill-load-cities';
+import { seedE2eAccounts } from './seed-e2e';
 
 const prisma = new PrismaClient();
 
@@ -209,6 +210,7 @@ async function main() {
       });
 
   const backfill = await backfillLoadCities(prisma);
+  const e2e = await seedE2eAccounts(prisma);
 
   console.log('Datos de seed listos:', {
     geo: `${geo.provinces} provincias, ${geo.cities} ciudades (${geo.inserted} nuevas, ${geo.postalCodes} CP completados, ${geo.renamed} nombres reconciliados)`,
@@ -222,6 +224,7 @@ async function main() {
     demoTransporters,
     load: load.id,
     reused: !!existing,
+    e2e: e2e ? `${e2e.shipper}, ${e2e.carrier}` : 'omitidas (sin E2E_PASSWORD)',
     backfill: `${backfill.origin} orígenes / ${backfill.dest} destinos resueltos sobre ${backfill.pending} cargas`,
   });
 }
