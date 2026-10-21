@@ -251,7 +251,7 @@ fontFamily: {
 },
 ```
 
-Las CSS vars las setea `app/layout.tsx` con `next/font/google`.
+Las CSS vars las setea `app/layout.tsx` con `next/font/local`, a partir de las fuentes variables versionadas en [`app/fonts/`](../frontend/src/app/fonts/README.md). Antes usaba `next/font/google`, pero el build bajaba las fuentes en cada corrida y fallaba cuando Google no respondía (#160).
 
 ### Otros tokens
 
