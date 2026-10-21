@@ -413,7 +413,7 @@ Source: [`../backend/src/trips/trips.controller.ts`](../backend/src/trips/trips.
 | GET | `/trips/my` | `TRANSPORTER` | Trips propios (carrier) |
 | GET | `/trips/metrics` | `TRANSPORTER` | Métricas de combustible + puntualidad del carrier logueado |
 | GET | `/trips/my-loads` | `CARGO_GENERATOR` | Trips de mis loads (shipper) |
-| GET | `/trips/:id` | cualquier rol | Detalle |
+| GET | `/trips/:id` | dador de la carga, transportista asignado o `ADMIN` | Detalle (incluye teléfonos y ubicación); cualquier otro usuario → 403 (#161) |
 | PATCH | `/trips/:id/start` | `TRANSPORTER` (dueño) | `PENDING` → `IN_PROGRESS`, set `startedAt` |
 | PATCH | `/trips/:id/complete` | `TRANSPORTER` (dueño) | → `COMPLETED`, set `completedAt` + `fuelLiters` + `distanceKm`, load → `DELIVERED` |
 | PATCH | `/trips/:id/location` | `TRANSPORTER` (dueño) | Update `currentLat`/`currentLng` |
