@@ -6,7 +6,7 @@ Parte del TP de Calidad de Software sobre el módulo de viajes (`trips`). Cubre 
 
 **Endpoint bajo carga:** `PATCH /api/trips/:id/location`. Es el de más tráfico del módulo: cada transportista con un viaje en curso manda su posición GPS cada pocos segundos, y escribe en la tabla `trips` en cada llamada.
 
-**Lo que no se prueba bajo carga:** el cierre del viaje (`PATCH /trips/:id/complete`), porque llama a OSRM. OSRM es un servidor público con rate limit, y estresarlo sería abusar de un servicio de terceros. Esa integración se cubre con dobles HTTP en `backend/src/trips/trips-osrm.integration.spec.ts` (ver #155).
+**Lo que no se prueba bajo carga:** el cierre del viaje (`PATCH /trips/:id/complete`), porque llama a OSRM. OSRM es un servidor público con rate limit, y estresarlo sería abusar de un servicio de terceros. Esa integración se cubre con dobles HTTP en `backend/src/trips/trips-osrm.integration.spec.ts` (ver #155) y contra OSRM real en el E2E post-deploy ([`integracion-osrm-e2e.md`](./integracion-osrm-e2e.md)).
 
 ## Criterios de aceptación (fijados antes de ejecutar)
 
