@@ -8,7 +8,7 @@ describe('TripsController', () => {
   let service: {
     acceptLoad: jest.Mock;
     findAll: jest.Mock;
-    findById: jest.Mock;
+    findByIdForUser: jest.Mock;
     startTrip: jest.Mock;
     completeTrip: jest.Mock;
     getCarrierMetrics: jest.Mock;
@@ -21,7 +21,7 @@ describe('TripsController', () => {
     service = {
       acceptLoad: jest.fn().mockResolvedValue('accept-result'),
       findAll: jest.fn().mockResolvedValue('findAll-result'),
-      findById: jest.fn().mockResolvedValue('findById-result'),
+      findByIdForUser: jest.fn().mockResolvedValue('findById-result'),
       startTrip: jest.fn().mockResolvedValue('start-result'),
       completeTrip: jest.fn().mockResolvedValue('complete-result'),
       getCarrierMetrics: jest.fn().mockResolvedValue('metrics-result'),
@@ -104,9 +104,10 @@ describe('TripsController', () => {
   });
 
   describe('findOne', () => {
-    it('delegates to findById', async () => {
-      const result = await controller.findOne('trip-7');
-      expect(service.findById).toHaveBeenCalledWith('trip-7');
+    it('delegates to findByIdForUser with the current user (#161)', async () => {
+      const user = { id: USER_ID, role: 'TRANSPORTER' };
+      const result = await controller.findOne('trip-7', user);
+      expect(service.findByIdForUser).toHaveBeenCalledWith('trip-7', user);
       expect(result).toBe('findById-result');
     });
   });

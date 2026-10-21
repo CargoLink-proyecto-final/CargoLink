@@ -225,7 +225,7 @@ Puntos de diseño:
 | `/api/trips/my` | GET | `TRANSPORTER` |
 | `/api/trips/metrics` | GET | `TRANSPORTER` |
 | `/api/trips/my-loads` | GET | `CARGO_GENERATOR` |
-| `/api/trips/:id` | GET | cualquier rol autenticado |
+| `/api/trips/:id` | GET | dador de la carga, transportista asignado o `ADMIN` (ownership en el service) |
 | `/api/trips/:id/start` | PATCH | `TRANSPORTER` |
 | `/api/trips/:id/complete` | PATCH | `TRANSPORTER` |
 | `/api/trips/:id/location` | PATCH | `TRANSPORTER` |

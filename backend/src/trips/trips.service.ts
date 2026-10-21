@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TripStatus, LoadStatus } from '@prisma/client';
+import { TripStatus, LoadStatus, Role } from '@prisma/client';
 import { fetchRouteDistanceKm } from '../common/routing';
 import { computeFuelAndDeliveryMetrics } from '../common/metrics';
 
@@ -91,6 +91,20 @@ export class TripsService {
       },
     });
     if (!trip) throw new NotFoundException('Viaje no encontrado');
+    return trip;
+  }
+
+  /**
+   * Detalle del viaje para el usuario logueado. Trae teléfonos de las dos
+   * partes y la ubicación del camión, así que solo lo ven el dador de la carga,
+   * el transportista asignado y el ADMIN (#161).
+   */
+  async findByIdForUser(id: string, user: { id: string; role: string }) {
+    const trip = await this.findById(id);
+    const isParty = trip.carrierId === user.id || trip.load?.shipperId === user.id;
+    if (!isParty && user.role !== Role.ADMIN) {
+      throw new ForbiddenException('No tenés acceso a este viaje');
+    }
     return trip;
   }
 

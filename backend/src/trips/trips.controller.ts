@@ -87,9 +87,12 @@ export class TripsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get trip details' })
-  findOne(@Param('id') id: string) {
-    return this.tripsService.findById(id);
+  @ApiOperation({ summary: 'Get trip details (load shipper, assigned carrier or admin)' })
+  findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string; role: string },
+  ) {
+    return this.tripsService.findByIdForUser(id, user);
   }
 
   @Patch(':id/start')
