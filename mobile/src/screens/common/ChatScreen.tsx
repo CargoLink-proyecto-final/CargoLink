@@ -207,6 +207,10 @@ export default function ChatScreen({ route }: any) {
           onChangeText={setText}
           placeholder="Escribe un mensaje..."
           multiline
+          // Mismo tope que el DTO del backend. Sin esto, el envío por socket no
+          // recibía ack, esperaba los 5s del timeout, caía a REST y volvía a
+          // fallar con 400: cinco segundos y ningún aviso al usuario.
+          maxLength={2000}
         />
         <TouchableOpacity
           style={[styles.sendBtn, (!text.trim() || sending) && { opacity: 0.5 }]}

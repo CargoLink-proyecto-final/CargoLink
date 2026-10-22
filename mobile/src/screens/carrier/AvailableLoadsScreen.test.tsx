@@ -131,7 +131,7 @@ describe('AvailableLoadsScreen', () => {
     });
   });
 
-  it('shows the package count and interest on a card', async () => {
+  it('shows the package count on a card, without the competition', async () => {
     (loadsApi.getAvailable as jest.Mock).mockResolvedValue({
       data: {
         loads: [
@@ -149,7 +149,10 @@ describe('AvailableLoadsScreen', () => {
     await waitFor(() => expect(screen.getByText('Granos a Rosario')).toBeTruthy());
     expect(screen.getByText('30 bultos')).toBeTruthy();
     expect(screen.getByText('Ana Diaz - AgroSur')).toBeTruthy();
-    expect(screen.getByText('2 transportistas ya se postularon')).toBeTruthy();
+    // El backend no le expone `pendingPostulationsCount` al transportista —lo
+    // omite del payload para no filtrar la competencia— así que la tarjeta no
+    // puede mostrarlo aunque el fixture lo traiga.
+    expect(screen.queryByText(/ya se postular/)).toBeNull();
   });
 
   it('does not promise the shipper industry, which this endpoint never returns', async () => {

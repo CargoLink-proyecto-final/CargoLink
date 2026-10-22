@@ -139,6 +139,7 @@ export default function TripConversationPage() {
             <input
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              maxLength={2000}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
               placeholder="Escribe un mensaje..."
             />

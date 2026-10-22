@@ -120,6 +120,12 @@ export default function PostulationsPanel({ loadId, listedPrice, isOpen, onChang
       Alert.alert('Precio inválido', 'Ingresá un monto.');
       return;
     }
+    // El `@IsPositive()` del DTO ya lo rechaza, pero el error del server llega
+    // como un Alert genérico: mejor decirlo antes y en los términos del negocio.
+    if (price <= 0) {
+      Alert.alert('Precio inválido', 'El monto tiene que ser mayor a cero.');
+      return;
+    }
     setActionId(p.id);
     try {
       await postulationsApi.counterOffer(p.id, price);
