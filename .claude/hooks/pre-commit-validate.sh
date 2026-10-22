@@ -104,55 +104,93 @@ fi
 # Bloque B: validación de git commit.
 # ────────────────────────────────────────────────────────────────────────
 
-# Si no es `git commit`, dejar pasar. Detección por TOKENS (no substring): busca
-# un token `git` y, salteando sus opciones globales (-C <path>, -c <k=v>,
-# --git-dir, etc.), verifica que el subcomando sea exactamente `commit`. Así un
-# comando read-only como `git log ... | echo "...commits..."` NO se confunde con
-# un commit real — el glob viejo `*"git"*"commit"*` matcheaba ambos y bloqueaba
-# comandos inocentes en ramas protegidas.
-IS_GIT_COMMIT="$(printf '%s' "$CMD" | /usr/bin/python3 -c '
+# Enumera CADA invocación de `git … commit` del comando, con el directorio en el
+# que va a correr. Una línea por invocación; `CWD` = el cwd del hook.
+#
+# Detección por TOKENS (no substring): busca un token `git` y, salteando sus
+# opciones globales (-C <path>, -c <k=v>, --git-dir, etc.), verifica que el
+# subcomando sea exactamente `commit`. Así un `git log … | echo "…commits…"` no
+# se confunde con un commit real.
+#
+# El directorio importa porque el hook corre ANTES del comando, en el cwd de la
+# sesión: sin mirar el comando, un `cd <worktree> && git commit` se validaba
+# contra el directorio viejo y bloqueaba todo commit hecho desde un worktree.
+# Y tiene que ser **por invocación**: quedarse con el último `-C` o `cd` del
+# comando entero deja pasar un `git -C <worktree> log && git commit`, donde el
+# commit real aterriza en la rama del cwd — que puede ser `develop`.
+COMMIT_TARGETS="$(printf '%s' "$CMD" | /usr/bin/python3 -c '
 import sys, shlex
 try:
   tokens = shlex.split(sys.stdin.read())
 except Exception:
-  print("0"); sys.exit(0)
+  sys.exit(0)
+
 GLOBAL_WITH_ARG = ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path")
-i, n, found = 0, len(tokens), False
+targets = []
+last_cd = ""      # último `cd <dir>` visto hasta acá
+i, n = 0, len(tokens)
+
 while i < n:
-  if tokens[i] == "git":
+  t = tokens[i]
+
+  # `cd <dir>`: vale para todo lo que venga después, hasta el próximo cd.
+  # `cd -` y `cd` sin argumento se saltean: no se puede saber a dónde vuelven,
+  # y quedarse con el cd anterior falla del lado seguro (sobre-bloquea).
+  if t == "cd" and i + 1 < n and not tokens[i + 1].startswith("-"):
+    last_cd = tokens[i + 1]
+    i += 2
+    continue
+
+  if t == "git":
     j = i + 1
+    explicit_dir = ""
     while j < n:
-      t = tokens[j]
-      if t in GLOBAL_WITH_ARG:
-        j += 2; continue
-      if t.startswith("-"):
-        j += 1; continue
+      tok = tokens[j]
+      # El -C de ESTA invocación, no de cualquier git del comando.
+      if tok == "-C" and j + 1 < n:
+        explicit_dir = tokens[j + 1]
+        j += 2
+        continue
+      if tok in GLOBAL_WITH_ARG:
+        j += 2
+        continue
+      if tok.startswith("-"):
+        j += 1
+        continue
       break
     if j < n and tokens[j] == "commit":
-      found = True
-      break
+      targets.append(explicit_dir or last_cd or "CWD")
+    i = j + 1
+    continue
+
   i += 1
-print("1" if found else "0")
+
+for target in targets:
+  print(target)
 ' 2>/dev/null)"
 
-# Si no es un git commit real, dejar pasar.
-[ "$IS_GIT_COMMIT" != "1" ] && exit 0
+# Si no hay ninguna invocación de commit, dejar pasar.
+[ -z "$COMMIT_TARGETS" ] && exit 0
 
-# Rama actual. Resolvemos desde el cwd del comando, NO desde CLAUDE_PROJECT_DIR:
-# en un worktree (`/worktree-new`, `git worktree add`) el project dir sigue
-# apuntando al checkout principal, que normalmente está parado en `develop`.
-# Mirar ahí daba un falso positivo que bloqueaba TODO commit hecho desde
-# cualquier worktree, aunque su rama fuera una feature perfectamente válida.
-# Fallback a $REPO por si el hook corriera fuera de un repo git.
-BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
-[ -z "$BRANCH" ] && BRANCH="$(cd "$REPO" 2>/dev/null && git rev-parse --abbrev-ref HEAD 2>/dev/null)"
-[ -z "$BRANCH" ] && exit 0
+# 1. Protección de rama — se evalúan TODAS las invocaciones y alcanza con que
+# una caiga en rama protegida para bloquear el comando entero.
+while IFS= read -r TARGET; do
+  [ -z "$TARGET" ] && continue
 
-# 1. Protección de rama.
-case "$BRANCH" in
-  main|develop|master)
-    cat >&2 <<EOF
-🚫 Commit bloqueado: estás en la rama protegida \`$BRANCH\`.
+  BRANCH=""
+  if [ "$TARGET" != "CWD" ] && [ -d "$TARGET" ]; then
+    BRANCH="$(git -C "$TARGET" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  fi
+  # Sin destino explícito (o inexistente), el cwd del hook: el repo principal.
+  [ -z "$BRANCH" ] && BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  # Y como último recurso $REPO, por si el hook corriera fuera de un repo git.
+  [ -z "$BRANCH" ] && BRANCH="$(cd "$REPO" 2>/dev/null && git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  [ -z "$BRANCH" ] && continue
+
+  case "$BRANCH" in
+    main|develop|master)
+      cat >&2 <<EOF
+🚫 Commit bloqueado: el commit caería en la rama protegida \`$BRANCH\`.
 
 Según CLAUDE.md, ninguna feature se commitea directo a \`main\`, \`develop\` ni \`master\`.
 
@@ -163,9 +201,12 @@ Qué hacer:
 
 Si esto es intencional (hotfix directo a main autorizado por el usuario), pedile confirmación explícita antes de bypassear.
 EOF
-    exit 2
-    ;;
-esac
+      exit 2
+      ;;
+  esac
+done <<EOF
+$COMMIT_TARGETS
+EOF
 
 # 2. Validación del mensaje (solo si hay -m en el command).
 # Extrae el valor del primer -m "..." o -m '...' usando python para manejar quoting.

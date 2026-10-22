@@ -112,13 +112,6 @@ export default function AvailableLoadsScreen({ navigation }: any) {
               {item.shipper?.firstName} {item.shipper?.lastName}
               {item.shipper?.companyName ? ` - ${item.shipper.companyName}` : ''}
             </Text>
-            {(item.pendingPostulationsCount ?? 0) > 0 && (
-              <Text style={styles.cardInterest}>
-                {item.pendingPostulationsCount === 1
-                  ? '1 transportista ya se postuló'
-                  : `${item.pendingPostulationsCount} transportistas ya se postularon`}
-              </Text>
-            )}
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -157,7 +150,6 @@ const styles = StyleSheet.create({
   cardMeta: { flexDirection: 'row', gap: 8 },
   cardMetaText: { fontSize: 12, color: '#9ca3af', backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   cardShipper: { fontSize: 12, color: '#9ca3af', marginTop: 8 },
-  cardInterest: { fontSize: 12, color: '#1e40af', fontWeight: '600', marginTop: 6 },
   zoneHint: {
     backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a',
     borderRadius: 10, padding: 10, marginBottom: 12,

@@ -30,9 +30,40 @@ export default function LoginScreen({ navigation }: any) {
       const res = await authApi.login(data);
       await login(res.data.user, res.data.accessToken);
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Error al iniciar sesión');
+      const body = err.response?.data;
+
+      // El backend devuelve 403 con este código cuando falta verificar el mail.
+      // Sin ofrecer el reenvío acá, el usuario quedaba trabado: el enlace vence
+      // y desde el teléfono no había forma de pedir otro.
+      if (body?.code === 'EMAIL_NOT_VERIFIED') {
+        Alert.alert(
+          'Falta verificar tu correo',
+          `${body.message ?? 'Tenés que verificar tu correo antes de entrar.'}\n\n¿Querés que te mandemos el enlace de nuevo?`,
+          [
+            { text: 'Ahora no' },
+            {
+              text: 'Reenviar',
+              onPress: () => resendVerification(body.email ?? data.email),
+            },
+          ],
+        );
+        return;
+      }
+
+      Alert.alert('Error', body?.message || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resendVerification = async (email: string) => {
+    try {
+      const res = await authApi.resendVerification(email);
+      // La respuesta es opaca a propósito (no revela si la cuenta existe), así
+      // que el mensaje del backend ya viene redactado para mostrarse tal cual.
+      Alert.alert('Listo', res.data?.message ?? 'Si la cuenta existe, te llegará un enlace nuevo.');
+    } catch {
+      Alert.alert('No pudimos reenviarlo', 'Intentá de nuevo en un rato.');
     }
   };
 
