@@ -29,6 +29,7 @@ describe('PushService', () => {
   let presence: PresenceService;
   let prisma: {
     user: { findUnique: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
+    $transaction: jest.Mock;
   };
   let fetchMock: jest.Mock;
 
@@ -45,6 +46,10 @@ describe('PushService', () => {
         update: jest.fn().mockResolvedValue({}),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      // `registerToken` manda las dos escrituras juntas: desasociar al dueño
+      // anterior y asignar al nuevo. El mock resuelve el array como lo haría
+      // Prisma, así los asserts siguen mirando los mismos jest.fn().
+      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
     };
     fetchMock = jest.fn().mockResolvedValue(okResponse());
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -82,6 +87,16 @@ describe('PushService', () => {
         where: { expoPushToken: TOKEN, NOT: { id: 'u1' } },
         data: { expoPushToken: null },
       });
+    });
+
+    // Si las dos escrituras fueran sueltas y la segunda fallara, el dueño
+    // anterior quedaría sin token y el nuevo tampoco lo tendría: nadie
+    // recibiría las notificaciones de ese teléfono hasta el próximo login.
+    it('applies both writes atomically', async () => {
+      await service.registerToken('u1', TOKEN);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(2);
     });
   });
 

@@ -27,17 +27,22 @@ export class PushService {
   ) {}
 
   async registerToken(userId: string, token: string): Promise<void> {
-    // Un token sólo puede pertenecer a un usuario: si el dispositivo cambió de
-    // sesión, el dueño anterior dejaría de recibir sus propias notificaciones y
-    // pasaría a recibir las del nuevo en el mismo teléfono.
-    await this.prisma.user.updateMany({
-      where: { expoPushToken: token, NOT: { id: userId } },
-      data: { expoPushToken: null },
-    });
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { expoPushToken: token },
-    });
+    // Las dos escrituras van juntas: si la segunda fallara por separado, el
+    // dueño anterior quedaría sin token y el nuevo tampoco lo tendría, así que
+    // nadie recibiría las notificaciones de ese teléfono hasta el próximo login.
+    await this.prisma.$transaction([
+      // Un token sólo puede pertenecer a un usuario: si el dispositivo cambió de
+      // sesión, el dueño anterior dejaría de recibir sus propias notificaciones
+      // y pasaría a recibir las del nuevo en el mismo teléfono.
+      this.prisma.user.updateMany({
+        where: { expoPushToken: token, NOT: { id: userId } },
+        data: { expoPushToken: null },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { expoPushToken: token },
+      }),
+    ]);
   }
 
   async clearToken(userId: string): Promise<void> {

@@ -1,7 +1,13 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
 import { ChatBroadcaster } from './chat-broadcaster';
+import { MAX_MESSAGE_LENGTH } from './message-limits';
 
 @Injectable()
 export class MessagesService {
@@ -37,12 +43,25 @@ export class MessagesService {
   }
 
   async create(senderId: string, tripId: string, content: string) {
+    // El DTO cubre el POST, pero el gateway de sockets recibe el payload crudo,
+    // así que el límite tiene que estar acá también: por ahí entraba un mensaje
+    // vacío o de largo arbitrario, que además viaja al cuerpo de la push.
+    const text = (content ?? '').trim();
+    if (!text) {
+      throw new BadRequestException('El mensaje no puede estar vacío');
+    }
+    if (text.length > MAX_MESSAGE_LENGTH) {
+      throw new BadRequestException(
+        `El mensaje no puede superar los ${MAX_MESSAGE_LENGTH} caracteres`,
+      );
+    }
+
     const trip = await this.validateTripParticipant(tripId, senderId);
     const receiverId =
       trip.carrierId === senderId ? trip.load.shipperId : trip.carrierId;
 
     const message = await this.prisma.message.create({
-      data: { senderId, receiverId, tripId, content },
+      data: { senderId, receiverId, tripId, content: text },
       include: {
         sender: { select: { id: true, firstName: true, lastName: true } },
       },
@@ -68,7 +87,7 @@ export class MessagesService {
     void this.push
       .notify(receiverId, {
         title: senderName || 'Nuevo mensaje',
-        body: content,
+        body: text,
         data: { tripId },
       })
       .catch(() => undefined);
