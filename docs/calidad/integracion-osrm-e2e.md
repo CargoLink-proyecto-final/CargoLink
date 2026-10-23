@@ -98,4 +98,36 @@ Los pasos 1 a 6 pasan. El 7 falla por el entorno, no por el código: el Docker D
 
 ### En dev
 
-Pendiente de la primera corrida en el VPS, que necesita `E2E_PASSWORD` en el `.env` de `~/cargolink-dev`.
+El 2026-10-21 se cargó `E2E_PASSWORD` en el `.env` de `~/cargolink-dev` y se relanzó el último deploy de `develop`.
+
+**Primera corrida: rojo en el paso 7** ([run 39617516989, intento 2](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39617516989/attempts/2), `develop` @ `cbb5c35`). El smoke pasó con sus checks autenticados (login de `e2e-carrier`, `GET /trips/my` y `GET /trips/metrics` con token), pero el E2E falló:
+
+```
+  ok   login del dador y del transportista (1377 ms)
+  ok   el dador publica una carga (219 ms)
+  ok   el transportista se postula al precio publicado (324 ms)
+  ok   el dador acepta y se crea el viaje (322 ms)
+  ok   el transportista inicia el viaje (313 ms)
+  ok   el transportista reporta su ubicación (156 ms)
+  FAIL el transportista cierra el viaje y OSRM calcula la distancia (751 ms)
+       — distanceKm vino null: OSRM no respondió (se aplicó la contingencia)
+E2E FALLÓ en el paso 7 (3.5 s)
+```
+
+Esta vez el VPS sí tenía salida a internet: `curl` desde el host contra OSRM devolvía 200. El problema era de Node. Node 20 prueba IPv4 e IPv6 en paralelo (*happy eyeballs*) y le da 250 ms a cada intento. Desde el VPS el connect TCP a OSRM tarda ~265 ms y no hay ruta IPv6, así que el `fetch` del backend fallaba siempre con `ETIMEDOUT`. Es un **defecto real que solo aparece en el entorno desplegado**: en los runners de GitHub el connect es más rápido. Se registró como #168 y se corrigió en #166 subiendo ese límite a 2 s en `backend/src/main.ts`.
+
+**Después del fix: verde** ([run 39639648761](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39639648761), `develop` @ `ae5f79c`):
+
+```
+  ok   login del dador y del transportista (1325 ms)
+  ok   el dador publica una carga (193 ms)
+  ok   el transportista se postula al precio publicado (557 ms)
+  ok   el dador acepta y se crea el viaje (389 ms)
+  ok   el transportista inicia el viaje (562 ms)
+  ok   el transportista reporta su ubicación (240 ms)
+  ok   el transportista cierra el viaje y OSRM calcula la distancia (1698 ms) — 36.5 km por ruta (OSRM)
+  ok   el dador ve el viaje cerrado y lo califica (330 ms)
+E2E OK: 8 pasos en 5.3 s
+```
+
+Se cumple el criterio de aceptación: los 8 pasos pasan contra OSRM real. Los tiempos son más altos que en local porque cada request entra por Cloudflare Tunnel. El paso 7 es el más lento, porque incluye la llamada a OSRM.
