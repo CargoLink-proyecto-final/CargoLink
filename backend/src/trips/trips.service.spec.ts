@@ -514,8 +514,21 @@ describe('TripsService', () => {
       expect(prisma.trip.update).not.toHaveBeenCalled();
     });
 
+    const inProgressTrip = { ...baseTrip, status: TripStatus.IN_PROGRESS };
+
+    it.each([TripStatus.ACCEPTED, TripStatus.COMPLETED, TripStatus.CANCELLED])(
+      'throws BadRequestException when the trip is %s',
+      async (status) => {
+        prisma.trip.findUnique.mockResolvedValue({ ...baseTrip, status });
+        await expect(
+          service.updateLocation(TRIP_ID, CARRIER_ID, -34.6, -58.4),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.trip.update).not.toHaveBeenCalled();
+      },
+    );
+
     it('persists the new GPS coordinates', async () => {
-      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      prisma.trip.findUnique.mockResolvedValue(inProgressTrip);
       prisma.trip.update.mockResolvedValue({
         ...baseTrip,
         currentLat: -34.6037,
@@ -538,8 +551,8 @@ describe('TripsService', () => {
     });
 
     it('passes through zero coordinates without coercion', async () => {
-      prisma.trip.findUnique.mockResolvedValue(baseTrip);
-      prisma.trip.update.mockResolvedValue(baseTrip);
+      prisma.trip.findUnique.mockResolvedValue(inProgressTrip);
+      prisma.trip.update.mockResolvedValue(inProgressTrip);
       await service.updateLocation(TRIP_ID, CARRIER_ID, 0, 0);
       expect(prisma.trip.update).toHaveBeenCalledWith({
         where: { id: TRIP_ID },
