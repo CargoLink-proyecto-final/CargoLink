@@ -23,7 +23,7 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 | [`ci-cd.md`](./ci-cd.md) | GitHub Actions con runner self-hosted → deploy al VPS (`develop`→dev, `main`→prod), healthcheck. |
 | [`deployment.md`](./deployment.md) | VPS: layout, Cloudflare Tunnel, runner, env vars, migraciones, backups, restore, rollback. |
 | [`decision-deploy-vps.md`](./decision-deploy-vps.md) | Decisión: deploy al VPS con runner self-hosted y alternativas descartadas. |
-| [`calidad/`](./calidad/) | TP de Calidad de Software sobre el módulo trips. Punto de entrada: [plan de pruebas](./calidad/plan-de-pruebas.md), con [riesgos](./calidad/riesgos.md), [trazabilidad](./calidad/trazabilidad.md) y [casos de prueba](./calidad/casos-de-prueba.md). Además: [SonarCloud](./calidad/sonarcloud-setup.md), [pruebas de carga y smoke](./calidad/pruebas-carga.md), [integración OSRM y E2E post-deploy](./calidad/integracion-osrm-e2e.md). |
+| [`calidad/`](./calidad/) | TP de Calidad de Software sobre el módulo trips. Punto de entrada: [plan de pruebas](./calidad/plan-de-pruebas.md), con [riesgos](./calidad/riesgos.md), [trazabilidad](./calidad/trazabilidad.md) y [casos de prueba](./calidad/casos-de-prueba.md). Además: [SonarCloud](./calidad/sonarcloud-setup.md), [pruebas de carga y smoke](./calidad/pruebas-carga.md), [integración OSRM y E2E post-deploy](./calidad/integracion-osrm-e2e.md), [ISO/IEC 25010, métricas y herramienta nueva](./calidad/calidad-iso25010-metricas-herramienta.md). |
 | [`workflow-claude-code.md`](./workflow-claude-code.md) | `.claude/` tooling — hooks, skills, agents, slash-commands. |
 | [`contribuir.md`](./contribuir.md) | Gitflow, naming de ramas, conventional commits, flujo de PR/release, secretos. |
 
