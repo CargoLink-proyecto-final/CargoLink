@@ -53,20 +53,24 @@ lng: -180.0001 │ -180 …… 0 …… 180 │ 180.0001
 | CP-LOC-02 | Límite inferior válido | `{lat:-90, lng:-180}` | 200 | 200 | ✅ |
 | CP-LOC-03 | Límite superior válido | `{lat:90, lng:180}` | 200 | 200 | ✅ |
 | CP-LOC-04 | Valor central (cero) | `{lat:0, lng:0}` | 200, sin convertir 0 en `null` | 200, guardó 0/0 | ✅ |
-| CP-LOC-05 | EQ-2, primer inválido abajo | `{lat:-90.0001, lng:0}` | 400 | **200, guardado** | ❌ #170 |
-| CP-LOC-06 | EQ-3, primer inválido arriba | `{lat:90.0001, lng:0}` | 400 | **200, guardado** | ❌ #170 |
-| CP-LOC-07 | EQ-7 | `{lat:0, lng:-180.0001}` | 400 | **200, guardado** | ❌ #170 |
-| CP-LOC-08 | EQ-8 | `{lat:0, lng:180.0001}` | 400 | **200, guardado** | ❌ #170 |
-| CP-LOC-09 | EQ-4 | `{lat:"abc", lng:-64.18}` | 400 con mensaje de validación | **500**, y la respuesta incluye el detalle de `prisma.trip.update()` | ❌ #170 |
-| CP-LOC-10 | EQ-5 | `{lng:-64.18}`, `{lat:null, lng:0}`, `{}` | 400 | **200**. Con `null` borra la última ubicación | ❌ #170 |
-| CP-LOC-11 | EQ-10 | `{lat:-31.42, lng:-64.18, foo:1}` | 400 (`forbidNonWhitelisted`) | **200** | ❌ #170 |
-| CP-LOC-12 | EQ-12 | Posición válida, viaje `COMPLETED` | 400 | **200**, actualiza un viaje cerrado | ❌ #170 |
+| CP-LOC-05 | EQ-2, primer inválido abajo | `{lat:-90.0001, lng:0}` | 400 | 400 (antes del fix: 200, guardado) | ✅ #170 |
+| CP-LOC-06 | EQ-3, primer inválido arriba | `{lat:90.0001, lng:0}` | 400 | 400 (antes: 200, guardado) | ✅ #170 |
+| CP-LOC-07 | EQ-7 | `{lat:0, lng:-180.0001}` | 400 | 400 (antes: 200, guardado) | ✅ #170 |
+| CP-LOC-08 | EQ-8 | `{lat:0, lng:180.0001}` | 400 | 400 (antes: 200, guardado) | ✅ #170 |
+| CP-LOC-09 | EQ-4 | `{lat:"abc", lng:-64.18}` | 400 con mensaje de validación | 400 con el mensaje del validador, sin detalle interno (antes: 500 con el detalle de `prisma.trip.update()`) | ✅ #170 |
+| CP-LOC-10 | EQ-5 | `{lng:-64.18}`, `{lat:null, lng:0}`, `{}` | 400 | 400 en los tres (antes: 200, y con `null` borraba la última ubicación) | ✅ #170 |
+| CP-LOC-11 | EQ-10 | `{lat:-31.42, lng:-64.18, foo:1}` | 400 (`forbidNonWhitelisted`) | 400, *property foo should not exist* (antes: 200) | ✅ #170 |
+| CP-LOC-12 | EQ-12 | Posición válida, viaje `COMPLETED` | 400 | 400, *El viaje no está en progreso* (antes: 200, actualizaba un viaje cerrado) | ✅ #170 |
 | CP-LOC-13 | EQ-14 (otro rol) | Dador con token válido | 403 | 403 | ✅ |
 | CP-LOC-14 | EQ-14 (sin token) | Sin `Authorization` | 401 | 401 | ✅ |
 | CP-LOC-15 | EQ-14 (otro transportista) | Token de otro transportista | 403 | Automatizado: `trips.service.spec.ts` › `updateLocation` › *throws ForbiddenException when the trip belongs to another carrier* | ✅ |
 | CP-LOC-16 | Viaje inexistente | UUID que no existe | 404 | 404 | ✅ |
 
-Los casos de coordenadas se corrieron sobre un viaje `COMPLETED`, el que el E2E deja en dev. Para las clases de rango y de tipo no cambia la conclusión: si el rango se validara, la respuesta sería 400 en cualquier estado. Con el viaje `IN_PROGRESS` y coordenadas válidas (EQ-1 + EQ-11), el caso se ejecuta en cada deploy (paso 6 del E2E) y en cada CI (k6, con checks de que la posición se guarda).
+**Primera ejecución (23/10):** los casos de coordenadas se corrieron sobre un viaje `COMPLETED`, el que el E2E deja en dev. Para las clases de rango y de tipo eso no cambiaba la conclusión: si el rango se validara, la respuesta sería 400 en cualquier estado. Fallaron CP-LOC-05 a 12 y se registró [#170](https://github.com/CargoLink-proyecto-final/CargoLink/issues/170).
+
+**Re-ejecución tras la corrección (25/10):** [PR #173](https://github.com/CargoLink-proyecto-final/CargoLink/pull/173) agregó `UpdateLocationDto` (lat/lng numéricos y en rango) y exige el viaje `IN_PROGRESS`. Después del deploy a dev ([run 40239410412](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/40239410412)) se repitieron CP-LOC-01 a 12 con las mismas entradas, esta vez sobre un viaje nuevo y en el estado que corresponde a cada caso: `IN_PROGRESS` para los de coordenadas y `COMPLETED` para CP-LOC-12. Los 12 dan el resultado esperado; la columna *Obtenido* muestra el valor nuevo y, entre paréntesis, el de la primera ejecución. Ninguna respuesta de error menciona Prisma.
+
+Con el viaje `IN_PROGRESS` y coordenadas válidas (EQ-1 + EQ-11), el caso se ejecuta además en cada deploy (paso 6 del E2E) y en cada CI (k6, con checks de que la posición se guarda). La regresión automatizada de CP-LOC-05 a 12 está en `update-location.dto.spec.ts` (rango, tipo, `null`, campos faltantes) y en `trips.service.spec.ts` › `updateLocation` (estados `ACCEPTED`, `COMPLETED` y `CANCELLED`).
 
 **Causa:** el controller declara el body como un tipo inline (`{ lat: number; lng: number }`), no como una clase DTO. El `ValidationPipe` necesita una clase para saber qué validar, así que deja pasar el body sin tocarlo. Y `updateLocation` no mira el estado del viaje. Este es el caso que muestra el límite de la cobertura: `trips.service.ts` tiene 100 % de decisiones, pero `updateLocation` no tiene ninguna decisión sobre los datos, así que no había nada que cubrir.
 
@@ -185,7 +189,7 @@ En R3 a R6 el viaje pasa a `COMPLETED` y la carga a `DELIVERED`: **la caída de 
 | CP-EST-14 | `COMPLETED` | start | 400 | Misma condición que CP-EST-13 | ✅ |
 | CP-EST-15 | `ACCEPTED` | complete | 400 | CP-EST-07 | ✅ |
 | CP-EST-16 | `COMPLETED` | complete | 400 | Misma condición que CP-EST-15 | ✅ |
-| CP-EST-17 | `COMPLETED` | location | 400 | CP-LOC-12 | ❌ #170 |
+| CP-EST-17 | `COMPLETED` | location | 400 | CP-LOC-12; `trips.service.spec.ts` › *throws BadRequestException when the trip is COMPLETED* | ✅ #170 |
 
 ---
 
@@ -220,10 +224,10 @@ El test de pantalla de CP-CAL-11 es el que estaba desactualizado en #154: espera
 
 | Área | Casos | ✅ | ❌ | ⏳ |
 |---|---|---|---|---|
-| Ubicación (CP-LOC) | 16 | 8 | 8 | 0 |
+| Ubicación (CP-LOC) | 16 | 16 | 0 | 0 |
 | Combustible (CP-FUEL) | 10 | 10 | 0 | 0 |
 | Calificación (CP-CAL) | 15 | 15 | 0 | 0 |
-| Estados (CP-EST) | 17 | 15 | 1 | 1 |
-| **Total** | **58** | **48** | **9** | **1** |
+| Estados (CP-EST) | 17 | 16 | 0 | 1 |
+| **Total** | **58** | **57** | **0** | **1** |
 
-Los 9 casos que fallan corresponden a un solo defecto, [#170](https://github.com/CargoLink-proyecto-final/CargoLink/issues/170). Todos los encontró el diseño de casos de caja negra. Ninguno lo había detectado la suite automatizada, que da 100 % de decisiones en el service.
+En la primera ejecución (23/10) fallaron 9 casos, todos por un solo defecto: [#170](https://github.com/CargoLink-proyecto-final/CargoLink/issues/170). Todos los encontró el diseño de casos de caja negra. Ninguno lo había detectado la suite automatizada, que daba 100 % de decisiones en el service. Tras la corrección ([PR #173](https://github.com/CargoLink-proyecto-final/CargoLink/pull/173), 25/10) los 9 pasan en dev y quedaron como regresión automatizada en el CI. Queda pendiente solo CP-EST-12, que no tiene test propio.

@@ -77,20 +77,20 @@ Endpoints: `POST /trips/accept/:loadId`, `GET /trips`, `GET /trips/my`, `GET /tr
              ┌─┴───────────────┴─┐
              │    Integración    │ 9 tests: HTTP real con Nest + OSRM falso
          ┌───┴───────────────────┴───┐
-         │         Unitarias         │ 59 tests backend + 9 de la pantalla (jest)
+         │         Unitarias         │ 70 tests backend + 9 de la pantalla (jest)
          └───────────────────────────┘
 ```
 
 | Nivel | Qué prueba | Archivos | Contra qué | Cuándo |
 |---|---|---|---|---|
-| Unitario | Reglas de negocio del service, delegación del controller, reglas de calificación, render y acciones de la pantalla | `trips.service.spec.ts` (33), `trips.controller.spec.ts` (12), `ratings.service.spec.ts` (14), `frontend/src/app/trips/[id]/page.test.tsx` (9) | Prisma y OSRM mockeados | Cada push y PR (CI) |
+| Unitario | Reglas de negocio del service, delegación del controller, reglas de calificación, render y acciones de la pantalla | `trips.service.spec.ts` (38), `trips.controller.spec.ts` (12), `ratings.service.spec.ts` (14), `trips/dto/update-location.dto.spec.ts` (6), `frontend/src/app/trips/[id]/page.test.tsx` (9) | Prisma y OSRM mockeados | Cada push y PR (CI) |
 | Integración | Control de acceso por HTTP (#161) y llamada real por red a un OSRM falso (responde bien, con error o nunca) | `trips-access.integration.spec.ts` (5), `trips-osrm.integration.spec.ts` (4) | App Nest levantada en un puerto + servidor HTTP local | Cada push y PR (CI) |
 | Smoke | Que el entorno desplegado responda, que los endpoints exijan token y que con login devuelvan 200 | `deploy/vps/smoke.sh` | dev (7 checks) y prod (4: los de login se omiten porque prod no tiene cuenta de prueba) | Después de cada deploy |
 | E2E | Ciclo completo por la API: carga → postulación → viaje → ubicación → cierre con OSRM real → calificación | `deploy/vps/e2e-trips.mjs` | dev + OSRM real | Después de cada deploy a dev |
 | Carga | Latencia y errores de `PATCH /trips/:id/location` con 50 usuarios virtuales (stress) y con 20 sostenidos (soak) | `tests/k6/trips-location.js` | Backend + Postgres efímeros en el runner | Stress en cada CI; soak a mano |
 | Estático | Bugs, vulnerabilidades, code smells, duplicación, cobertura | SonarCloud | Todo el repo | Cada push y PR (CI) |
 
-Las pruebas siguen la estructura **AAA** (Arrange, Act, Assert): preparan los mocks, llaman una sola vez y verifican. La estructura está **marcada con comentarios** en 12 de los 75 tests del módulo: los de control de acceso (#161) y los más nuevos de `trips.service.spec.ts`. Marcar el resto es una mejora pendiente de forma, no de contenido.
+Las pruebas siguen la estructura **AAA** (Arrange, Act, Assert): preparan los mocks, llaman una sola vez y verifican. La estructura está **marcada con comentarios** en 12 de los 88 tests del módulo: los de control de acceso (#161) y los más nuevos de `trips.service.spec.ts`. Marcar el resto es una mejora pendiente de forma, no de contenido.
 
 ### Técnicas de diseño
 
@@ -126,15 +126,15 @@ Para empezar a probar un cambio:
 
 Un cambio se puede mergear, y el módulo se da por probado, cuando se cumple todo esto:
 
-| # | Criterio | Fuente | Estado al 2026-10-23 |
+| # | Criterio | Fuente | Estado al 2026-10-25 |
 |---|---|---|---|
-| S1 | CI verde: lint, build, unitarias e integración | GitHub Actions | ✅ 632/632 backend, 418/418 frontend ([run 39639648905](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39639648905)) |
+| S1 | CI verde: lint, build, unitarias e integración | GitHub Actions | ✅ 645/645 backend, 418/418 frontend ([run 40239410504](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/40239410504)) |
 | S2 | Quality gate de SonarCloud en *Passed* | SonarCloud | ✅ Passed |
 | S3 | Cobertura del módulo ≥ 80 % de sentencias y de decisiones | Artefacto `coverage-backend` | ✅ Ver §7 |
 | S4 | Cobertura del código nuevo ≥ 80 % | SonarCloud, *New Code* | Se registra en el informe |
 | S5 | k6 `stress` con los cuatro umbrales en verde | Job *Stress · k6* | ✅ |
-| S6 | Smoke y E2E 8/8 en verde después del deploy a dev | *Deploy to VPS* | ✅ [run 39639648761](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39639648761) |
-| S7 | Sin defectos abiertos de severidad alta en el módulo | GitHub Issues | ✅ Los de severidad alta (#155, #161) están cerrados. Queda abierto #170, de severidad media |
+| S6 | Smoke y E2E 8/8 en verde después del deploy a dev | *Deploy to VPS* | ✅ [run 40239410412](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/40239410412) |
+| S7 | Sin defectos abiertos de severidad alta en el módulo | GitHub Issues | ✅ No queda ningún defecto abierto: los de severidad alta (#155, #161) y el último de severidad media (#170, [PR #173](https://github.com/CargoLink-proyecto-final/CargoLink/pull/173)) están cerrados |
 
 **Limitación conocida:** el repo es privado y la organización no tiene GitHub Pro, así que no se pueden activar *branch protection* ni *rulesets* (la API devuelve 403). El CI y el gate de SonarCloud **informan** en cada PR, pero GitHub no bloquea el merge. Se compensa con la regla de equipo de no mergear con checks en rojo.
 
@@ -145,15 +145,16 @@ Un cambio se puede mergear, y el módulo se da por probado, cuando se cumple tod
 
 ## 7. Cobertura del módulo
 
-Números del artefacto `coverage-backend` del CI sobre `develop` @ `ae5f79c` ([run 39639648905](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39639648905)):
+Números del artefacto `coverage-backend` del CI sobre `develop` @ `f17176e`, con la corrección de #170 incluida ([run 40239410504](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/40239410504)):
 
 | Archivo | Sentencias | Decisiones (ramas) | Funciones |
 |---|---|---|---|
-| `trips/trips.service.ts` | 100 % (58/58) | **100 % (24/24)** | 100 % (11/11) |
-| `trips/trips.controller.ts` | 100 % (31/31) | sin ramas | 100 % (10/10) |
+| `trips/trips.service.ts` | 100 % (60/60) | **100 % (25/25)** | 100 % (11/11) |
+| `trips/trips.controller.ts` | 100 % (32/32) | sin ramas | 100 % (10/10) |
 | `trips/dto/complete-trip.dto.ts` | 100 % (4/4) | sin ramas | — |
+| `trips/dto/update-location.dto.ts` | 100 % (5/5) | sin ramas | — |
 | `trips/trips.module.ts` | 0 % (0/6) | sin ramas | — |
-| **Módulo `trips` (backend)** | **93,9 % (93/99)** | **100 % (24/24)** | **100 % (21/21)** |
+| **Módulo `trips` (backend)** | **94,4 % (101/107)** | **100 % (25/25)** | **100 % (21/21)** |
 | `common/routing.ts` (OSRM) | 100 % (15/15) | 100 % (8/8) | 100 % (1/1) |
 | `ratings/ratings.service.ts` | 100 % (25/25) | 100 % (7/7) | 100 % (4/4) |
 | `frontend/src/app/trips/[id]/page.tsx` | 94,2 % (65/69) | 76,2 % (48/63) | 92,3 % (24/26) |
@@ -162,7 +163,7 @@ Números del artefacto `coverage-backend` del CI sobre `develop` @ `ae5f79c` ([r
 
 SonarCloud mide la cobertura con su propio criterio (líneas más condiciones, sobre backend y frontend del módulo juntos): marcó **84,5 % antes y 87,0 % después** de las correcciones del día 2. Por eso no coincide con el número de jest, y el informe aclara de cuál de las dos fuentes sale cada cifra.
 
-**Lectura crítica:** el 100 % de decisiones de `trips.service.ts` no impidió el defecto [#170](https://github.com/CargoLink-proyecto-final/CargoLink/issues/170). `updateLocation` no tiene ninguna rama para validar coordenadas o estado, así que no había decisión que cubrir. Lo encontró el diseño de casos de caja negra con valores límite. La cobertura mide qué código se ejecutó, no qué requisitos se verificaron.
+**Lectura crítica:** el 100 % de decisiones de `trips.service.ts` no impidió el defecto [#170](https://github.com/CargoLink-proyecto-final/CargoLink/issues/170). `updateLocation` no tenía ninguna rama para validar coordenadas o estado, así que no había decisión que cubrir. Lo encontró el diseño de casos de caja negra con valores límite. La cobertura mide qué código se ejecutó, no qué requisitos se verificaron. La corrección agregó justamente la decisión que faltaba (el chequeo de estado), y la validación de rango y tipo vive en el DTO, que la cobertura de ramas tampoco ve: por eso su regresión son tests de validación propios y no un número de cobertura.
 
 ## 8. Gestión de defectos
 
