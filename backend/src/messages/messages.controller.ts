@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { MessagesService } from './messages.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { SendMessageDto } from './dto/send-message.dto';
 
 @ApiTags('Messages')
 @ApiBearerAuth()
@@ -25,9 +26,9 @@ export class MessagesController {
   send(
     @CurrentUser('id') userId: string,
     @Param('tripId') tripId: string,
-    @Body() data: { content: string },
+    @Body() dto: SendMessageDto,
   ) {
-    return this.messagesService.create(userId, tripId, data.content);
+    return this.messagesService.create(userId, tripId, dto.content);
   }
 
   @Get('unread-count')
