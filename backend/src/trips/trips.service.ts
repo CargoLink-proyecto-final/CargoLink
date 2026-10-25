@@ -196,6 +196,9 @@ export class TripsService {
     if (trip.carrierId !== carrierId) {
       throw new ForbiddenException('No es tu viaje');
     }
+    if (trip.status !== TripStatus.IN_PROGRESS) {
+      throw new BadRequestException('El viaje no está en progreso');
+    }
 
     return this.prisma.trip.update({
       where: { id },

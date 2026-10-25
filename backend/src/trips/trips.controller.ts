@@ -15,6 +15,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CompleteTripDto } from './dto/complete-trip.dto';
+import { UpdateLocationDto } from './dto/update-location.dto';
 import { TripStatus } from '@prisma/client';
 
 @ApiTags('Trips')
@@ -122,7 +123,7 @@ export class TripsController {
   updateLocation(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
-    @Body() data: { lat: number; lng: number },
+    @Body() data: UpdateLocationDto,
   ) {
     return this.tripsService.updateLocation(id, userId, data.lat, data.lng);
   }
