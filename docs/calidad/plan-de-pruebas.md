@@ -4,10 +4,10 @@ Parte del TP Integrador de Calidad de Software sobre el TFG CargoLink. Este docu
 
 | | |
 |---|---|
-| Versión | **1.0** |
-| Fecha | 2026-10-23 |
+| Versión | **1.1** |
+| Fecha | 2026-10-25 |
 | Nivel declarado | **Nivel 3, prototipo avanzado** |
-| Línea de código de referencia | `develop` @ `ae5f79c` |
+| Línea de código de referencia | `develop` @ `f17176e` |
 | Tracker de defectos | GitHub Issues, etiqueta `bug` |
 
 ### Historial de versiones
@@ -15,6 +15,7 @@ Parte del TP Integrador de Calidad de Software sobre el TFG CargoLink. Este docu
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-10-23 | Primera versión. Junta lo hecho del 19 al 22/10 (CI, SonarCloud, k6, smoke, E2E) y agrega riesgos, trazabilidad y casos de prueba con técnicas de caja negra. |
+| 1.1 | 2026-10-25 | Cierra #170 ([PR #173](https://github.com/CargoLink-proyecto-final/CargoLink/pull/173)) y vuelve a ejecutar los casos CP-LOC en dev. Actualiza la cobertura del módulo (94,4 % y 100 %), los criterios de salida al 25/10 y los datos de SonarCloud: 87,9 % de cobertura y 100 % sobre el código nuevo, con lo que S4 queda cumplido. |
 
 El documento está versionado en git: cada cambio entra por PR y queda en el historial de `docs/calidad/plan-de-pruebas.md`.
 
@@ -22,6 +23,7 @@ El documento está versionado en git: cada cambio entra por PR y queda en el his
 
 | Documento | Contenido |
 |---|---|
+| [`calidad-iso25010-metricas-herramienta.md`](calidad-iso25010-metricas-herramienta.md) | Matriz ISO/IEC 25010 y top 3, métricas interpretadas, objetivos de calidad, contingencia y herramienta nueva (k6) con matriz de decisión |
 | [`riesgos.md`](riesgos.md) | Riesgos del módulo, probabilidad × impacto, priorizados |
 | [`trazabilidad.md`](trazabilidad.md) | Requisito → caso de prueba → defecto |
 | [`casos-de-prueba.md`](casos-de-prueba.md) | Clases de equivalencia, valores límite y tablas de decisión |
@@ -131,7 +133,7 @@ Un cambio se puede mergear, y el módulo se da por probado, cuando se cumple tod
 | S1 | CI verde: lint, build, unitarias e integración | GitHub Actions | ✅ 645/645 backend, 418/418 frontend ([run 40239410504](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/40239410504)) |
 | S2 | Quality gate de SonarCloud en *Passed* | SonarCloud | ✅ Passed |
 | S3 | Cobertura del módulo ≥ 80 % de sentencias y de decisiones | Artefacto `coverage-backend` | ✅ Ver §7 |
-| S4 | Cobertura del código nuevo ≥ 80 % | SonarCloud, *New Code* | Se registra en el informe |
+| S4 | Cobertura del código nuevo ≥ 80 % | SonarCloud, *New Code* | ✅ 100 % (análisis de `develop` @ `f17176e`, [captura](capturas/2026-10-25-sonarcloud-develop-final.jpg)) |
 | S5 | k6 `stress` con los cuatro umbrales en verde | Job *Stress · k6* | ✅ |
 | S6 | Smoke y E2E 8/8 en verde después del deploy a dev | *Deploy to VPS* | ✅ [run 40239410412](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/40239410412) |
 | S7 | Sin defectos abiertos de severidad alta en el módulo | GitHub Issues | ✅ No queda ningún defecto abierto: los de severidad alta (#155, #161) y el último de severidad media (#170, [PR #173](https://github.com/CargoLink-proyecto-final/CargoLink/pull/173)) están cerrados |
@@ -161,7 +163,7 @@ Números del artefacto `coverage-backend` del CI sobre `develop` @ `f17176e`, co
 
 `trips.module.ts` queda en 0 % porque es solo la declaración del módulo de Nest, que los tests reemplazan por un `TestingModule`. No tiene lógica.
 
-SonarCloud mide la cobertura con su propio criterio (líneas más condiciones, sobre backend y frontend del módulo juntos): marcó **84,5 % antes y 87,0 % después** de las correcciones del día 2. Por eso no coincide con el número de jest, y el informe aclara de cuál de las dos fuentes sale cada cifra.
+SonarCloud mide la cobertura con su propio criterio (líneas más condiciones, sobre backend y frontend del módulo juntos): marcó **84,5 % antes y 87,0 % después** de las correcciones del día 2, y **87,9 %** en el análisis de `f17176e` (25/10), con 100 % sobre el código nuevo. Por eso no coincide con el número de jest, y el informe aclara de cuál de las dos fuentes sale cada cifra.
 
 **Lectura crítica:** el 100 % de decisiones de `trips.service.ts` no impidió el defecto [#170](https://github.com/CargoLink-proyecto-final/CargoLink/issues/170). `updateLocation` no tenía ninguna rama para validar coordenadas o estado, así que no había decisión que cubrir. Lo encontró el diseño de casos de caja negra con valores límite. La cobertura mide qué código se ejecutó, no qué requisitos se verificaron. La corrección agregó justamente la decisión que faltaba (el chequeo de estado), y la validación de rango y tipo vive en el DTO, que la cobertura de ramas tampoco ve: por eso su regresión son tests de validación propios y no un número de cobertura.
 

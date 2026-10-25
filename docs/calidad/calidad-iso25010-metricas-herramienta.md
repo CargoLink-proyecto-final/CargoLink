@@ -1,10 +1,10 @@
 # Calidad de CargoLink: ISO/IEC 25010, métricas, herramienta nueva y fundamentos
 
-Parte del TP Integrador de Calidad de Software sobre el TFG CargoLink. Completa el [plan de pruebas](plan-de-pruebas.md) (v1.0, 2026-10-23) con lo que el plan dejó para el día 5: la matriz ISO/IEC 25010, las métricas interpretadas, la incorporación de la herramienta nueva y los fundamentos (objetivos de calidad, siete principios, QA vs QC y mapa de herramientas).
+Parte del TP Integrador de Calidad de Software sobre el TFG CargoLink. Completa el [plan de pruebas](plan-de-pruebas.md) (v1.1, 2026-10-25) con lo que el plan dejó para el día 5: la matriz ISO/IEC 25010, las métricas interpretadas, la incorporación de la herramienta nueva y los fundamentos (objetivos de calidad, siete principios, QA vs QC y mapa de herramientas).
 
 | | |
 |---|---|
-| Versión | **1.0** |
+| Versión | **1.1** |
 | Fecha | 2026-10-25 |
 | Nivel declarado | **Nivel 3, prototipo avanzado** |
 | Alcance | Módulo de viajes (`trips`), igual que el plan de pruebas |
@@ -106,7 +106,7 @@ Se usa el modelo de calidad de producto de **ISO/IEC 25010:2011**, con sus 8 car
 | 3 | **Compatibilidad** | Interoperabilidad, coexistencia | Intercambiar datos con OSRM; que web y mobile usen la misma API; que dev y prod convivan en el mismo host | Contrato de OSRM documentado y probado con dobles y con OSRM real; API única documentada con Swagger; dev y prod como proyectos compose separados en el mismo VPS | La integración funciona en el entorno real después del fix | #168 (cerrado) | ⚠️ Compatibilidad entre navegadores fuera del alcance | Media |
 | 4 | **Usabilidad** | Protección contra errores del usuario, accesibilidad | Que el usuario no pueda cargar datos inválidos y que la interfaz sea usable | Validación de DTOs en el backend (`ValidationPipe` con `whitelist`); validación de formularios en el frontend (zod); 52 atributos `aria-*` en el frontend | No hubo pruebas con usuarios ni auditoría de accesibilidad | — | ❌ Fuera del alcance del plan | Baja |
 | 5 | **Fiabilidad** | Tolerancia a fallos, disponibilidad, recuperabilidad | La plataforma sigue funcionando si falla un tercero, y se recupera si se cae el host | Contingencia de OSRM con timeout; healthcheck + smoke en cada deploy; backups diarios (14 copias) y antes de cada deploy a prod; rollback con imágenes `:previous` | El viaje se cierra con OSRM caído; los deploys desde el 19/10 fueron verdes en 10 de 11 | #155, #168 (cerrados) | ✅ | **Alta** |
-| 6 | **Seguridad** | Confidencialidad, autenticidad, integridad | Solo las partes del viaje ven teléfonos y ubicación; solo usuarios autenticados operan | JWT + bcrypt; guard de roles; chequeo de ownership; 5 tests de integración de acceso; el smoke verifica 401 sin token; SonarCloud Security **A** | IDOR corregido y con regresión. SonarCloud marca **238 riesgos en dependencias (calificación C)** sin tratar | #161 (cerrado, alta), #170 (cerrado: el 500 exponía el detalle de Prisma; ahora responde 400 con el mensaje del validador) | ⚠️ Faltan las dependencias | **Alta** |
+| 6 | **Seguridad** | Confidencialidad, autenticidad, integridad | Solo las partes del viaje ven teléfonos y ubicación; solo usuarios autenticados operan | JWT + bcrypt; guard de roles; chequeo de ownership; 5 tests de integración de acceso; el smoke verifica 401 sin token; SonarCloud Security **A** | IDOR corregido y con regresión. SonarCloud marca **248 riesgos en dependencias (calificación C)** sin tratar | #161 (cerrado, alta), #170 (cerrado: el 500 exponía el detalle de Prisma; ahora responde 400 con el mensaje del validador) | ⚠️ Faltan las dependencias | **Alta** |
 | 7 | **Mantenibilidad** | Modularidad, analizabilidad, capacidad de prueba | El código es fácil de entender, cambiar y probar | SonarCloud Maintainability **A**; duplicación **0 %**; ESLint en el CI; TypeScript estricto en el frontend; módulos NestJS con inyección de dependencias que se mockean en los tests | Cobertura de sentencias 94,4 % y de decisiones 100 % en el backend del módulo | — | ✅ | Media |
 | 8 | **Portabilidad** | Adaptabilidad, instalabilidad, reemplazabilidad | La app corre en cualquier host con Docker y se configura sin tocar código | `docker compose up -d` levanta todo; configuración por variables de entorno (`OSRM_URL`, etc.); migración de GCP Cloud Run a un VPS propio sin cambiar la app | Mudanza realizada el 2026-09-13/14 | #160 (cerrado: el build dependía de descargar fuentes) | ✅ | Baja |
 
@@ -114,7 +114,7 @@ Se usa el modelo de calidad de producto de **ISO/IEC 25010:2011**, con sus 8 car
 
 - **5 de las 8 características tienen evidencia completa o parcial medida por el pipeline.** Las tres con huecos están declaradas: falta el punto de quiebre de la eficiencia, la compatibilidad entre navegadores quedó afuera y la usabilidad no se evaluó.
 - **Los 6 defectos caen en 5 características:** fiabilidad (#155, #168), seguridad (#161, #170), adecuación funcional (#154, #170), compatibilidad (#168) y portabilidad (#160). #168 y #170 cuentan en dos. Ninguno cayó en mantenibilidad, que es la característica que el análisis estático vigila en cada push.
-- **El hallazgo más importante que todavía no se atacó:** los 238 riesgos en dependencias que reporta SonarCloud. No se reflejan en la calificación de seguridad del código (A), porque son de librerías de terceros. Es la principal deuda de seguridad del proyecto.
+- **El hallazgo más importante que todavía no se atacó:** los 248 riesgos en dependencias que reporta SonarCloud (238 el 20/10). No se reflejan en la calificación de seguridad del código (A), porque son de librerías de terceros. Es la principal deuda de seguridad del proyecto.
 
 ---
 
@@ -141,10 +141,11 @@ El criterio fue cruzar dos datos: qué riesgos tienen **exposición alta (6)** e
 | Cobertura de sentencias, backend `trips` | **94,4 %** (101/107) | Jest, [run 40239410504](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/40239410504) | Supera el 80 % del Nivel 3. Las 6 líneas sin cubrir son `trips.module.ts`, la declaración del módulo, que no tiene lógica. |
 | Cobertura de decisiones, backend `trips` | **100 %** (25/25) | Jest, mismo run | Cada `if` se probó por las dos ramas. No impidió #170, porque el defecto era justamente que faltaba una decisión. |
 | Cobertura de decisiones, pantalla de detalle del viaje | **76,2 %** (48/63) | Jest, mismo run | Por debajo del 80 %: es el punto más débil de la cobertura del módulo. |
-| Cobertura SonarCloud (líneas + condiciones, backend + frontend del módulo) | 84,5 % → **87,0 %** | SonarCloud, `develop` | Criterio distinto al de Jest, por eso los números no coinciden. Subió con las correcciones del 20/10. |
+| Cobertura SonarCloud (líneas + condiciones, backend + frontend del módulo) | 84,5 % → 87,0 % → **87,9 %** | SonarCloud, `develop` (19/10, 20/10 y 25/10 @ `f17176e`) | Criterio distinto al de Jest, por eso los números no coinciden. Subió con las correcciones del 20/10 y con los tests de #170. |
+| Cobertura del código nuevo | **100 %** | SonarCloud, *New Code* de `develop` @ `f17176e` | Supera el 80 % que pide el Nivel 3. Todo lo que entró desde la línea base quedó cubierto. |
 | Duplicación | **0 %** | SonarCloud | Muy por debajo del límite del 5 % del quality gate. |
 | Calificaciones de fiabilidad, seguridad y mantenibilidad | **A / A / A** | SonarCloud | El código propio no tiene bugs, vulnerabilidades ni deuda relevante según el análisis estático. |
-| Riesgos en dependencias | **238 (C)** | SonarCloud | Peor dato del análisis. Son vulnerabilidades conocidas en librerías de terceros. Pendiente. |
+| Riesgos en dependencias | **248 (C)** | SonarCloud, 25/10 (238 el 20/10) | Peor dato del análisis. Son vulnerabilidades conocidas en librerías de terceros. Pendiente. |
 | Tests del CI | 645 backend + 418 frontend, todos en verde | [run 40239410504](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/40239410504) | El 25/10, con la corrección de #170, la suite completa pasa. |
 | Latencia p95 del tracking (stress, 50 VUs) | **19,3 ms** | k6, [run 39488546108](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39488546108) | 23 veces por debajo del umbral de 500 ms. |
 | Latencia p95 del tracking (soak, 20 VUs, 10 min) | **16,9 ms**, 0 % error | k6, [run 39602779633](https://github.com/CargoLink-proyecto-final/CargoLink/actions/runs/39602779633) | La latencia no crece con el tiempo: no hay señales de fugas de memoria ni de conexiones. |
@@ -325,7 +326,7 @@ Todas son libres y gratuitas (HQ-5), así que ese requisito no desempata. HQ-6 l
 |---|---|---|---|
 | Pipeline | Compilación, pruebas, análisis estático, cobertura, quality gate y reporte automático | ✅ | `ci.yml` con los tres jobs y *job summary* |
 | Quality gate | Bloquea ante bugs críticos, duplicación > 5 % y cobertura sobre código nuevo < 80 % | ⚠️ | El gate *Sonar way* es más estricto que la consigna y hace fallar el job, pero sin GitHub Pro no se puede impedir el merge (R3, riesgo aceptado) |
-| Cobertura sobre código nuevo | 80 % | ⚠️ | El criterio S4 del plan lo deja para el informe: hay que tomar el dato de *New Code* de SonarCloud |
+| Cobertura sobre código nuevo | 80 % | ✅ | 100 % sobre el código nuevo según SonarCloud (análisis de `develop` @ `f17176e`; [captura](capturas/2026-10-25-sonarcloud-develop-final.jpg)) |
 | Cobertura sobre código existente | 80 % | ⚠️ | Se cumple en el módulo `trips` (94,4 % sentencias, 100 % decisiones), que es el alcance declarado. **No está medido sobre todo el proyecto**, y la pantalla de detalle tiene 76,2 % de decisiones |
 | Plan de pruebas y riesgos | Versionado, con criterios de entrada y salida, riesgos P × I y trazabilidad | ✅ | `plan-de-pruebas.md`, `riesgos.md`, `trazabilidad.md` |
 | Defectos | Con pasos, esperado y obtenido, vinculados a su caso | ✅ | 6 issues con la plantilla; #168 registrado después del fix |
