@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import api, {
+  setSessionHandlers,
   authApi,
   loadsApi,
   tripsApi,
@@ -15,8 +16,12 @@ import api, {
 // we can assert the exported api groups call them with the right URLs/payloads.
 // The request interceptor handler registered by api.ts is captured here.
 jest.mock('axios', () => {
-  const captured: { requestHandler?: (config: any) => Promise<any> } = {};
-  const instance = {
+  const captured: {
+    requestHandler?: (config: any) => Promise<any>;
+    responseRejected?: (error: any) => Promise<any>;
+  } = {};
+  // Invocable: el interceptor reintenta la request original con `api(config)`.
+  const instance: any = Object.assign(jest.fn(() => Promise.resolve({ data: { retried: true } })), {
     get: jest.fn(),
     post: jest.fn(),
     patch: jest.fn(),
@@ -28,8 +33,13 @@ jest.mock('axios', () => {
           captured.requestHandler = handler;
         }),
       },
+      response: {
+        use: jest.fn((_ok: unknown, rejected: (error: any) => Promise<any>) => {
+          captured.responseRejected = rejected;
+        }),
+      },
     },
-  };
+  });
   const create = jest.fn(() => instance);
   const mod: any = { create };
   mod.default = mod;
@@ -42,6 +52,14 @@ jest.mock('axios', () => {
 const fakeInstance = (axios as any).__instance;
 const getRequestHandler = (): ((config: any) => Promise<any>) =>
   (axios as any).__captured.requestHandler;
+const getResponseRejected = (): ((error: any) => Promise<any>) =>
+  (axios as any).__captured.responseRejected;
+
+const RENEWED = {
+  user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', role: 'TRANSPORTER' },
+  accessToken: 'new-access',
+  refreshToken: 'new-rt',
+};
 
 describe('api service', () => {
   beforeEach(async () => {
@@ -71,6 +89,75 @@ describe('api service', () => {
       const config = await getRequestHandler()({ headers: {} });
 
       expect(config.headers.Authorization).toBeUndefined();
+    });
+  });
+
+  describe('response interceptor (session refresh)', () => {
+    const onRefreshed = jest.fn();
+    const onExpired = jest.fn();
+    beforeEach(() => {
+      setSessionHandlers({ onRefreshed, onExpired });
+    });
+
+    it('renews the session once on 401 and retries the request', async () => {
+      await AsyncStorage.setItem('refreshToken', 'old-rt');
+      fakeInstance.post.mockResolvedValueOnce({ data: RENEWED });
+      const config = { url: '/trips/my', headers: {} };
+
+      const result = await getResponseRejected()({ response: { status: 401 }, config });
+
+      expect(fakeInstance.post).toHaveBeenCalledWith('/auth/refresh', { refreshToken: 'old-rt' });
+      expect(onRefreshed).toHaveBeenCalledWith(RENEWED);
+      expect(fakeInstance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          _retried: true,
+          headers: expect.objectContaining({ Authorization: 'Bearer new-access' }),
+        }),
+      );
+      expect(result).toEqual({ data: { retried: true } });
+    });
+
+    it('shares one refresh between concurrent 401s', async () => {
+      await AsyncStorage.setItem('refreshToken', 'old-rt');
+      fakeInstance.post.mockResolvedValueOnce({ data: RENEWED });
+
+      await Promise.all([
+        getResponseRejected()({ response: { status: 401 }, config: { url: '/a', headers: {} } }),
+        getResponseRejected()({ response: { status: 401 }, config: { url: '/b', headers: {} } }),
+      ]);
+
+      expect(fakeInstance.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('ends the session when the backend rejects the refresh token', async () => {
+      await AsyncStorage.setItem('refreshToken', 'revoked');
+      fakeInstance.post.mockRejectedValueOnce({ response: { status: 401 } });
+      const error = { response: { status: 401 }, config: { url: '/trips/my', headers: {} } };
+
+      await expect(getResponseRejected()(error)).rejects.toBe(error);
+      expect(onExpired).toHaveBeenCalled();
+    });
+
+    it('keeps the session when the refresh fails for network reasons', async () => {
+      await AsyncStorage.setItem('refreshToken', 'old-rt');
+      fakeInstance.post.mockRejectedValueOnce(new Error('Network Error'));
+      const error = { response: { status: 401 }, config: { url: '/trips/my', headers: {} } };
+
+      await expect(getResponseRejected()(error)).rejects.toBe(error);
+      expect(onExpired).not.toHaveBeenCalled();
+    });
+
+    it('does not try to refresh on 401s from /auth endpoints', async () => {
+      const error = { response: { status: 401 }, config: { url: '/auth/login', headers: {} } };
+      await expect(getResponseRejected()(error)).rejects.toBe(error);
+      expect(fakeInstance.post).not.toHaveBeenCalled();
+      expect(onExpired).not.toHaveBeenCalled();
+    });
+
+    it('ignores non-401 errors', async () => {
+      const error = { response: { status: 500 }, config: { url: '/trips/my', headers: {} } };
+      await expect(getResponseRejected()(error)).rejects.toBe(error);
+      expect(fakeInstance.post).not.toHaveBeenCalled();
     });
   });
 

@@ -28,7 +28,7 @@ export default function LoginScreen({ navigation }: any) {
     setLoading(true);
     try {
       const res = await authApi.login(data);
-      await login(res.data.user, res.data.accessToken);
+      await login(res.data.user, res.data.accessToken, res.data.refreshToken);
     } catch (err: any) {
       const body = err.response?.data;
 

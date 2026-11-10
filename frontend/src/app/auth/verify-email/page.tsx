@@ -27,7 +27,7 @@ function VerifyEmailInner() {
       try {
         const res = await authApi.verifyEmail(token);
         if (cancelled) return;
-        login(res.data.user, res.data.accessToken);
+        login(res.data.user, res.data.accessToken, res.data.refreshToken);
         setStatus('success');
         setTimeout(() => router.push('/'), 1500);
       } catch (err: any) {

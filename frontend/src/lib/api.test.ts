@@ -10,7 +10,8 @@
 // The fake instance is built inside the (hoisted) mock factory, then read back
 // out via the mocked axios.create return value once the module is imported.
 jest.mock('axios', () => {
-  const instance = {
+  // Invocable: el interceptor reintenta la request original con `api(config)`.
+  const instance = Object.assign(jest.fn(() => Promise.resolve({ data: { retried: true } })), {
     get: jest.fn(() => Promise.resolve({ data: {} })),
     post: jest.fn(() => Promise.resolve({ data: {} })),
     patch: jest.fn(() => Promise.resolve({ data: {} })),
@@ -19,7 +20,7 @@ jest.mock('axios', () => {
       request: { use: jest.fn() },
       response: { use: jest.fn() },
     },
-  };
+  });
   return {
     __esModule: true,
     default: {
@@ -44,6 +45,19 @@ import api, {
   companiesApi,
   postulationsApi,
 } from './api';
+
+// El cliente API y session.ts (refresh) comparten el mismo doble de axios.create.
+function makeJwt(exp: number): string {
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64').replace(/=+$/, '');
+  return `${b64({ alg: 'HS256' })}.${b64({ sub: 'u1', role: 'ADMIN', exp })}.sig`;
+}
+const FRESH = () => makeJwt(Math.floor(Date.now() / 1000) + 3600);
+const EXPIRED = () => makeJwt(Math.floor(Date.now() / 1000) - 60);
+const RENEWED = {
+  user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', role: 'ADMIN' },
+  accessToken: 'new-access',
+  refreshToken: 'new-refresh',
+};
 
 // Pull out the handlers captured at module-load time.
 const requestHandler = fakeInstance.interceptors.request.use.mock.calls[0][0] as (
@@ -76,22 +90,41 @@ describe('axios instance setup', () => {
 });
 
 describe('request interceptor', () => {
-  it('adds an Authorization header when a token exists in sessionStorage', () => {
+  it('adds an Authorization header when a token exists in sessionStorage', async () => {
     sessionStorage.setItem('token', 'abc123');
     const config = { headers: {} as Record<string, string> };
-    const out = requestHandler(config);
+    const out = await requestHandler(config);
     expect(out.headers.Authorization).toBe('Bearer abc123');
   });
 
-  it('omits the Authorization header when no token is present', () => {
+  it('omits the Authorization header when no token is present', async () => {
     const config = { headers: {} as Record<string, string> };
-    const out = requestHandler(config);
+    const out = await requestHandler(config);
     expect(out.headers.Authorization).toBeUndefined();
   });
 
-  it('returns the config object unchanged otherwise', () => {
+  it('returns the config object unchanged otherwise', async () => {
     const config = { headers: {}, url: '/loads' };
-    expect(requestHandler(config)).toBe(config);
+    expect(await requestHandler(config)).toBe(config);
+  });
+
+  it('renews an access token about to expire before sending the request', async () => {
+    sessionStorage.setItem('token', EXPIRED());
+    sessionStorage.setItem('refreshToken', 'old-refresh');
+    fakeInstance.post.mockResolvedValueOnce({ data: RENEWED });
+
+    const out = await requestHandler({ headers: {}, url: '/loads' });
+
+    expect(fakeInstance.post).toHaveBeenCalledWith('/auth/refresh', { refreshToken: 'old-refresh' });
+    expect(out.headers.Authorization).toBe('Bearer new-access');
+    expect(sessionStorage.getItem('refreshToken')).toBe('new-refresh');
+  });
+
+  it('does not refresh a token that is still fresh', async () => {
+    sessionStorage.setItem('token', FRESH());
+    sessionStorage.setItem('refreshToken', 'old-refresh');
+    await requestHandler({ headers: {}, url: '/loads' });
+    expect(fakeInstance.post).not.toHaveBeenCalled();
   });
 });
 
@@ -128,7 +161,82 @@ describe('response interceptor', () => {
     expect(responseFulfilled(response)).toBe(response);
   });
 
-  it('on 401 for a non-/auth endpoint, clears session and redirects to /auth/login', async () => {
+  it('on 401 renews the session once and retries the original request', async () => {
+    sessionStorage.setItem('token', 'old-access');
+    sessionStorage.setItem('refreshToken', 'old-refresh');
+    fakeInstance.post.mockResolvedValueOnce({ data: RENEWED });
+    const config = { url: '/loads/my', headers: { Authorization: 'Bearer old-access' } };
+
+    const result = await responseRejected({ response: { status: 401 }, config });
+
+    expect(result).toEqual({ data: { retried: true } });
+    expect(fakeInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: '/loads/my',
+        _retried: true,
+        headers: expect.objectContaining({ Authorization: 'Bearer new-access' }),
+      }),
+    );
+    expect(sessionStorage.getItem('token')).toBe('new-access');
+    expect(navigationAttempted()).toBe(false);
+  });
+
+  it('shares a single refresh between concurrent 401s (refresh tokens are single use)', async () => {
+    sessionStorage.setItem('refreshToken', 'old-refresh');
+    fakeInstance.post.mockResolvedValueOnce({ data: RENEWED });
+
+    await Promise.all([
+      responseRejected({ response: { status: 401 }, config: { url: '/a', headers: {} } }),
+      responseRejected({ response: { status: 401 }, config: { url: '/b', headers: {} } }),
+    ]);
+
+    expect(fakeInstance.post).toHaveBeenCalledTimes(1);
+    expect(fakeInstance).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs out when the backend rejects the refresh token', async () => {
+    sessionStorage.setItem('token', 'old-access');
+    sessionStorage.setItem('refreshToken', 'revoked');
+    sessionStorage.setItem('user', '{"id":"1"}');
+    fakeInstance.post.mockRejectedValueOnce({ response: { status: 401 } });
+    const error = { response: { status: 401 }, config: { url: '/loads', headers: {} } };
+
+    await expect(responseRejected(error)).rejects.toBe(error);
+
+    expect(sessionStorage.getItem('token')).toBeNull();
+    expect(sessionStorage.getItem('refreshToken')).toBeNull();
+    expect(navigationAttempted()).toBe(true);
+  });
+
+  it('keeps the session when the refresh fails for network reasons', async () => {
+    sessionStorage.setItem('token', 'old-access');
+    sessionStorage.setItem('refreshToken', 'old-refresh');
+    fakeInstance.post.mockRejectedValueOnce(new Error('Network Error'));
+    const error = { response: { status: 401 }, config: { url: '/loads', headers: {} } };
+
+    await expect(responseRejected(error)).rejects.toBe(error);
+
+    expect(sessionStorage.getItem('refreshToken')).toBe('old-refresh');
+    expect(navigationAttempted()).toBe(false);
+  });
+
+  it('does not retry twice: a 401 after a renewed token ends the session', async () => {
+    sessionStorage.setItem('token', 'tok');
+    sessionStorage.setItem('refreshToken', 'rt');
+    const error = {
+      response: { status: 401 },
+      config: { url: '/loads', headers: {}, _retried: true },
+    };
+
+    await expect(responseRejected(error)).rejects.toBe(error);
+
+    expect(fakeInstance.post).toHaveBeenCalledWith('/auth/logout', { refreshToken: 'rt' });
+    expect(fakeInstance.post).not.toHaveBeenCalledWith('/auth/refresh', expect.anything());
+    expect(sessionStorage.getItem('token')).toBeNull();
+    expect(navigationAttempted()).toBe(true);
+  });
+
+  it('on 401 without a refresh token, clears session and redirects to /auth/login', async () => {
     sessionStorage.setItem('token', 'tok');
     sessionStorage.setItem('user', '{"id":"1"}');
     const error = { response: { status: 401 }, config: { url: '/loads/register' } };

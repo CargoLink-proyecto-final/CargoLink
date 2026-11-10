@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { RegisterDto, SELF_REGISTRABLE_ROLES } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokenService } from './refresh-token.service';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
@@ -27,6 +28,7 @@ export class AuthService {
     private jwtService: JwtService,
     private prisma: PrismaService,
     private mailService: MailService,
+    private refreshTokens: RefreshTokenService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -123,18 +125,7 @@ export class AuthService {
       });
     }
 
-    const token = this.generateToken(user.id, user.email, user.role);
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-      },
-      accessToken: token,
-    };
+    return this.startSession(user);
   }
 
   async verifyEmail(token: string) {
@@ -158,17 +149,28 @@ export class AuthService {
       },
     });
 
-    const accessToken = this.generateToken(user.id, user.email, user.role);
+    return this.startSession(user);
+  }
+
+  /**
+   * Canjea el refresh token por un access token nuevo (y el siguiente refresh
+   * token: rotan en cada uso). El usuario se relee de la base, así que un cambio
+   * de rol o una desactivación se reflejan en la próxima renovación.
+   */
+  async refresh(refreshToken: string) {
+    const session = await this.refreshTokens.rotate(refreshToken);
+    const { user } = session;
     return {
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-      },
-      accessToken,
+      user,
+      accessToken: this.generateToken(user.id, user.email, user.role),
+      refreshToken: session.refreshToken,
     };
+  }
+
+  /** Cierra la sesión del refresh token. Idempotente: un token inválido no da error. */
+  async logout(refreshToken: string) {
+    await this.refreshTokens.revoke(refreshToken);
+    return { message: 'Sesión cerrada' };
   }
 
   async resendVerification(email: string) {
@@ -253,7 +255,31 @@ export class AuthService {
       },
     });
 
+    // Si la clave se reseteó porque alguien más la conocía, sus sesiones abiertas
+    // tienen que morir: sin refresh token, su access token vence en minutos.
+    await this.refreshTokens.revokeAllForUser(user.id);
+
     return { message: 'La contraseña se ha restablecido exitosamente' };
+  }
+
+  private async startSession(user: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: Role;
+  }) {
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      },
+      accessToken: this.generateToken(user.id, user.email, user.role),
+      refreshToken: await this.refreshTokens.issue(user.id),
+    };
   }
 
   private generateToken(userId: string, email: string, role: string): string {

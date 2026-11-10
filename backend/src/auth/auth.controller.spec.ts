@@ -13,6 +13,8 @@ describe('AuthController', () => {
     resendVerification: jest.Mock;
     forgotPassword: jest.Mock;
     resetPassword: jest.Mock;
+    refresh: jest.Mock;
+    logout: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -23,6 +25,8 @@ describe('AuthController', () => {
       resendVerification: jest.fn(),
       forgotPassword: jest.fn(),
       resetPassword: jest.fn(),
+      refresh: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }),
+      logout: jest.fn().mockResolvedValue({ message: 'ok' }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -52,6 +56,7 @@ describe('AuthController', () => {
       ['forgotPassword', 5],
       ['resendVerification', 5],
       ['resetPassword', 10],
+      ['refresh', 30],
     ] as const)('limits %s to %i requests per window', (handler, limit) => {
       expect(limitOf(handler)).toBe(limit);
     });
@@ -138,6 +143,22 @@ describe('AuthController', () => {
 
       expect(authService.resetPassword).toHaveBeenCalledWith(dto.token, dto.newPassword);
       expect(result).toBe(expected);
+    });
+  });
+  describe('refresh', () => {
+    it('delegates to authService.refresh with the refresh token', async () => {
+      await expect(controller.refresh({ refreshToken: 'rt' })).resolves.toEqual({
+        accessToken: 'a',
+        refreshToken: 'r',
+      });
+      expect(authService.refresh).toHaveBeenCalledWith('rt');
+    });
+  });
+
+  describe('logout', () => {
+    it('delegates to authService.logout with the refresh token', async () => {
+      await controller.logout({ refreshToken: 'rt' });
+      expect(authService.logout).toHaveBeenCalledWith('rt');
     });
   });
 });

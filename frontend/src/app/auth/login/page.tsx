@@ -31,7 +31,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await authApi.login(data);
-      login(res.data.user, res.data.accessToken);
+      login(res.data.user, res.data.accessToken, res.data.refreshToken);
       router.push('/');
     } catch (err: any) {
       const body = err.response?.data;

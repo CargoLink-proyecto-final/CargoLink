@@ -8,8 +8,8 @@ El backend expone un único namespace de Socket.IO para mensajería del chat por
 |---|---|
 | URL | `ws://localhost:3001/chat` (mismo host:port que la API REST) |
 | Namespace | `/chat` |
-| CORS | `origin: '*'` (sin restricción — TODO endurecer para prod, ver caveats abajo) |
-| Auth | `userId` en la query del handshake; **no** JWT |
+| CORS | Los orígenes de `CORS_ORIGIN` (mismo criterio que HTTP, [`common/cors.ts`](../backend/src/common/cors.ts)). Sin header `Origin` (app mobile) se acepta: no es un navegador |
+| Auth | **Access token JWT** en `auth.token` del handshake (o header `Authorization: Bearer`). Sin token válido, el server desconecta |
 | Transport | Socket.IO default (websocket con fallback a long-polling) |
 
 Las acciones de mensajería se duplican entre REST y WS: mandar por POST a `/api/messages/trip/:tripId` o emitir `sendMessage` por socket termina llamando al mismo `MessagesService.create()`. La diferencia es que el socket broadcastea inmediatamente a todos los clientes conectados al room del trip.
@@ -22,14 +22,16 @@ Cliente:
 import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:3001/chat', {
-  query: { userId: '<userId-del-logueado>' },
+  // Función y no objeto: cada reconexión lee el token vigente (el access token
+  // dura 15 min y el cliente HTTP lo renueva por detrás).
+  auth: (cb) => cb({ token: getAccessToken() }),
 });
 ```
 
 Al conectar, el servidor ejecuta `handleConnection(client)`:
 
-1. Lee `userId` del handshake. Si está vacío, **no hace nada** (el cliente queda conectado pero sin rooms).
-2. Joinea `user_${userId}` (room personal).
+1. Valida el access token con `SocketAuthService` ([`../backend/src/auth/socket-auth.service.ts`](../backend/src/auth/socket-auth.service.ts)): firma, vencimiento y usuario existente y activo (mismo criterio que `JwtStrategy`). Si no pasa, emite `unauthorized` y **desconecta**.
+2. Guarda el `userId` del token en `client.data.userId` y joinea `user_${userId}` (room personal).
 3. Consulta a Prisma todos los trips donde el usuario es carrier **o** dueño del load del trip, con estado `ACCEPTED`, `IN_PROGRESS` o `COMPLETED`.
 4. Joinea `trip_${tripId}` para cada uno.
 
@@ -37,8 +39,14 @@ Implementación:
 
 ```ts
 async handleConnection(client: Socket) {
-  const userId = client.handshake.query.userId as string;
-  if (!userId) return;
+  const user = await this.socketAuth.authenticate(extractSocketToken(client.handshake));
+  if (!user) {
+    client.emit('unauthorized', { message: 'Sesión inválida o vencida' });
+    client.disconnect(true);
+    return;
+  }
+  const userId = user.id;
+  client.data.userId = userId;
 
   client.join(`user_${userId}`);
 
@@ -73,21 +81,22 @@ Payload:
 
 ```ts
 {
-  senderId: string;   // userId del que manda
   tripId: string;     // trip donde se envía
   content: string;    // texto
 }
 ```
 
+El remitente **no** viaja en el payload: es siempre el dueño del socket (`client.data.userId`). Un `senderId` que mande el cliente se ignora.
+
 Handler (gateway):
 
 ```ts
 @SubscribeMessage('sendMessage')
-async handleMessage(client: Socket, payload: { senderId, tripId, content }) {
+async handleMessage(client: Socket, payload: { tripId: string; content: string }) {
+  const senderId = client.data?.userId;
+  if (!senderId) throw new WsException('No autenticado');
   // El broadcast lo hace el service, para no emitir dos veces.
-  return this.messagesService.create(
-    payload.senderId, payload.tripId, payload.content,
-  );
+  return this.messagesService.create(senderId, payload?.tripId, payload?.content);
 }
 ```
 
@@ -139,9 +148,8 @@ Payload (objeto Message completo):
 import { io } from 'socket.io-client';
 import { useAuthStore } from '@/store/auth';
 
-const { user } = useAuthStore.getState();
 const socket = io(`${process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '')}/chat`, {
-  query: { userId: user!.id },
+  auth: (cb) => cb({ token: sessionStorage.getItem('token') }),
 });
 
 // suscribirse a mensajes entrantes
@@ -154,7 +162,7 @@ socket.on('newMessage', (msg) => {
 });
 
 // mandar
-socket.emit('sendMessage', { senderId: user!.id, tripId, content });
+socket.emit('sendMessage', { tripId, content });
 
 // cleanup
 return () => { socket.disconnect(); };
@@ -168,11 +176,15 @@ En mobile el patrón es idéntico — la dependencia `socket.io-client@4.7.4` es
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const userId = await AsyncStorage.getItem('userId');
 const socket = io('http://<tu-ip-lan>:3001/chat', {
-  query: { userId },
+  transports: ['websocket'],
+  auth: (cb) => {
+    AsyncStorage.getItem('token').then((token) => cb({ token }));
+  },
 });
 ```
+
+Implementación real: [`../mobile/src/services/socket.ts`](../mobile/src/services/socket.ts).
 
 Nota: `localhost` desde un dispositivo físico apunta al dispositivo, no a tu máquina. Usar la IP LAN o un túnel (ngrok / Cloudflare tunnel).
 
@@ -202,8 +214,7 @@ No hay evento WS para esto. Se hace por REST con `PATCH /api/messages/trip/:trip
 
 ## Caveats
 
-- **CORS `origin: '*'`**: cualquier sitio puede abrir el socket. En producción ajustar `cors.origin` en el `@WebSocketGateway(...)` a la lista real de orígenes confiables, o leerlo de env.
-- **Auth débil**: el `userId` viene en la query y se cree a ciegas. Cualquier cliente puede impersonar a otro usuario en el WS — la validación de "podés mandar a este trip" la hace `MessagesService.create()`, pero el `senderId` que se persiste es el que mandó el cliente. Para producción: pasar el JWT en `auth: { token: '...' }` y validar en `handleConnection` con la misma `JwtStrategy`.
+- **Token vencido con el socket abierto**: el token se valida en el handshake; un socket ya conectado sigue vivo aunque el access token venza. Al reconectar se pide uno vigente. Una cuenta desactivada deja de poder conectarse, pero un socket abierto no se corta solo.
 - **Sin reconnect handling de rooms**: si la conexión cae y vuelve, los `client.join(...)` se re-ejecutan en `handleConnection`, pero un trip creado durante la caída no aparece (la lista se computa al momento). En la práctica funciona porque la conexión es resiliente, pero si la UI cambia de trip "activo" mientras está conectada, no es necesariamente trivial.
 - **Sin rate limiting**: no hay throttling de `sendMessage`. Un cliente malicioso podría llenar la DB con mensajes — `MessagesService` solo valida participación.
 - **Sin ack a nivel UI**: el ack que devuelve el `@SubscribeMessage` handler está disponible (`socket.emit('sendMessage', payload, ack => ...)`), pero el código frontend hoy no lo usa para nada — se asume que `newMessage` llega.

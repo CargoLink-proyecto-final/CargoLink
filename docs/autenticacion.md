@@ -27,15 +27,31 @@ JWT (Bearer token) con Passport en el backend; `sessionStorage` (web) / `AsyncSt
    │                      │                         ├──valida password
    │                      │                         ├──verifica emailVerified
    │                      │                         ├──firma JWT (sub, email, role)
-   │                      │◀──{ access_token, user }┤                      │
-   │                      ├──sessionStorage.setItem('token', ...)          │
+   │                      │◀──{ accessToken, refreshToken, user }──┤        │
+   │                      ├──sessionStorage: token + refreshToken + user   │
    │                      │                                                │
    │                      │  desde acá todas las requests llevan Bearer    │
 ```
 
 ## JWT
 
-Firma con `JWT_SECRET` (env var, **requerida**). Lifetime `JWT_EXPIRATION` (default `7d`).
+Firma con `JWT_SECRET` (env var, **requerida**: el backend no arranca sin ella, y en producción rechaza los valores de los `.env.example`; ver [`jwt-secret.ts`](../backend/src/auth/jwt-secret.ts)). Lifetime `JWT_ACCESS_EXPIRATION` (default `15m`). La variable vieja `JWT_EXPIRATION` ya no se lee.
+
+## Sesiones: access token + refresh token
+
+El JWT es el **access token**: corto (15 min) y stateless. La sesión larga la sostiene un **refresh token** opaco, rotativo y revocable ([`refresh-token.service.ts`](../backend/src/auth/refresh-token.service.ts), tabla `refresh_tokens`):
+
+| Endpoint | Body | Respuesta |
+|---|---|---|
+| `POST /auth/login` / `GET /auth/verify-email/:token` | — | `{ user, accessToken, refreshToken }` (abre una sesión = una *familia*) |
+| `POST /auth/refresh` | `{ refreshToken }` | `{ user, accessToken, refreshToken }` — el refresh token **rota**: el usado queda revocado |
+| `POST /auth/logout` | `{ refreshToken }` | Revoca la sesión. Idempotente |
+
+- En la base se guarda solo el **SHA-256** del refresh token. Vida: `REFRESH_TOKEN_TTL_DAYS` (default 30), renovada en cada rotación.
+- **Detección de reuso**: si llega un refresh token ya revocado, alguien tiene una copia vieja (robo o el cliente compitiendo consigo mismo) → se revoca la familia entera y hay que volver a loguearse. Por eso los clientes **deduplican** el refresh (una sola request de refresh aunque fallen varias a la vez).
+- El refresh relee al usuario de la base: una desactivación corta la renovación y un cambio de rol entra en el próximo access token.
+- `reset-password` revoca **todas** las sesiones del usuario: quien conocía la clave vieja queda afuera en ≤ 15 min (lo que le quede al access token).
+- Caso borde conocido (web): "Duplicar pestaña" copia el `sessionStorage`, así que las dos pestañas comparten refresh token; la segunda en renovar dispara la detección de reuso y ambas tienen que volver a loguearse.
 
 ### Payload
 
@@ -189,7 +205,7 @@ user            frontend              backend                 mail
  ├─submit email──▶│                     │                      │
  │                 ├──POST /forgot-password──▶│                 │
  │                 │                     ├──genera resetToken (1h)
- │                 │                     ├──save token + exp en User
+ │                 │                     ├──save SHA-256(token) + exp en User
  │                 │                     ├──MailService────────▶│
  │                 │◀──200 (siempre)─────┤                      │
  │                 │                                            │
@@ -197,14 +213,39 @@ user            frontend              backend                 mail
  │                                                              │
  ├─click + nuevo password──▶│                                   │
  │                 ├──POST /reset-password { token, newPassword }──▶│
- │                 │                     ├──findUnique by resetToken
+ │                 │                     ├──findFirst by SHA-256(token)
  │                 │                     ├──verifica resetTokenExp > now
  │                 │                     ├──bcrypt(newPassword)
  │                 │                     ├──update + clear token + exp
+ │                 │                     ├──revoca todos los refresh tokens
  │                 │◀──200───────────────┤
 ```
 
-Nota: `forgot-password` siempre responde 200 — no leakea si el email existe o no.
+Notas:
+
+- `forgot-password` siempre responde 200 — no leakea si el email existe o no. El mail se manda **sin esperar** al SMTP: si la respuesta tardara segundos solo cuando la cuenta existe, el tiempo la delataría. Cuentas inactivas/eliminadas no reciben link.
+- Los tokens de reset y de verificación de email se guardan **hasheados** (SHA-256, [`token-crypto.ts`](../backend/src/auth/token-crypto.ts)): un dump de la base no alcanza para tomar cuentas.
+- El login corre bcrypt contra un hash dummy cuando el email no existe, para que el tiempo de respuesta sea el mismo.
+
+## Política de contraseñas y registro
+
+- Contraseñas nuevas (registro y reset): mínimo **8**, máximo **72** (bcrypt ignora lo que pase de 72 bytes). El login no aplica el mínimo para no dejar afuera cuentas viejas. Costo de bcrypt: **12**.
+- Roles auto-registrables: `CARGO_GENERATOR`, `TRANSPORTER`, `COMPANY_ADMIN`. **`ADMIN` no** — se valida en el DTO y otra vez en el service.
+
+## Rate limiting
+
+`AuthController` usa `ClientIpThrottlerGuard` (`@nestjs/throttler`, storage en memoria), contando por IP real del cliente (`CF-Connecting-IP`, porque detrás del Cloudflare Tunnel `req.ip` es siempre el contenedor `cloudflared`):
+
+| Endpoint | Límite por IP |
+|---|---|
+| `login` | 10 / min |
+| `register` | 5 / 10 min |
+| `forgot-password`, `resend-verification` | 5 / 15 min |
+| `reset-password` | 10 / 15 min |
+| `refresh` | 30 / min |
+| resto de `/auth/*` | 20 / min |
+
+Pasado el límite responde `429`. Confiar en `CF-Connecting-IP` es seguro solo mientras el backend **no** publique puertos (hoy `ports: !reset []` en `deploy/vps/compose.*.yml`); si se expusiera directo, un cliente podría falsearlo.
 
 ## Verificación de email — caso `EMAIL_NOT_VERIFIED`
 
@@ -231,16 +272,19 @@ El frontend lo agarra y redirige a una pantalla que ofrece reenviar el email (`P
 // Sesión POR PESTAÑA: sessionStorage está aislado por browsing context, así que
 // dos cuentas abiertas en dos pestañas no comparten token (localStorage sí lo
 // compartía y causaba 403 cruzados: una pestaña mandaba el token de la otra).
-login: (user, token) => {
+login: (user, token, refreshToken) => {
   storage.set('token', token);
+  storage.set('refreshToken', refreshToken);
   storage.set('user', JSON.stringify(user));
   queryClient.clear();            // evita filtrar datos de la cuenta anterior
   set({ user, token, isAuthenticated: true });
 },
 
+setSession: (user, token, refreshToken) => { /* tras un refresh: sin limpiar la caché */ },
+
 logout: () => {
-  storage.remove('token');
-  storage.remove('user');
+  revokeSession(storage.get('refreshToken'));   // POST /auth/logout, best effort
+  clearStorage();
   queryClient.clear();
   set({ user: null, token: null, isAuthenticated: false });
 },
@@ -254,7 +298,7 @@ hydrate: () => {
 },
 ```
 
-El `hydrate()` se llama desde un client component al inicializar (`Providers.tsx`) — sino tras un reload el store arranca vacío y el user aparece "deslogueado" hasta que un fetch falle con 401. Además valida el JWT guardado (`parseJwt`): si expiró o el `sub`/`role` del token no coincide con el user persistido, descarta la sesión en vez de confiar en datos inconsistentes.
+El `hydrate()` se llama desde un client component al inicializar (`Providers.tsx`) — sino tras un reload el store arranca vacío y el user aparece "deslogueado" hasta que un fetch falle con 401. Además valida el JWT guardado (`parseJwt`): si el `sub`/`role` del token no coincide con el user persistido, descarta la sesión en vez de confiar en datos inconsistentes. Un access token **vencido** solo descarta la sesión si no hay refresh token; si lo hay, el interceptor lo renueva en la primera request.
 
 ### Mobile
 
@@ -263,8 +307,9 @@ El `hydrate()` se llama desde un client component al inicializar (`Providers.tsx
 ```ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// guardar
+// guardar (login guarda token, refreshToken y user)
 await AsyncStorage.setItem('token', token);
+await AsyncStorage.setItem('refreshToken', refreshToken);
 
 // leer (con flag de loading mientras tanto)
 const token = await AsyncStorage.getItem('token');
@@ -276,31 +321,11 @@ const token = await AsyncStorage.getItem('token');
 
 Source: [`../frontend/src/lib/api.ts`](../frontend/src/lib/api.ts).
 
-```ts
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = sessionStorage.getItem('token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+La lógica de refresh vive en [`../frontend/src/lib/session.ts`](../frontend/src/lib/session.ts) (`refreshSession`, deduplicado, con una instancia de axios sin interceptores).
 
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const requestUrl: string = error.config?.url || '';
-    const isAuthEndpoint = requestUrl.includes('/auth/');
-    if (error.response?.status === 401 && typeof window !== 'undefined' && !isAuthEndpoint) {
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('user');
-      window.location.href = '/auth/login';
-    }
-    return Promise.reject(error);
-  },
-);
-```
-
-- 401 fuera de `/auth/*` → limpia storage + redirect a login. El "fuera de `/auth/*`" es para no reciclar el redirect cuando el propio login falla con 401 (credenciales mal).
+- **Request**: agrega `Authorization: Bearer <token>`. Si el access token vence en menos de 30 s, lo renueva **antes** de mandar la request.
+- **Response 401** fuera de `/auth/*`: renueva la sesión **una vez** y reintenta la request (`config._retried`). Si el backend rechaza el refresh token (400/401) → `logout()` + redirect a `/auth/login`. Si el refresh falla por red, **no** desloguea: devuelve el error original.
+- El "fuera de `/auth/*`" es para no reciclar el redirect cuando el propio login falla con 401 (credenciales mal).
 
 ### Mobile — request interceptor
 
@@ -314,17 +339,17 @@ api.interceptors.request.use(async (config) => {
 });
 ```
 
-⚠️ El mobile **no** tiene response interceptor para 401. Si el token expira, el comportamiento depende de cada pantalla.
+Response interceptor: mismo esquema que la web (renovar una vez y reintentar; si el refresh es rechazado, logout). Como el store importa `services/api.ts`, el cliente no puede importar el store: el store registra `setSessionHandlers({ onRefreshed, onExpired })` al cargarse.
+
+El socket del chat se autentica con el access token en `auth.token` (una función, para que cada reconexión lea el token vigente). Ver [`websockets.md`](./websockets.md).
 
 ## Caveats y áreas a mejorar
 
-- **No hay refresh token**. Cuando el JWT expira (default 7d), el user tiene que re-loguearse. Para una app mobile con sesiones largas, sumar refresh tokens sería el siguiente paso.
-- **`JWT_SECRET` con fallback `'default-secret'`**: ver advertencia arriba. En producción asegurate de que esté seteada.
-- **Sin rate limiting** en login / register / forgot-password. Brute force trivial. Para prod: agregar `@nestjs/throttler` o un proxy nivel infra.
-- **CORS abierto en WS** — ver [`websockets.md`](./websockets.md).
+- **Rate limit en memoria**: alcanza con una réplica del backend. Con varias, cada una cuenta por su lado; habría que pasar a un storage compartido (Redis). Tampoco hay bloqueo por cuenta: un ataque distribuido desde muchas IPs contra un mismo email no se frena.
+- **Tokens en `sessionStorage`**: un XSS podría leerlos (también el refresh token). La alternativa es una cookie `httpOnly` para el refresh token, que exige que web y API compartan sitio o configurar `SameSite`/CORS con credenciales.
 - **Frontend redirige a `/auth/login` por window.location**, lo que descarta cualquier estado React. Está OK para una sesión expirada (querés flush), pero ojo si lo invocás por error en un fetch interno.
 - **`AsyncStorage` no es secure storage**. Tokens en plain text. Para prod mobile considerar `expo-secure-store` (Keychain en iOS, EncryptedSharedPreferences en Android).
-- **No hay logout en backend**. JWT es stateless: el token sigue válido hasta su expiración aunque el cliente lo "borre". Si necesitás invalidar (p.ej. cambio de password debería desloguear todas las sesiones), tendrías que llevar una blacklist o rotar `JWT_SECRET` (escala mal, mejor blacklist por jti).
+- **El access token no se puede revocar**: es stateless y vive hasta 15 min después del logout o del reset. Lo que se revoca es el refresh token, así que la sesión no se puede extender. Una desactivación de cuenta sí corta al instante, porque `JwtStrategy` relee al usuario en cada request.
 
 ## Cómo proteger un endpoint nuevo
 

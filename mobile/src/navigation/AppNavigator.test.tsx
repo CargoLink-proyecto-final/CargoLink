@@ -32,6 +32,9 @@ jest.mock('../services/notifications', () => ({
 // de lo que dice.
 jest.mock('../services/api', () => ({
   api: { get: jest.fn().mockResolvedValue({ data: {} }) },
+  // El store registra sus handlers de sesión al cargarse.
+  setSessionHandlers: jest.fn(),
+  revokeSession: jest.fn(() => Promise.resolve()),
   usersApi: {
     getMe: jest.fn().mockResolvedValue({ data: null }),
     updateMe: jest.fn(),

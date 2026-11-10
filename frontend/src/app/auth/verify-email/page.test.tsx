@@ -60,7 +60,7 @@ describe('VerifyEmailPage — missing token', () => {
 describe('VerifyEmailPage — success', () => {
   it('calls authApi.verifyEmail with the token, logs in and redirects', async () => {
     (authApi.verifyEmail as jest.Mock).mockResolvedValue({
-      data: { user: { id: 'u1' }, accessToken: 'tok' },
+      data: { user: { id: 'u1' }, accessToken: 'tok', refreshToken: 'rt' },
     });
     render(<VerifyEmailPage />);
 
@@ -68,7 +68,7 @@ describe('VerifyEmailPage — success', () => {
       expect(authApi.verifyEmail).toHaveBeenCalledWith('verify-token'),
     );
     expect(await screen.findByText('¡Cuenta verificada!')).toBeInTheDocument();
-    expect(login).toHaveBeenCalledWith({ id: 'u1' }, 'tok');
+    expect(login).toHaveBeenCalledWith({ id: 'u1' }, 'tok', 'rt');
 
     jest.advanceTimersByTime(1500);
     await waitFor(() => expect(push).toHaveBeenCalledWith('/'));

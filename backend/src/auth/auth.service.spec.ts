@@ -13,6 +13,7 @@ import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { DUMMY_PASSWORD_HASH, hashToken } from './token-crypto';
+import { RefreshTokenService } from './refresh-token.service';
 
 jest.mock('bcrypt');
 
@@ -23,6 +24,12 @@ describe('AuthService', () => {
   let prisma: {
     user: { update: jest.Mock; findFirst: jest.Mock };
     company: { create: jest.Mock };
+  };
+  let refreshTokens: {
+    issue: jest.Mock;
+    rotate: jest.Mock;
+    revoke: jest.Mock;
+    revokeAllForUser: jest.Mock;
   };
   let mailService: {
     sendVerificationEmail: jest.Mock;
@@ -47,6 +54,12 @@ describe('AuthService', () => {
       user: { update: jest.fn().mockResolvedValue(baseUser), findFirst: jest.fn() },
       company: { create: jest.fn().mockResolvedValue({ id: 'company-1' }) },
     };
+    refreshTokens = {
+      issue: jest.fn().mockResolvedValue('refresh-token'),
+      rotate: jest.fn(),
+      revoke: jest.fn().mockResolvedValue(undefined),
+      revokeAllForUser: jest.fn().mockResolvedValue(undefined),
+    };
     mailService = {
       sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
@@ -59,6 +72,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: jwtService },
         { provide: PrismaService, useValue: prisma },
         { provide: MailService, useValue: mailService },
+        { provide: RefreshTokenService, useValue: refreshTokens },
       ],
     }).compile();
 
@@ -139,11 +153,22 @@ describe('AuthService', () => {
   describe('login', () => {
     const dto = { email: 'test@example.com', password: 'secret123' } as any;
 
-    it('returns a token for valid verified credentials', async () => {
+    it('returns an access token and a refresh token for valid verified credentials', async () => {
       usersService.findByEmail.mockResolvedValue(baseUser);
       const result = await service.login(dto);
       expect(result.accessToken).toBe('signed-token');
+      expect(result.refreshToken).toBe('refresh-token');
+      expect(refreshTokens.issue).toHaveBeenCalledWith(baseUser.id);
       expect(result.user.id).toBe(baseUser.id);
+      // Nunca se devuelven el hash ni los tokens internos del usuario.
+      expect(result.user).not.toHaveProperty('password');
+    });
+
+    it('does not open a session when the credentials are wrong', async () => {
+      usersService.findByEmail.mockResolvedValue(baseUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      expect(refreshTokens.issue).not.toHaveBeenCalled();
     });
 
     it('throws UnauthorizedException when the user does not exist', async () => {
@@ -190,6 +215,7 @@ describe('AuthService', () => {
         },
       });
       expect(result.accessToken).toBe('signed-token');
+      expect(result.refreshToken).toBe('refresh-token');
     });
 
     it('throws BadRequestException for an invalid or expired token', async () => {
@@ -293,6 +319,21 @@ describe('AuthService', () => {
       });
     });
 
+    // Quien conocía la clave vieja no puede seguir adentro después del reset.
+    it('closes every open session of the user', async () => {
+      prisma.user.findFirst.mockResolvedValue(baseUser);
+      await service.resetPassword('valid-token', 'newpass123');
+      expect(refreshTokens.revokeAllForUser).toHaveBeenCalledWith(baseUser.id);
+    });
+
+    it('does not touch sessions when the reset token is invalid', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      await expect(service.resetPassword('bad', 'newpass123')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(refreshTokens.revokeAllForUser).not.toHaveBeenCalled();
+    });
+
     it('resets the password for a valid token', async () => {
       prisma.user.findFirst.mockResolvedValue(baseUser);
       const result = await service.resetPassword('valid-token', 'newpass123');
@@ -306,6 +347,38 @@ describe('AuthService', () => {
       await expect(service.resetPassword('bad', 'newpass123')).rejects.toThrow(
         BadRequestException,
       );
+    });
+  });
+  describe('refresh', () => {
+    it('returns a new access token for the user of the rotated refresh token', async () => {
+      refreshTokens.rotate.mockResolvedValue({
+        refreshToken: 'next-refresh',
+        user: { id: 'user-1', email: 'a@b.com', firstName: 'A', lastName: 'B', role: Role.ADMIN },
+      });
+
+      const result = await service.refresh('old-refresh');
+
+      expect(refreshTokens.rotate).toHaveBeenCalledWith('old-refresh');
+      // El rol sale de la base al momento del refresh, no del token anterior.
+      expect(jwtService.sign).toHaveBeenCalledWith({ sub: 'user-1', email: 'a@b.com', role: Role.ADMIN });
+      expect(result).toEqual({
+        user: expect.objectContaining({ id: 'user-1', role: Role.ADMIN }),
+        accessToken: 'signed-token',
+        refreshToken: 'next-refresh',
+      });
+    });
+
+    it('propagates the rejection of an invalid refresh token', async () => {
+      refreshTokens.rotate.mockRejectedValue(new UnauthorizedException());
+      await expect(service.refresh('bad')).rejects.toThrow(UnauthorizedException);
+      expect(jwtService.sign).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('logout', () => {
+    it('revokes the session of the refresh token', async () => {
+      await expect(service.logout('rt')).resolves.toHaveProperty('message');
+      expect(refreshTokens.revoke).toHaveBeenCalledWith('rt');
     });
   });
 });

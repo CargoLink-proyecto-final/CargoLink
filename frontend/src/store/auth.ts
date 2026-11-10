@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User } from '@/types';
 import { queryClient } from '@/lib/queryClient';
+import { revokeSession, SESSION_KEYS } from '@/lib/session';
 
 type AuthUser = Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role'>;
 
@@ -8,7 +9,10 @@ interface AuthState {
   user: AuthUser | null;
   token: string | null;
   isAuthenticated: boolean;
-  login: (user: AuthUser, token: string) => void;
+  login: (user: AuthUser, token: string, refreshToken: string) => void;
+  // Reemplaza los tokens tras un refresh (sin limpiar la caché de queries:
+  // es la misma sesión del mismo usuario).
+  setSession: (user: AuthUser, token: string, refreshToken: string) => void;
   updateUser: (partial: Partial<AuthUser>) => void;
   logout: () => void;
   hydrate: () => void;
@@ -35,6 +39,12 @@ const storage = {
   },
 };
 
+function clearStorage(): void {
+  storage.remove(SESSION_KEYS.accessToken);
+  storage.remove(SESSION_KEYS.refreshToken);
+  storage.remove(SESSION_KEYS.user);
+}
+
 // Decodifica el payload de un JWT sin validar la firma (la firma la valida el
 // backend). Solo lo usamos para verificar que el usuario guardado coincide con
 // el token que efectivamente se manda: el rol que rendea la UI nunca puede
@@ -54,12 +64,20 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   isAuthenticated: false,
 
-  login: (user, token) => {
-    storage.set('token', token);
-    storage.set('user', JSON.stringify(user));
+  login: (user, token, refreshToken) => {
+    storage.set(SESSION_KEYS.accessToken, token);
+    storage.set(SESSION_KEYS.refreshToken, refreshToken);
+    storage.set(SESSION_KEYS.user, JSON.stringify(user));
     // Limpiamos la caché de queries para que no se filtren datos de una cuenta
     // anterior usada en esta misma pestaña.
     queryClient.clear();
+    set({ user, token, isAuthenticated: true });
+  },
+
+  setSession: (user, token, refreshToken) => {
+    storage.set(SESSION_KEYS.accessToken, token);
+    storage.set(SESSION_KEYS.refreshToken, refreshToken);
+    storage.set(SESSION_KEYS.user, JSON.stringify(user));
     set({ user, token, isAuthenticated: true });
   },
 
@@ -74,16 +92,19 @@ export const useAuthStore = create<AuthState>((set) => ({
     }),
 
   logout: () => {
-    storage.remove('token');
-    storage.remove('user');
+    // Revoca la sesión en el backend: si no, el refresh token seguiría sirviendo
+    // para sacar access tokens nuevos aunque el usuario "cerró sesión".
+    revokeSession(storage.get(SESSION_KEYS.refreshToken));
+    clearStorage();
     queryClient.clear();
     set({ user: null, token: null, isAuthenticated: false });
   },
 
   hydrate: () => {
     if (typeof window === 'undefined') return;
-    const token = storage.get('token');
-    const userStr = storage.get('user');
+    const token = storage.get(SESSION_KEYS.accessToken);
+    const userStr = storage.get(SESSION_KEYS.user);
+    const hasRefresh = !!storage.get(SESSION_KEYS.refreshToken);
     if (!token || !userStr) {
       set({ user: null, token: null, isAuthenticated: false });
       return;
@@ -92,18 +113,23 @@ export const useAuthStore = create<AuthState>((set) => ({
       const user = JSON.parse(userStr) as AuthUser;
       const claims = parseJwt(token);
       const expired = claims?.exp ? claims.exp * 1000 <= Date.now() : false;
-      // Defensa en profundidad: si el token no matchea al usuario guardado (o
-      // expiró), descartamos la sesión en vez de confiar en datos inconsistentes.
-      if (!claims || expired || claims.sub !== user.id || claims.role !== user.role) {
-        storage.remove('token');
-        storage.remove('user');
+      // Defensa en profundidad: si el token no matchea al usuario guardado,
+      // descartamos la sesión en vez de confiar en datos inconsistentes. Un
+      // access token vencido NO mata la sesión si hay refresh token: el
+      // interceptor de axios lo renueva en la primera request.
+      if (
+        !claims ||
+        (expired && !hasRefresh) ||
+        claims.sub !== user.id ||
+        claims.role !== user.role
+      ) {
+        clearStorage();
         set({ user: null, token: null, isAuthenticated: false });
         return;
       }
       set({ user, token, isAuthenticated: true });
     } catch {
-      storage.remove('token');
-      storage.remove('user');
+      clearStorage();
       set({ user: null, token: null, isAuthenticated: false });
     }
   },

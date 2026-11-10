@@ -70,7 +70,7 @@ describe('LoginPage — submit', () => {
   it('calls authApi.login, stores the session and redirects on success', async () => {
     const user = userEvent.setup();
     (authApi.login as jest.Mock).mockResolvedValue({
-      data: { user: { id: 'u1' }, accessToken: 'tok' },
+      data: { user: { id: 'u1' }, accessToken: 'tok', refreshToken: 'rt' },
     });
     render(<LoginPage />);
     await user.type(screen.getByPlaceholderText('tu@empresa.com'), 'user@example.com');
@@ -83,7 +83,7 @@ describe('LoginPage — submit', () => {
         password: 'secret123',
       });
     });
-    expect(login).toHaveBeenCalledWith({ id: 'u1' }, 'tok');
+    expect(login).toHaveBeenCalledWith({ id: 'u1' }, 'tok', 'rt');
     expect(push).toHaveBeenCalledWith('/');
   });
 

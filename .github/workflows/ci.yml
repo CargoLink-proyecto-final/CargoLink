@@ -185,6 +185,9 @@ jobs:
       # Credenciales descartables: la DB vive solo durante el job.
       DATABASE_URL: postgresql://cargolink:cargolink@localhost:5432/cargolink
       JWT_SECRET: ci-stress-only
+      # k6 se loguea una sola vez en setup(): el access token tiene que durar más
+      # que el perfil más largo (soak) o la corrida empieza a recibir 401.
+      JWT_ACCESS_EXPIRATION: 2h
       PORT: 3001
       K6_PROFILE: ${{ inputs.k6_profile || 'stress' }}
       SOAK_DURATION: ${{ inputs.soak_duration || '10m' }}

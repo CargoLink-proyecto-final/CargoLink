@@ -1,6 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/env';
+import type { AuthResponse } from '../types';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -10,6 +11,66 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Instancia sin interceptores para el refresh: si pasara por el interceptor de
+// 401, un refresh rechazado dispararía otro refresh en loop.
+const bare = axios.create({
+  baseURL: API_URL,
+  timeout: 15000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+/**
+ * El store (zustand) importa este módulo, así que acá no se puede importar el
+ * store sin armar un ciclo. En su lugar el store registra qué hacer cuando la
+ * sesión se renueva o muere.
+ */
+export interface SessionHandlers {
+  onRefreshed: (session: AuthResponse) => Promise<void> | void;
+  onExpired: () => Promise<void> | void;
+}
+let sessionHandlers: SessionHandlers | null = null;
+export function setSessionHandlers(handlers: SessionHandlers): void {
+  sessionHandlers = handlers;
+}
+
+class RefreshUnavailableError extends Error {}
+let inflightRefresh: Promise<AuthResponse | null> | null = null;
+
+/**
+ * Canjea el refresh token por una sesión nueva. `null` = el backend lo rechazó
+ * (sesión muerta). Tira RefreshUnavailableError si no hubo red: en ese caso no
+ * deslogueamos. Las llamadas concurrentes comparten la misma promesa porque el
+ * refresh token es de un solo uso (canjearlo dos veces cierra la sesión).
+ */
+export function refreshSession(): Promise<AuthResponse | null> {
+  if (!inflightRefresh) {
+    inflightRefresh = (async () => {
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      if (!refreshToken) return null;
+      try {
+        const { data } = await bare.post<AuthResponse>('/auth/refresh', { refreshToken });
+        await sessionHandlers?.onRefreshed(data);
+        return data;
+      } catch (err: any) {
+        const status = err?.response?.status;
+        if (status === 400 || status === 401) return null;
+        throw new RefreshUnavailableError('No se pudo renovar la sesión');
+      }
+    })().finally(() => {
+      inflightRefresh = null;
+    });
+  }
+  return inflightRefresh;
+}
+
+/** Revoca la sesión en el backend. Best effort: el logout local sigue igual. */
+export async function revokeSession(refreshToken: string | null): Promise<void> {
+  if (!refreshToken) return;
+  await bare.post('/auth/logout', { refreshToken }).catch(() => undefined);
+}
+
+const isAuthEndpoint = (url?: string) => (url || '').includes('/auth/');
+
 api.interceptors.request.use(async (config) => {
   const token = await AsyncStorage.getItem('token');
   if (token) {
@@ -17,6 +78,39 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+// El access token dura minutos. Ante un 401 se renueva una vez con el refresh
+// token y se reintenta la request; si el backend rechaza el refresh, se cierra
+// la sesión (antes la app no manejaba el 401 y quedaba "logueada" sin poder
+// hacer nada).
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error.config;
+    if (error.response?.status !== 401 || isAuthEndpoint(config?.url)) {
+      return Promise.reject(error);
+    }
+    if (!config || config._retried) {
+      await sessionHandlers?.onExpired();
+      return Promise.reject(error);
+    }
+
+    let session: AuthResponse | null;
+    try {
+      session = await refreshSession();
+    } catch {
+      return Promise.reject(error);
+    }
+    if (!session) {
+      await sessionHandlers?.onExpired();
+      return Promise.reject(error);
+    }
+
+    config._retried = true;
+    config.headers = { ...config.headers, Authorization: `Bearer ${session.accessToken}` };
+    return api(config);
+  },
+);
 
 export default api;
 

@@ -37,7 +37,7 @@ describe('RegisterScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (authApi.register as jest.Mock).mockResolvedValue({
-      data: { user: { id: 'u1', email: 'a@b.com' }, accessToken: 'tok-123' },
+      data: { message: 'Cuenta creada. Revisá tu correo.', email: 'a@b.com' },
     });
   });
 
@@ -53,7 +53,8 @@ describe('RegisterScreen', () => {
     expect(getByText('Crear Cuenta')).toBeTruthy();
   });
 
-  it('registers with entered values and the default role, then logs in', async () => {
+  it('registers with entered values and the default role, then asks to verify the email', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const q = render(<RegisterScreen navigation={navigation} />);
     fillRequired(q);
     fireEvent.press(q.getByText('Crear Cuenta'));
@@ -68,7 +69,10 @@ describe('RegisterScreen', () => {
         role: 'CARGO_GENERATOR',
       });
     });
-    expect(mockLogin).toHaveBeenCalledWith({ id: 'u1', email: 'a@b.com' }, 'tok-123');
+    // No abre sesión: hay que verificar el correo primero.
+    expect(mockLogin).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith('Revisá tu correo', 'Cuenta creada. Revisá tu correo.');
+    expect(mockNavigate).toHaveBeenCalledWith('Login');
   });
 
   it('sends the selected role when switching to Transportista', async () => {

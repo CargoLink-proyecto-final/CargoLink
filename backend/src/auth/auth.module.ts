@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { getJwtSecret } from './jwt-secret';
 import { SocketAuthService } from './socket-auth.service';
+import { RefreshTokenService } from './refresh-token.service';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
 
@@ -26,14 +27,18 @@ import { MailModule } from '../mail/mail.module';
       useFactory: (configService: ConfigService) => ({
         secret: getJwtSecret(configService),
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRATION', '7d'),
+          // Access token corto: si se filtra, sirve por minutos. La sesión larga
+          // la sostiene el refresh token (rotativo y revocable, ver
+          // RefreshTokenService). Variable nueva a propósito: los .env de los
+          // entornos tienen JWT_EXPIRATION=7d y no queremos heredarlo.
+          expiresIn: configService.get<string>('JWT_ACCESS_EXPIRATION') || '15m',
         },
       }),
       inject: [ConfigService],
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, SocketAuthService],
+  providers: [AuthService, JwtStrategy, SocketAuthService, RefreshTokenService],
   exports: [AuthService, SocketAuthService],
 })
 export class AuthModule {}

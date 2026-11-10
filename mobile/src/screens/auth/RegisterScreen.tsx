@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { authApi } from '../../services/api';
-import { useAuthStore } from '../../store/auth';
 
 interface RegisterForm {
   email: string;
@@ -25,15 +24,21 @@ interface RegisterForm {
 export default function RegisterScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<'CARGO_GENERATOR' | 'TRANSPORTER'>('CARGO_GENERATOR');
-  const login = useAuthStore((s) => s.login);
-
   const { control, handleSubmit, formState: { errors } } = useForm<RegisterForm>();
 
   const onSubmit = async (data: RegisterForm) => {
     setLoading(true);
     try {
       const res = await authApi.register({ ...data, role });
-      await login(res.data.user, res.data.accessToken);
+      // El registro no abre sesión: el backend exige verificar el correo antes
+      // del primer login, así que la respuesta trae solo `{ message, email }`.
+      // Antes se llamaba a login() con un accessToken inexistente.
+      Alert.alert(
+        'Revisá tu correo',
+        res.data?.message ||
+          'Te enviamos un enlace para verificar tu dirección antes de iniciar sesión.',
+      );
+      navigation.navigate('Login');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.message || 'Error en el registro');
     } finally {
