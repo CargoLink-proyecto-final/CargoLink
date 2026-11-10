@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SOCKET_URL } from '../config/env';
+import { refreshSession } from './api';
 
 /**
  * Cliente del gateway de chat (`namespace /chat` de MessagesGateway).
@@ -19,6 +20,31 @@ import { SOCKET_URL } from '../config/env';
  */
 let socket: Socket | null = null;
 let currentUserId: string | null = null;
+// Como mucho un intento de re-autenticación por minuto. No alcanza con resetearlo
+// en `connect`: el gateway acepta el handshake y recién después desconecta, así
+// que `connect` se dispara aunque el token sea rechazado, y eso sería un loop.
+const REAUTH_COOLDOWN_MS = 60_000;
+let lastReauthAt = 0;
+
+/**
+ * El server corta la conexión (`io server disconnect`) cuando el access token
+ * del handshake no es válido, típicamente porque venció mientras la app estaba
+ * en segundo plano sin hacer requests HTTP (que son las que lo renuevan). Ante
+ * un corte del server socket.io NO reconecta solo: renovamos la sesión y
+ * reconectamos a mano. Si la sesión murió, no hay nada que reconectar (el store
+ * ya hace logout vía el interceptor de axios).
+ */
+async function reauthenticate(target: Socket): Promise<void> {
+  if (Date.now() - lastReauthAt < REAUTH_COOLDOWN_MS) return;
+  lastReauthAt = Date.now();
+  try {
+    const session = await refreshSession();
+    // Puede haber cambiado de usuario o cerrado sesión mientras tanto.
+    if (session && target === socket) target.connect();
+  } catch {
+    // Sin red: el próximo getChatSocket() vuelve a intentar conectar.
+  }
+}
 
 export function getChatSocket(userId: string): Socket {
   if (socket && currentUserId === userId) {
@@ -46,6 +72,12 @@ export function getChatSocket(userId: string): Socket {
     autoConnect: true,
   });
   currentUserId = userId;
+  lastReauthAt = 0;
+
+  const created = socket;
+  created.on('disconnect', (reason: string) => {
+    if (reason === 'io server disconnect') void reauthenticate(created);
+  });
 
   return socket;
 }
