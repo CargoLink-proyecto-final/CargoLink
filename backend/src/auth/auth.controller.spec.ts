@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { Role } from '@prisma/client';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -25,6 +26,7 @@ describe('AuthController', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
+      imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 20 }])],
       controllers: [AuthController],
       providers: [{ provide: AuthService, useValue: authService }],
     }).compile();
@@ -36,6 +38,23 @@ describe('AuthController', () => {
 
   it('is defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  describe('rate limiting', () => {
+    // Los límites viven como metadata de @Throttle: si alguien los borra, el
+    // login vuelve a aceptar intentos ilimitados de fuerza bruta.
+    const limitOf = (handler: keyof AuthController) =>
+      Reflect.getMetadata('THROTTLER:LIMITdefault', AuthController.prototype[handler]);
+
+    it.each([
+      ['login', 10],
+      ['register', 5],
+      ['forgotPassword', 5],
+      ['resendVerification', 5],
+      ['resetPassword', 10],
+    ] as const)('limits %s to %i requests per window', (handler, limit) => {
+      expect(limitOf(handler)).toBe(limit);
+    });
   });
 
   describe('register', () => {

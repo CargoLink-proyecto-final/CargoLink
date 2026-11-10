@@ -12,6 +12,7 @@ import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { DUMMY_PASSWORD_HASH, hashToken } from './token-crypto';
 
 jest.mock('bcrypt');
 
@@ -88,7 +89,7 @@ describe('AuthService', () => {
       const result = await service.register(dto);
 
       expect(usersService.create).toHaveBeenCalled();
-      expect(bcrypt.hash).toHaveBeenCalledWith(dto.password, 10);
+      expect(bcrypt.hash).toHaveBeenCalledWith(dto.password, 12);
       expect(mailService.sendVerificationEmail).toHaveBeenCalled();
       expect(result.email).toBe(dto.email);
     });
@@ -150,6 +151,15 @@ describe('AuthService', () => {
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
     });
 
+    // Sin este compare contra un hash dummy, el login de un email inexistente
+    // respondía mucho más rápido y delataba qué cuentas existen.
+    it('still runs bcrypt when the user does not exist, to keep timing uniform', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      expect(bcrypt.compare).toHaveBeenCalledWith(dto.password, DUMMY_PASSWORD_HASH);
+    });
+
     it('throws UnauthorizedException for a wrong password', async () => {
       usersService.findByEmail.mockResolvedValue(baseUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
@@ -185,6 +195,14 @@ describe('AuthService', () => {
     it('throws BadRequestException for an invalid or expired token', async () => {
       prisma.user.findFirst.mockResolvedValue(null);
       await expect(service.verifyEmail('bad-token')).rejects.toThrow(BadRequestException);
+    });
+
+    it('looks the token up by its hash, never in plain text', async () => {
+      prisma.user.findFirst.mockResolvedValue(baseUser);
+      await service.verifyEmail('valid-token');
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: expect.objectContaining({ emailVerificationToken: hashToken('valid-token') }),
+      });
     });
   });
 
@@ -234,19 +252,51 @@ describe('AuthService', () => {
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
-    it('stores a reset token and emails the user when found', async () => {
+    it('stores only the hash of the reset token and emails the plain one', async () => {
       usersService.findByEmail.mockResolvedValue(baseUser);
       await service.forgotPassword(baseUser.email);
-      expect(prisma.user.update).toHaveBeenCalled();
-      expect(mailService.sendPasswordResetEmail).toHaveBeenCalled();
+
+      const plain = mailService.sendPasswordResetEmail.mock.calls[0][2];
+      const stored = prisma.user.update.mock.calls[0][0].data.resetToken;
+      expect(stored).toBe(hashToken(plain));
+      expect(stored).not.toBe(plain);
+    });
+
+    it('does not send a reset link to a deactivated or deleted account', async () => {
+      usersService.findByEmail.mockResolvedValue({ ...baseUser, isActive: false });
+      await service.forgotPassword(baseUser.email);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(mailService.sendPasswordResetEmail).not.toHaveBeenCalled();
+    });
+
+    // La respuesta no espera al SMTP: si lo hiciera, tardaría segundos solo
+    // cuando la cuenta existe y eso permitiría enumerar emails.
+    it('responds without waiting for the email to be sent', async () => {
+      usersService.findByEmail.mockResolvedValue(baseUser);
+      mailService.sendPasswordResetEmail.mockReturnValue(new Promise(() => undefined));
+      await expect(service.forgotPassword(baseUser.email)).resolves.toHaveProperty('message');
+    });
+
+    it('does not fail when the email cannot be sent', async () => {
+      usersService.findByEmail.mockResolvedValue(baseUser);
+      mailService.sendPasswordResetEmail.mockRejectedValue(new Error('smtp down'));
+      await expect(service.forgotPassword(baseUser.email)).resolves.toHaveProperty('message');
     });
   });
 
   describe('resetPassword', () => {
+    it('looks the reset token up by its hash', async () => {
+      prisma.user.findFirst.mockResolvedValue(baseUser);
+      await service.resetPassword('valid-token', 'newpass123');
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: expect.objectContaining({ resetToken: hashToken('valid-token') }),
+      });
+    });
+
     it('resets the password for a valid token', async () => {
       prisma.user.findFirst.mockResolvedValue(baseUser);
       const result = await service.resetPassword('valid-token', 'newpass123');
-      expect(bcrypt.hash).toHaveBeenCalledWith('newpass123', 10);
+      expect(bcrypt.hash).toHaveBeenCalledWith('newpass123', 12);
       expect(prisma.user.update).toHaveBeenCalled();
       expect(result.message).toBeDefined();
     });

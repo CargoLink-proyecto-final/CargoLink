@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
@@ -15,6 +16,11 @@ import { MailModule } from '../mail/mail.module';
     UsersModule,
     MailModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
+    // Storage en memoria del rate limit. No hay guard global: se aplica solo donde
+    // se usa ClientIpThrottlerGuard (hoy, AuthController), para no frenar el
+    // tracking GPS ni el resto de la API. Con una sola réplica del backend la
+    // memoria alcanza; con varias habría que pasar a un storage compartido.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 20 }]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

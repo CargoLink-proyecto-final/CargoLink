@@ -97,7 +97,7 @@ export default function RegisterScreen({ navigation }: any) {
         <Controller
           control={control}
           name="password"
-          rules={{ required: 'Contraseña obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } }}
+          rules={{ required: 'Contraseña obligatoria', minLength: { value: 8, message: 'Mínimo 8 caracteres' } }}
           render={({ field: { onChange, value } }) => (
             <TextInput style={styles.input} placeholder="Contraseña *" value={value} onChangeText={onChange} secureTextEntry />
           )}

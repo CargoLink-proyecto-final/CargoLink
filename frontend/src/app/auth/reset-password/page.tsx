@@ -107,7 +107,7 @@ function ResetPasswordInner() {
                     type={showPassword ? 'text' : 'password'}
                     {...register('newPassword', {
                       required: 'La contraseña es obligatoria',
-                      minLength: { value: 6, message: 'Mínimo 6 caracteres' },
+                      minLength: { value: 8, message: 'Mínimo 8 caracteres' },
                     })}
                     className="w-full px-4 py-2.5 pr-10 bg-surface-raised border border-ink-200 rounded-lg text-[14px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
                     placeholder="••••••••"
