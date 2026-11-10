@@ -72,16 +72,20 @@ Source: [`../backend/src/auth/jwt.strategy.ts`](../backend/src/auth/jwt.strategy
 ```ts
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService) {
+  constructor(configService: ConfigService, private usersService: UsersService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET', 'default-secret'),
+      secretOrKey: getJwtSecret(configService), // sin fallback: tira si falta
     });
   }
 
-  validate(payload: JwtPayload) {
-    return { id: payload.sub, email: payload.email, role: payload.role };
+  // El usuario se relee de la base en cada request: una desactivación corta las
+  // sesiones al instante y un cambio de rol aplica sin esperar al vencimiento.
+  async validate(payload: JwtPayload) {
+    const user = await this.usersService.findById(payload.sub).catch(() => null);
+    if (!user || !user.isActive) throw new UnauthorizedException('Cuenta inactiva o inexistente');
+    return { id: user.id, email: user.email, role: user.role };
   }
 }
 ```
@@ -89,7 +93,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 - Extrae del header `Authorization: Bearer <token>`.
 - `ignoreExpiration: false` — tokens expirados fallan con 401.
 - El `validate()` returnea el objeto que termina en `request.user` (lo lee `@CurrentUser()`).
-- ⚠️ El fallback `'default-secret'` se usa si `JWT_SECRET` no está seteada. En `docker-compose.yml` está declarada con `:?` (required), así que el container no arranca sin ella. Igual: si corrés el backend con dev local sin `.env`, te puede pasar — siempre cargá la var.
+- `JWT_SECRET` es obligatoria: `getJwtSecret()` corta el arranque si falta (ya no hay fallback `'default-secret'`, que permitía fabricar tokens), y en `NODE_ENV=production` también si es uno de los valores de los `.env.example`.
 
 ## Guards
 
@@ -229,7 +233,8 @@ Notas:
 
 ## Política de contraseñas y registro
 
-- Contraseñas nuevas (registro y reset): mínimo **8**, máximo **72** (bcrypt ignora lo que pase de 72 bytes). El login no aplica el mínimo para no dejar afuera cuentas viejas. Costo de bcrypt: **12**.
+- Contraseñas nuevas (registro y reset): mínimo **8**, máximo **72** (bcrypt ignora lo que pase de 72 bytes), validado en backend, web y mobile. El login no aplica el mínimo para no dejar afuera cuentas viejas.
+- Costo de bcrypt: **12** (`BCRYPT_ROUNDS`). Las cuentas creadas con costo 10 se re-hashean en su próximo login exitoso. El hash dummy del login tiene el mismo costo (un test lo fija): si los costos difieren, el tiempo de respuesta vuelve a delatar qué emails existen. Mientras queden cuentas de costo 10 sin re-hashear, esas siguen siendo distinguibles por tiempo; el rate limit hace lenta esa enumeración.
 - Roles auto-registrables: `CARGO_GENERATOR`, `TRANSPORTER`, `COMPANY_ADMIN`. **`ADMIN` no** — se valida en el DTO y otra vez en el service.
 
 ## Rate limiting

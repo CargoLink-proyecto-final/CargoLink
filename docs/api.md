@@ -21,7 +21,9 @@ Source: [`../backend/src/auth/auth.controller.ts`](../backend/src/auth/auth.cont
 | Método | Path | Auth | Descripción |
 |---|---|---|---|
 | POST | `/auth/register` | público | Crear cuenta + mandar email de verificación |
-| POST | `/auth/login` | público | Devolver JWT (sólo si `emailVerified=true`) |
+| POST | `/auth/login` | público | Abrir sesión: access token + refresh token (sólo si `emailVerified=true`) |
+| POST | `/auth/refresh` | público (refresh token) | Renovar el access token; rota el refresh token |
+| POST | `/auth/logout` | público (refresh token) | Revocar la sesión |
 | GET | `/auth/verify-email/:token` | público | Verificar email con el token recibido |
 | POST | `/auth/resend-verification` | público | Reenviar email de verificación |
 | POST | `/auth/forgot-password` | público | Pedir email con reset link |
@@ -33,23 +35,18 @@ Source: [`../backend/src/auth/auth.controller.ts`](../backend/src/auth/auth.cont
 // Body
 {
   "email": "john@example.com",
-  "password": "StrongPass123",       // mín. 6 chars
+  "password": "StrongPass123",       // 8 a 72 chars
   "firstName": "John",
   "lastName": "Doe",
   "phone": "+1234567890",            // obligatorio
-  "role": "CARGO_GENERATOR",         // | "TRANSPORTER" | "ADMIN" | "COMPANY_ADMIN"
+  "role": "CARGO_GENERATOR",         // | "TRANSPORTER" | "COMPANY_ADMIN" (ADMIN no se auto-registra)
   "companyName": "Acme Logistics"    // opcional
 }
 
-// 201 Created
+// 201 Created (no abre sesión: hay que verificar el email)
 {
-  "id": "uuid",
-  "email": "john@example.com",
-  "firstName": "John",
-  "lastName": "Doe",
-  "role": "CARGO_GENERATOR",
-  "emailVerified": false,
-  "createdAt": "2026-05-23T..."
+  "message": "Cuenta creada. Te enviamos un correo para verificar tu dirección. ...",
+  "email": "john@example.com"
 }
 ```
 
@@ -63,7 +60,8 @@ Manda email de verificación automáticamente. Hasta verificar, `POST /auth/logi
 
 // 200 OK
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",   // JWT, 15 min
+  "refreshToken": "9f2c…",                     // opaco, rotativo
   "user": {
     "id": "uuid",
     "email": "john@example.com",
@@ -77,10 +75,31 @@ Manda email de verificación automáticamente. Hasta verificar, `POST /auth/logi
 Errores:
 - `401 Unauthorized` — credenciales inválidas.
 - `403 Forbidden` con `code: "EMAIL_NOT_VERIFIED"` — la cuenta existe pero no verificó email.
+- `429 Too Many Requests` — más de 10 intentos por minuto desde la misma IP (ver rate limiting en [`autenticacion.md`](./autenticacion.md)).
+
+### POST `/auth/refresh`
+
+```jsonc
+// Body
+{ "refreshToken": "9f2c…" }
+
+// 200 OK — mismo formato que el login, con un refresh token NUEVO
+{ "accessToken": "…", "refreshToken": "…", "user": { … } }
+```
+
+El refresh token usado queda revocado. Presentar uno ya usado revoca toda la sesión (detección de reuso) y responde `401`.
+
+### POST `/auth/logout`
+
+```jsonc
+{ "refreshToken": "9f2c…" }
+```
+
+Revoca la sesión. Responde 200 aunque el token no exista.
 
 ### GET `/auth/verify-email/:token`
 
-Acepta el token del link enviado por mail. Marca `emailVerified=true` y devuelve 200 o un error semántico si el token expiró / no existe.
+Acepta el token del link enviado por mail. Marca `emailVerified=true` y devuelve la sesión (`accessToken`, `refreshToken`, `user`) o un error semántico si el token expiró / no existe. En la base se guarda solo el SHA-256 del token.
 
 ### POST `/auth/resend-verification`
 
@@ -96,7 +115,7 @@ Regenera el token y reenvía el email (siempre que la cuenta exista y no esté v
 { "email": "john@example.com" }
 ```
 
-Genera un `resetToken` con vencimiento de 1h y envía email con link a `${FRONTEND_URL}/auth/reset-password?token=<token>`. Responde 200 incluso si el email no existe (para no leakear).
+Genera un `resetToken` con vencimiento de 1h (en la base se guarda su SHA-256) y envía email con link a `${FRONTEND_URL}/auth/reset-password?token=<token>`. Responde 200 incluso si el email no existe (para no leakear), sin esperar al SMTP.
 
 ### POST `/auth/reset-password`
 
@@ -104,7 +123,7 @@ Genera un `resetToken` con vencimiento de 1h y envía email con link a `${FRONTE
 { "token": "<token-del-email>", "newPassword": "NewStrongPass456" }
 ```
 
-Valida token + expiración, hashea el password y limpia los campos de reset.
+Valida token + expiración, hashea el password, limpia los campos de reset y **revoca todas las sesiones** (refresh tokens) del usuario.
 
 ## Users
 
@@ -139,12 +158,12 @@ Source: [`../backend/src/loads/loads.controller.ts`](../backend/src/loads/loads.
 | Método | Path | Roles | Descripción |
 |---|---|---|---|
 | POST | `/loads` | `CARGO_GENERATOR` | Crear load |
-| GET | `/loads` | cualquier rol | Listar con filtros |
+| GET | `/loads` | `ADMIN` | Listar todas las cargas con filtros |
 | GET | `/loads/available` | cualquier rol | Listar `PUBLISHED` (filtros) |
 | GET | `/loads/my` | `CARGO_GENERATOR` | Loads propios |
 | GET | `/loads/register` | cualquier rol | Registro de loads `DELIVERED`/`CANCELLED` (filtrado por rol) |
 | GET | `/loads/register/export` | cualquier rol | ZIP con `loads.csv` + `messages.csv` |
-| GET | `/loads/:id` | cualquier rol | Detalle |
+| GET | `/loads/:id` | involucrados | Detalle: admin, dador dueño, transportista (si está publicada, si la lleva o si se postuló) o admin de la empresa del transportista asignado; si no, 403 |
 | PATCH | `/loads/:id` | `CARGO_GENERATOR` | Actualizar (dueño) |
 | DELETE | `/loads/:id` | `CARGO_GENERATOR` | Cancelar (dueño) |
 
@@ -555,7 +574,7 @@ Casos típicos:
 TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"shipper@example.com","password":"password123"}' \
-  | jq -r '.access_token')
+  | jq -r '.accessToken')
 
 # 2. Llamar endpoints autenticados
 curl http://localhost:3001/api/users/me \
