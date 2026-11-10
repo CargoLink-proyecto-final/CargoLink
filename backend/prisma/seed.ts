@@ -3,13 +3,16 @@ import * as bcrypt from 'bcrypt';
 import { seedGeo } from './seed-geo';
 import { backfillLoadCities } from './backfill-load-cities';
 import { seedE2eAccounts } from './seed-e2e';
+import { BCRYPT_ROUNDS } from '../src/auth/token-crypto';
 
 const prisma = new PrismaClient();
 
 async function main() {
   const geo = await seedGeo(prisma);
 
-  const password = await bcrypt.hash('password123', 10);
+  // Mismo costo que la app: con hashes de costos distintos, el tiempo del login
+  // distingue cuentas existentes de inexistentes (ver DUMMY_PASSWORD_HASH).
+  const password = await bcrypt.hash('password123', BCRYPT_ROUNDS);
 
   // El ADMIN es la única cuenta con permisos sobre todo el sistema, así que no
   // comparte la password genérica de las cuentas demo: sale de ADMIN_PASSWORD
@@ -18,7 +21,7 @@ async function main() {
   const declaredAdminPassword = process.env.ADMIN_PASSWORD;
   const adminPassword = await bcrypt.hash(
     declaredAdminPassword || 'cladmin2026',
-    10,
+    BCRYPT_ROUNDS,
   );
 
   const admin = await prisma.user.upsert({

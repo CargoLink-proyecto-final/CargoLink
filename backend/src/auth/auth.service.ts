@@ -8,7 +8,13 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { BCRYPT_ROUNDS, DUMMY_PASSWORD_HASH, generateOpaqueToken, hashToken } from './token-crypto';
+import {
+  BCRYPT_ROUNDS,
+  DUMMY_PASSWORD_HASH,
+  generateOpaqueToken,
+  hashToken,
+  needsRehash,
+} from './token-crypto';
 import { Role } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -106,6 +112,16 @@ export class AuthService {
     );
     if (!user || !isPasswordValid) {
       throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    // Cuentas con hash de costo viejo (10): se re-hashean ahora que tenemos la
+    // clave en claro. Así todas convergen al costo de DUMMY_PASSWORD_HASH y el
+    // tiempo del login deja de distinguir cuentas existentes de inexistentes.
+    if (needsRehash(user.password)) {
+      const upgraded = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+      await this.prisma.user
+        .update({ where: { id: user.id }, data: { password: upgraded } })
+        .catch((err) => this.logger.warn(`Could not upgrade password hash for ${user.id}: ${err}`));
     }
 
     if (!user.emailVerified) {

@@ -178,6 +178,49 @@ describe('AuthService', () => {
 
     // Sin este compare contra un hash dummy, el login de un email inexistente
     // respondía mucho más rápido y delataba qué cuentas existen.
+    // Una cuenta de antes del cambio de costo (10 → 12) se re-hashea al entrar,
+    // para que todas terminen con el mismo costo que el hash dummy.
+    it('upgrades a legacy-cost password hash after a successful login', async () => {
+      usersService.findByEmail.mockResolvedValue(baseUser);
+      (bcrypt.getRounds as jest.Mock).mockReturnValue(10);
+
+      await service.login(dto);
+
+      expect(bcrypt.hash).toHaveBeenCalledWith(dto.password, 12);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: baseUser.id },
+        data: { password: 'hashed-password' },
+      });
+    });
+
+    it('does not rehash a password that already has the current cost', async () => {
+      usersService.findByEmail.mockResolvedValue(baseUser);
+      (bcrypt.getRounds as jest.Mock).mockReturnValue(12);
+
+      await service.login(dto);
+
+      expect(bcrypt.hash).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('does not rehash when the password is wrong', async () => {
+      usersService.findByEmail.mockResolvedValue(baseUser);
+      (bcrypt.getRounds as jest.Mock).mockReturnValue(10);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+
+      expect(bcrypt.hash).not.toHaveBeenCalled();
+    });
+
+    it('still logs in if upgrading the hash fails', async () => {
+      usersService.findByEmail.mockResolvedValue(baseUser);
+      (bcrypt.getRounds as jest.Mock).mockReturnValue(10);
+      prisma.user.update.mockRejectedValueOnce(new Error('db down'));
+
+      await expect(service.login(dto)).resolves.toHaveProperty('accessToken');
+    });
+
     it('still runs bcrypt when the user does not exist, to keep timing uniform', async () => {
       usersService.findByEmail.mockResolvedValue(null);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);

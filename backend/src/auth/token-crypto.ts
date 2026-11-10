@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
+import { getRounds } from 'bcrypt';
 
 /**
  * Costo de bcrypt para contraseñas nuevas. 12 es la recomendación actual de
@@ -15,6 +16,20 @@ export const BCRYPT_ROUNDS = 12;
  */
 export const DUMMY_PASSWORD_HASH =
   '$2b$12$wofvnrioOpCiYHNbhEq6nuE5ScKM5mpkm1X/L7ApA225mSnLJPi5K';
+
+// El dummy tiene que tener el MISMO costo que los hashes reales: con costos
+// distintos, el tiempo vuelve a delatar qué emails existen. Las cuentas creadas
+// antes del cambio a 12 (costo 10) se re-hashean en su próximo login exitoso
+// (AuthService.login), así que todo converge a BCRYPT_ROUNDS.
+
+/** true si el hash se generó con un costo menor al actual y conviene re-hashear. */
+export function needsRehash(hash: string): boolean {
+  try {
+    return getRounds(hash) < BCRYPT_ROUNDS;
+  } catch {
+    return false;
+  }
+}
 
 /** SHA-256 en hex. Los tokens opacos se guardan así, nunca en claro. */
 export function hashToken(token: string): string {

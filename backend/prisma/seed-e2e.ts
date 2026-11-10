@@ -6,6 +6,7 @@ import {
   DocumentStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { BCRYPT_ROUNDS } from '../src/auth/token-crypto';
 import { REQUIRED_DOCUMENT_TYPES } from '../src/transporter-profile/profile-completeness';
 
 export const E2E_SHIPPER_EMAIL = 'e2e-shipper@cargolink.test';
@@ -27,7 +28,7 @@ export async function seedE2eAccounts(prisma: PrismaClient) {
   const plain = process.env.E2E_PASSWORD;
   if (!plain) return null;
 
-  const password = await bcrypt.hash(plain, 10);
+  const password = await bcrypt.hash(plain, BCRYPT_ROUNDS);
 
   const shipper = await prisma.user.upsert({
     where: { email: E2E_SHIPPER_EMAIL },
