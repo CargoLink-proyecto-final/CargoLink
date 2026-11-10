@@ -19,6 +19,7 @@ import {
   TripStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { parsePagination } from '../common/pagination';
 import { MailService } from '../mail/mail.service';
 import { RegisterDto } from '../auth/dto/register.dto';
 import {
@@ -130,8 +131,7 @@ export class UsersService {
   }
 
   async findAll(params?: { role?: string; page?: number; limit?: number }) {
-    const page = params?.page || 1;
-    const limit = params?.limit || 20;
+    const { page, limit } = parsePagination(params?.page, params?.limit);
     const where = params?.role ? { role: params.role as any } : {};
 
     const [users, total] = await Promise.all([
