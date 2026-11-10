@@ -26,7 +26,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   // Resolvemos el usuario desde la DB en cada request (no confiamos en el payload):
   // así una desactivación corta las sesiones vivas al instante y un cambio de rol
-  // aplica los permisos nuevos sin esperar a que el token expire (TTL 7d).
+  // aplica los permisos nuevos sin esperar a que el token expire (TTL 15m por defecto).
   async validate(payload: JwtPayload) {
     const user = await this.usersService.findById(payload.sub).catch(() => null);
     if (!user || !user.isActive) {

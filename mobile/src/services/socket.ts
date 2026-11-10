@@ -31,8 +31,9 @@ let lastReauthAt = 0;
  * del handshake no es válido, típicamente porque venció mientras la app estaba
  * en segundo plano sin hacer requests HTTP (que son las que lo renuevan). Ante
  * un corte del server socket.io NO reconecta solo: renovamos la sesión y
- * reconectamos a mano. Si la sesión murió, no hay nada que reconectar (el store
- * ya hace logout vía el interceptor de axios).
+ * reconectamos a mano. Si la sesión murió, no reconectamos: el logout llega con
+ * la próxima request HTTP que responda 401 (el interceptor de axios llama a
+ * onExpired); mientras tanto el chat queda en polling.
  */
 async function reauthenticate(target: Socket): Promise<void> {
   if (Date.now() - lastReauthAt < REAUTH_COOLDOWN_MS) return;
