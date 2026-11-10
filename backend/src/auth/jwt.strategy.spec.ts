@@ -23,10 +23,16 @@ describe('JwtStrategy', () => {
     expect(strategy).toBeDefined();
   });
 
-  it('reads JWT_SECRET from config with the default fallback', () => {
+  it('reads JWT_SECRET from config', () => {
     const config = buildConfig('my-secret');
     new JwtStrategy(config, buildUsers(jest.fn()));
-    expect(config.get).toHaveBeenCalledWith('JWT_SECRET', 'default-secret');
+    expect(config.get).toHaveBeenCalledWith('JWT_SECRET');
+  });
+
+  it('refuses to start without JWT_SECRET instead of using a public default', () => {
+    expect(() => new JwtStrategy(buildConfig(undefined), buildUsers(jest.fn()))).toThrow(
+      /JWT_SECRET/,
+    );
   });
 
   describe('validate', () => {

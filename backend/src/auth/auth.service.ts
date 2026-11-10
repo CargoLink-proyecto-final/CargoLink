@@ -13,7 +13,7 @@ import { Role } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
-import { RegisterDto } from './dto/register.dto';
+import { RegisterDto, SELF_REGISTRABLE_ROLES } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
@@ -30,6 +30,12 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    // El DTO ya lo filtra; esto es defensa en profundidad por si `register` se
+    // llama sin pasar por el ValidationPipe. Un ADMIN nunca se auto-registra.
+    if (!(SELF_REGISTRABLE_ROLES as readonly string[]).includes(dto.role)) {
+      throw new ForbiddenException('Ese rol no se puede elegir al registrarse');
+    }
+
     const existing = await this.usersService.findByEmail(dto.email);
     if (existing) {
       throw new ConflictException('El correo ya está registrado');

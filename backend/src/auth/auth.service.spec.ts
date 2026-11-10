@@ -93,6 +93,14 @@ describe('AuthService', () => {
       expect(result.email).toBe(dto.email);
     });
 
+    it('refuses to self-register an ADMIN even if the DTO validation is bypassed', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+      await expect(service.register({ ...dto, role: Role.ADMIN })).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(usersService.create).not.toHaveBeenCalled();
+    });
+
     it('throws ConflictException when email is already registered', async () => {
       usersService.findByEmail.mockResolvedValue(baseUser);
       await expect(service.register(dto)).rejects.toThrow(ConflictException);

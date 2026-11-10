@@ -1,6 +1,6 @@
 import {
   IsEmail,
-  IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -11,6 +11,16 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
+
+// Roles que alguien puede elegir al crear su propia cuenta. ADMIN queda afuera a
+// propósito: con `@IsEnum(Role)` cualquiera se registraba como administrador
+// mandando `"role": "ADMIN"` en el body. Los admins se crean por seed o desde el panel.
+export const SELF_REGISTRABLE_ROLES = [
+  Role.CARGO_GENERATOR,
+  Role.TRANSPORTER,
+  Role.COMPANY_ADMIN,
+] as const;
+export type SelfRegistrableRole = (typeof SELF_REGISTRABLE_ROLES)[number];
 
 export class RegisterDto {
   @ApiProperty({ example: 'john@example.com' })
@@ -41,9 +51,9 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'El teléfono es obligatorio' })
   phone: string;
 
-  @ApiProperty({ enum: Role, example: 'CARGO_GENERATOR' })
-  @IsEnum(Role, { message: 'El rol debe ser un valor válido' })
-  role: Role;
+  @ApiProperty({ enum: SELF_REGISTRABLE_ROLES, example: 'CARGO_GENERATOR' })
+  @IsIn(SELF_REGISTRABLE_ROLES, { message: 'El rol debe ser un valor válido' })
+  role: SelfRegistrableRole;
 
   @ApiProperty({ example: 'Acme Logistics', required: false })
   @IsOptional()
