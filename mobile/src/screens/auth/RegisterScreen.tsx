@@ -102,11 +102,18 @@ export default function RegisterScreen({ navigation }: any) {
         <Controller
           control={control}
           name="password"
-          rules={{ required: 'Contraseña obligatoria', minLength: { value: 8, message: 'Mínimo 8 caracteres' } }}
+          rules={{
+            required: 'Contraseña obligatoria',
+            minLength: { value: 8, message: 'Mínimo 8 caracteres' },
+            // bcrypt ignora lo que pase de 72 bytes; el backend lo rechaza igual.
+            maxLength: { value: 72, message: 'Máximo 72 caracteres' },
+          }}
           render={({ field: { onChange, value } }) => (
             <TextInput style={styles.input} placeholder="Contraseña *" value={value} onChangeText={onChange} secureTextEntry />
           )}
         />
+        {/* Sin esto el formulario no avanzaba y no decía por qué. */}
+        {errors.password && <Text style={styles.error}>{errors.password.message}</Text>}
 
         <Controller
           control={control}
@@ -163,6 +170,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 8,
   },
   buttonDisabled: { opacity: 0.6 },
+  error: { color: '#ef4444', fontSize: 12, marginTop: -4 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   link: { textAlign: 'center', color: '#6b7280', marginTop: 8 },
   linkBold: { color: '#2563eb', fontWeight: '600' },

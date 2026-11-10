@@ -108,6 +108,8 @@ function ResetPasswordInner() {
                     {...register('newPassword', {
                       required: 'La contraseña es obligatoria',
                       minLength: { value: 8, message: 'Mínimo 8 caracteres' },
+                      // bcrypt ignora lo que pase de 72 bytes; el backend lo rechaza igual.
+                      maxLength: { value: 72, message: 'Máximo 72 caracteres' },
                     })}
                     className="w-full px-4 py-2.5 pr-10 bg-surface-raised border border-ink-200 rounded-lg text-[14px] focus:ring-4 focus:ring-primary-600/15 focus:border-primary-600 outline-none transition"
                     placeholder="••••••••"

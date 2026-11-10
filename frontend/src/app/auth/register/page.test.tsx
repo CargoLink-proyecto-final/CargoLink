@@ -109,6 +109,17 @@ describe('RegisterPage — validation', () => {
     await user.click(screen.getByRole('button', { name: 'Registrarse' }));
     expect(await screen.findByText('Debe contener al menos un número')).toBeInTheDocument();
   });
+
+  // bcrypt ignora lo que pase de 72 bytes: el backend rechaza claves más largas.
+  it('rejects passwords longer than 72 characters', async () => {
+    const user = userEvent.setup();
+    render(<RegisterPage />);
+    await user.click(getPassword());
+    await user.paste('a1'.repeat(37));
+    await user.click(screen.getByRole('button', { name: 'Registrarse' }));
+    expect(await screen.findByText('Máximo 72 caracteres')).toBeInTheDocument();
+    expect(authApi.register).not.toHaveBeenCalled();
+  });
 });
 
 describe('RegisterPage — submit', () => {

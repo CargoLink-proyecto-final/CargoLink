@@ -88,6 +88,17 @@ describe('RegisterScreen', () => {
     });
   });
 
+  // bcrypt ignora lo que pase de 72 bytes: el backend rechaza claves más largas.
+  it('rejects passwords longer than 72 characters', async () => {
+    const q = render(<RegisterScreen navigation={navigation} />);
+    fillRequired(q);
+    fireEvent.changeText(q.getByPlaceholderText('Contraseña *'), 'a'.repeat(73));
+    fireEvent.press(q.getByText('Crear Cuenta'));
+
+    expect(await q.findByText('Máximo 72 caracteres')).toBeTruthy();
+    expect(authApi.register).not.toHaveBeenCalled();
+  });
+
   it('surfaces an alert when registration fails', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     (authApi.register as jest.Mock).mockRejectedValue({
@@ -109,16 +120,17 @@ describe('RegisterScreen', () => {
   // error message (unlike Login/Forgot). Validation still blocks the submit, but
   // the user sees no feedback. We assert the actual behavior: submit is blocked
   // and no error text is shown. (Suspected UX bug — missing error rendering.)
-  it('blocks submission when required fields are empty (no error text rendered)', async () => {
-    const { getByText, queryByText } = render(<RegisterScreen navigation={navigation} />);
+  it('blocks submission when required fields are empty', async () => {
+    const { getByText, findByText, queryByText } = render(<RegisterScreen navigation={navigation} />);
     fireEvent.press(getByText('Crear Cuenta'));
 
     await waitFor(() => {
       expect(authApi.register).not.toHaveBeenCalled();
     });
-    // Bug: no validation messages are rendered for the user.
+    // La contraseña ya muestra su error (política 8–72 caracteres).
+    expect(await findByText('Contraseña obligatoria')).toBeTruthy();
+    // Bug conocido: el resto de los campos todavía no muestra mensaje.
     expect(queryByText('Correo electrónico obligatorio')).toBeNull();
-    expect(queryByText('Contraseña obligatoria')).toBeNull();
     expect(queryByText('El teléfono es obligatorio')).toBeNull();
   });
 

@@ -133,6 +133,8 @@ export default function RegisterPage() {
                   validate: (value) => {
                     if (!value) return true;
                     if (value.length < 8) return 'Mínimo 8 caracteres';
+                    // bcrypt ignora lo que pase de 72 bytes; el backend lo rechaza igual.
+                    if (value.length > 72) return 'Máximo 72 caracteres';
                     if (!/[a-zA-Z]/.test(value)) return 'Debe contener al menos una letra';
                     if (!/[0-9]/.test(value)) return 'Debe contener al menos un número';
                     return true;

@@ -75,6 +75,18 @@ describe('ResetPasswordPage — with token', () => {
     expect(authApi.resetPassword).not.toHaveBeenCalled();
   });
 
+  // bcrypt ignora lo que pase de 72 bytes: el backend rechaza claves más largas.
+  it('rejects passwords longer than 72 characters', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(<ResetPasswordPage />);
+    const [pw] = passwordInputs();
+    await user.click(pw);
+    await user.paste('a'.repeat(73));
+    await user.click(screen.getByRole('button', { name: 'Cambiar contraseña' }));
+    expect(await screen.findByText('Máximo 72 caracteres')).toBeInTheDocument();
+    expect(authApi.resetPassword).not.toHaveBeenCalled();
+  });
+
   it('calls authApi.resetPassword with the token and redirects on success', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     (authApi.resetPassword as jest.Mock).mockResolvedValue({ data: {} });
