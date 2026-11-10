@@ -94,7 +94,7 @@ describe('ChatScreen', () => {
     await waitFor(() =>
       expect(mockEmit).toHaveBeenCalledWith(
         'sendMessage',
-        { senderId: 'me', tripId: 'trip-1', content: 'New message' },
+        { tripId: 'trip-1', content: 'New message' },
         expect.any(Function),
       ),
     );

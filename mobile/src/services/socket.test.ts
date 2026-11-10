@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getChatSocket, disconnectChatSocket } from './socket';
 import { SOCKET_URL } from '../config/env';
 
@@ -20,16 +21,18 @@ describe('chat socket', () => {
     (io as jest.Mock).mockImplementation(() => makeSocket());
   });
 
-  it('connects to the /chat namespace passing the userId in the handshake', () => {
+  it('connects to the /chat namespace authenticating with the stored token', async () => {
+    await AsyncStorage.setItem('token', 'access-token');
     getChatSocket('u1');
 
-    expect(io).toHaveBeenCalledWith(
-      `${SOCKET_URL}/chat`,
-      expect.objectContaining({
-        query: { userId: 'u1' },
-        transports: ['websocket'],
-      }),
-    );
+    const options = (io as jest.Mock).mock.calls[0][1];
+    expect((io as jest.Mock).mock.calls[0][0]).toBe(`${SOCKET_URL}/chat`);
+    expect(options.transports).toEqual(['websocket']);
+    // El userId ya no viaja: el server lo saca del token.
+    expect(options.query).toBeUndefined();
+
+    const payload = await new Promise((resolve) => options.auth(resolve));
+    expect(payload).toEqual({ token: 'access-token' });
   });
 
   it('reuses the same socket for the same user', () => {

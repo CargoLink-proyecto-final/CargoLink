@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
+import { parseCorsOrigins } from './common/cors';
 import { setDefaultAutoSelectFamilyAttemptTimeout } from 'node:net';
 
 // Node 20 prueba IPv4 e IPv6 en paralelo ("happy eyeballs") y corta cada intento
@@ -16,16 +17,8 @@ async function bootstrap() {
 
   // CORS_ORIGIN admite uno o varios orígenes separados por coma (ej. durante una
   // migración de dominio, el viejo y el nuevo a la vez).
-  const DEFAULT_CORS_ORIGIN = 'http://localhost:3000';
-  const corsOrigins = (process.env.CORS_ORIGIN || DEFAULT_CORS_ORIGIN)
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
   app.enableCors({
-    // Si CORS_ORIGIN quedara vacío (ej. "," o " "), caer al default en vez de
-    // pasar un array vacío, que bloquearía todo origen cruzado.
-    origin: corsOrigins.length > 0 ? corsOrigins : [DEFAULT_CORS_ORIGIN],
+    origin: parseCorsOrigins(),
     credentials: true,
   });
 
