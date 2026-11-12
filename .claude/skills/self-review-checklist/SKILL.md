@@ -17,7 +17,7 @@ cd backend && npm test
 ```
 Hay infra de Jest configurada (`*.spec.ts`); si el repo todavía no tiene specs y escribiste tests nuevos, que pasen los suyos + los preexistentes.
 
-Frontend: **no hay suite de tests configurada** (no hay Vitest ni script `test` más allá de `next lint`). Verificá el cambio corriendo la app: `cd frontend && npm run dev` (puerto 3003).
+Frontend: `cd frontend && npm test` (jest + @testing-library/react). Mobile: `cd mobile && npm test` (jest-expo) y `npm run typecheck`. Correr **las tres** suites: un cambio de layout o de un cliente de API rompe tests de otra capa, y afirmar que el frontend no tiene tests ya costó un bloqueante.
 
 Si escribiste tests nuevos, que pasen los suyos + los que ya existían (que no rompas nada preexistente).
 

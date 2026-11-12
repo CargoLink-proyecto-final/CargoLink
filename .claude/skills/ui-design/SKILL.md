@@ -165,7 +165,7 @@ React Native 0.73 + Expo SDK 50. Navigation: react-navigation. Maps: react-nativ
 
 ### Testing
 
-There is **no frontend test suite configured** (no Vitest, no `test` script beyond `next lint`). Verify UI changes by running the app (`npm run dev`, port 3003) and `npm run lint`. If automated frontend tests get added later, coordinate the setup — don't assume Vitest exists today.
+El frontend **sí** tiene suite: `cd frontend && npm test` (jest + @testing-library/react, ~50 suites). Correrla ante cualquier cambio de UI, además de `npm run lint` y `npm run build`. Mobile: `cd mobile && npm test` (jest-expo) y `npm run typecheck`.
 
 ## Delivery checklist
 

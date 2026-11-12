@@ -45,6 +45,8 @@ export default function LoadDetailScreen({ route, navigation }: any) {
   const [load, setLoad] = useState<Load | null>(null);
   const [myPostulation, setMyPostulation] = useState<Postulation | null>(null);
   const [postulating, setPostulating] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [fuelLiters, setFuelLiters] = useState('');
   const [proposedPrice, setProposedPrice] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -201,10 +203,23 @@ export default function LoadDetailScreen({ route, navigation }: any) {
 
   const handleCompleteTrip = async () => {
     if (!load?.trip) return;
+
+    // Los litros son opcionales para el backend, pero es el único momento en
+    // que se pueden cargar: sin ellos el viaje no suma a las métricas de
+    // combustible del transportista. Por eso se piden acá en vez de completar
+    // derecho.
+    const liters = fuelLiters.trim() ? Number(fuelLiters) : undefined;
+    if (liters !== undefined && (!Number.isFinite(liters) || liters <= 0)) {
+      Alert.alert('Litros inválidos', 'Ingresá un número mayor a cero, o dejalo vacío.');
+      return;
+    }
+
     setActionLoading(true);
     try {
-      await tripsApi.complete(load.trip.id);
+      await tripsApi.complete(load.trip.id, liters);
       Alert.alert('¡Viaje completado!');
+      setCompleting(false);
+      setFuelLiters('');
       fetchLoad();
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.message || 'Error');
@@ -222,7 +237,6 @@ export default function LoadDetailScreen({ route, navigation }: any) {
   }
 
   const stageColor = getSolicitudStageColor(load.status);
-  const interestedCount = load.pendingPostulationsCount ?? 0;
 
   // Mismo criterio que el web: la calificación es unidireccional — sólo el
   // publicador califica al transportista, con el viaje completado y una sola
@@ -250,16 +264,6 @@ export default function LoadDetailScreen({ route, navigation }: any) {
       </View>
 
       {load.description && <Text style={styles.desc}>{load.description}</Text>}
-
-      {user?.role === 'TRANSPORTER' && load.status === 'PUBLISHED' && interestedCount > 0 && (
-        <View style={styles.interestBanner}>
-          <Text style={styles.interestText}>
-            {interestedCount === 1
-              ? 'Hay 1 transportista interesado en esta carga.'
-              : `Hay ${interestedCount} transportistas interesados en esta carga.`}
-          </Text>
-        </View>
-      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Ruta</Text>
@@ -455,14 +459,50 @@ export default function LoadDetailScreen({ route, navigation }: any) {
           </TouchableOpacity>
         )}
 
-        {user?.role === 'TRANSPORTER' && load.trip?.status === 'IN_PROGRESS' && load.trip?.carrierId === user.id && (
+        {user?.role === 'TRANSPORTER' && load.trip?.status === 'IN_PROGRESS' && load.trip?.carrierId === user.id && !completing && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#22c55e' }]}
-            onPress={handleCompleteTrip}
+            onPress={() => setCompleting(true)}
             disabled={actionLoading}
           >
             <Text style={styles.actionBtnText}>Completar Viaje</Text>
           </TouchableOpacity>
+        )}
+
+        {completing && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Completar viaje</Text>
+            <Text style={styles.gridLabel}>Combustible usado en litros (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              value={fuelLiters}
+              onChangeText={setFuelLiters}
+              placeholder="Ej., 85.5"
+              keyboardType="numeric"
+            />
+            <Text style={styles.helper}>
+              Es el único momento para cargarlos: alimentan tus métricas de consumo.
+            </Text>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#22c55e' }]}
+              onPress={handleCompleteTrip}
+              disabled={actionLoading}
+            >
+              <Text style={styles.actionBtnText}>
+                {actionLoading ? 'Completando...' : 'Confirmar'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#9ca3af' }]}
+              onPress={() => {
+                setCompleting(false);
+                setFuelLiters('');
+              }}
+              disabled={actionLoading}
+            >
+              <Text style={styles.actionBtnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {user?.role === 'CARGO_GENERATOR' && load.shipperId === user.id && load.status === 'PUBLISHED' && (
@@ -504,11 +544,6 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   badgeText: { fontSize: 12, fontWeight: '600' },
   desc: { fontSize: 14, color: '#6b7280', marginBottom: 16 },
-  interestBanner: {
-    backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe',
-    borderRadius: 12, padding: 12, marginBottom: 12,
-  },
-  interestText: { fontSize: 13, fontWeight: '500', color: '#1e40af' },
   section: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 10, color: '#374151' },
   infoRow: { marginBottom: 8 },

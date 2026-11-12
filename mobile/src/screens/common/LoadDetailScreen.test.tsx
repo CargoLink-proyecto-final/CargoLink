@@ -149,46 +149,75 @@ describe('LoadDetailScreen', () => {
     expect(queryByText('Dimensiones')).toBeNull();
   });
 
-  it('tells a transporter how many others are interested in a published load', async () => {
+  // Los litros son opcionales para el backend, pero es el único momento en que
+  // se pueden cargar: sin ellos el viaje no suma a las métricas de combustible.
+  describe('completar el viaje', () => {
+    const inProgress = {
+      ...baseLoad,
+      status: 'IN_TRANSIT',
+      trip: { id: 'trip-1', status: 'IN_PROGRESS', carrierId: 'carrier1' },
+    };
+
+    const openForm = async () => {
+      (loadsApi.getById as jest.Mock).mockResolvedValue({ data: inProgress });
+      const view = render(<LoadDetailScreen route={makeRoute()} navigation={makeNav()} />);
+      await waitFor(() => expect(view.getByText('Completar Viaje')).toBeTruthy());
+      fireEvent.press(view.getByText('Completar Viaje'));
+      return view;
+    };
+
+    it('pide los litros antes de completar, en vez de mandar el viaje sin ellos', async () => {
+      const { getByText, getByPlaceholderText } = await openForm();
+
+      expect(getByPlaceholderText('Ej., 85.5')).toBeTruthy();
+      expect(getByText('Confirmar')).toBeTruthy();
+      expect(tripsApi.complete).not.toHaveBeenCalled();
+    });
+
+    it('manda los litros cargados', async () => {
+      const { getByText, getByPlaceholderText } = await openForm();
+
+      fireEvent.changeText(getByPlaceholderText('Ej., 85.5'), '85.5');
+      fireEvent.press(getByText('Confirmar'));
+
+      await waitFor(() => expect(tripsApi.complete).toHaveBeenCalledWith('trip-1', 85.5));
+    });
+
+    it('permite completar sin litros', async () => {
+      const { getByText } = await openForm();
+
+      fireEvent.press(getByText('Confirmar'));
+
+      await waitFor(() => expect(tripsApi.complete).toHaveBeenCalledWith('trip-1', undefined));
+    });
+
+    it('rechaza un valor que no es un número positivo', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      const { getByText, getByPlaceholderText } = await openForm();
+
+      fireEvent.changeText(getByPlaceholderText('Ej., 85.5'), '-5');
+      fireEvent.press(getByText('Confirmar'));
+
+      expect(alertSpy).toHaveBeenCalledWith('Litros inválidos', expect.any(String));
+      expect(tripsApi.complete).not.toHaveBeenCalled();
+      alertSpy.mockRestore();
+    });
+  });
+
+  // El banner de "N interesados" se quitó: el backend omite
+  // `pendingPostulationsCount` del payload que recibe el transportista, para no
+  // filtrarle la competencia, así que nunca se renderizaba.
+  it('never shows the competition to a transporter, even if the payload carries it', async () => {
     (loadsApi.getById as jest.Mock).mockResolvedValue({
       data: { ...baseLoad, pendingPostulationsCount: 3 },
     });
 
-    const { getByText } = render(
-      <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
-    );
-
-    await waitFor(() =>
-      expect(getByText('Hay 3 transportistas interesados en esta carga.')).toBeTruthy(),
-    );
-  });
-
-  it('uses the singular wording for a single interested transporter', async () => {
-    (loadsApi.getById as jest.Mock).mockResolvedValue({
-      data: { ...baseLoad, pendingPostulationsCount: 1 },
-    });
-
-    const { getByText } = render(
-      <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
-    );
-
-    await waitFor(() =>
-      expect(getByText('Hay 1 transportista interesado en esta carga.')).toBeTruthy(),
-    );
-  });
-
-  it('hides the interest banner from the shipper', async () => {
-    mockUser = { id: 'shipper1', role: 'CARGO_GENERATOR' };
-    (loadsApi.getById as jest.Mock).mockResolvedValue({
-      data: { ...baseLoad, pendingPostulationsCount: 3 },
-    });
-
-    const { queryByText, getByText } = render(
+    const { getByText, queryByText } = render(
       <LoadDetailScreen route={makeRoute()} navigation={makeNav()} />,
     );
 
     await waitFor(() => expect(getByText('Steel beams')).toBeTruthy());
-    expect(queryByText('Hay 3 transportistas interesados en esta carga.')).toBeNull();
+    expect(queryByText(/interesad/)).toBeNull();
   });
 
   it('shows "Carga no encontrada" when the load is missing', async () => {
@@ -444,8 +473,6 @@ describe('LoadDetailScreen', () => {
       fireEvent.press(getByText('Enviar postulación'));
 
       await waitFor(() => expect(postulationsApi.create).toHaveBeenCalled());
-      // POST /trips/accept/:loadId es override de ADMIN: 403 para un TRANSPORTER.
-      expect(tripsApi.accept).not.toHaveBeenCalled();
     });
 
     it('omits the price when the carrier accepts the listed one', async () => {

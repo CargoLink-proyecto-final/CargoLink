@@ -3,6 +3,13 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
+import { setDefaultAutoSelectFamilyAttemptTimeout } from 'node:net';
+
+// Node 20 prueba IPv4 e IPv6 en paralelo ("happy eyeballs") y corta cada intento
+// a los 250 ms. Desde el VPS el connect a OSRM tarda ~265 ms y no hay ruta IPv6,
+// así que la llamada fallaba con ETIMEDOUT y el viaje se cerraba sin distancia.
+// 2 s deja margen sin pisar el timeout de OSRM (5 s).
+setDefaultAutoSelectFamilyAttemptTimeout(2000);
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

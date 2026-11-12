@@ -136,9 +136,10 @@ describe('api service', () => {
   });
 
   describe('tripsApi', () => {
-    it('accept posts to /trips/accept/:loadId', () => {
-      tripsApi.accept('l1');
-      expect(fakeInstance.post).toHaveBeenCalledWith('/trips/accept/l1');
+    // `accept` no existe en el cliente: POST /trips/accept/:loadId quedó como
+    // override de ADMIN y un TRANSPORTER recibe 403.
+    it('does not expose the admin-only accept override', () => {
+      expect('accept' in tripsApi).toBe(false);
     });
 
     it('getMy gets /trips/my with params', () => {
@@ -160,7 +161,14 @@ describe('api service', () => {
 
     it('complete patches /trips/:id/complete', () => {
       tripsApi.complete('t1');
-      expect(fakeInstance.patch).toHaveBeenCalledWith('/trips/t1/complete');
+      expect(fakeInstance.patch).toHaveBeenCalledWith('/trips/t1/complete', {});
+    });
+
+    // Sin litros el viaje queda fuera de las métricas de combustible, y es el
+    // único momento en que se pueden cargar.
+    it('complete sends the fuel liters when the carrier loaded them', () => {
+      tripsApi.complete('t1', 85.5);
+      expect(fakeInstance.patch).toHaveBeenCalledWith('/trips/t1/complete', { fuelLiters: 85.5 });
     });
 
     it('updateLocation patches /trips/:id/location with coords', () => {

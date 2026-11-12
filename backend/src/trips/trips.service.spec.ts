@@ -225,6 +225,61 @@ describe('TripsService', () => {
     });
   });
 
+  // #161: el detalle del viaje expone teléfonos y ubicación, así que solo lo
+  // ven las partes del viaje y el ADMIN.
+  describe('findByIdForUser', () => {
+    const SHIPPER_ID = 'shipper-1';
+    const tripWithShipper = { ...baseTrip, load: { ...baseLoad, shipperId: SHIPPER_ID } };
+
+    it('returns the trip to the shipper who owns the load', async () => {
+      // Arrange
+      prisma.trip.findUnique.mockResolvedValue(tripWithShipper);
+      // Act
+      const result = await service.findByIdForUser(TRIP_ID, { id: SHIPPER_ID, role: 'CARGO_GENERATOR' });
+      // Assert
+      expect(result).toBe(tripWithShipper);
+    });
+
+    it('returns the trip to the assigned carrier', async () => {
+      // Arrange
+      prisma.trip.findUnique.mockResolvedValue(tripWithShipper);
+      // Act
+      const result = await service.findByIdForUser(TRIP_ID, { id: CARRIER_ID, role: 'TRANSPORTER' });
+      // Assert
+      expect(result).toBe(tripWithShipper);
+    });
+
+    it('returns any trip to an ADMIN', async () => {
+      // Arrange
+      prisma.trip.findUnique.mockResolvedValue(tripWithShipper);
+      // Act
+      const result = await service.findByIdForUser(TRIP_ID, { id: 'admin-1', role: 'ADMIN' });
+      // Assert
+      expect(result).toBe(tripWithShipper);
+    });
+
+    it.each([
+      ['another carrier', { id: 'carrier-2', role: 'TRANSPORTER' }],
+      ['another shipper', { id: 'shipper-2', role: 'CARGO_GENERATOR' }],
+    ])('throws ForbiddenException to %s', async (_label, user) => {
+      // Arrange
+      prisma.trip.findUnique.mockResolvedValue(tripWithShipper);
+      // Act
+      const result = service.findByIdForUser(TRIP_ID, user);
+      // Assert
+      await expect(result).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws NotFoundException when the trip does not exist', async () => {
+      // Arrange
+      prisma.trip.findUnique.mockResolvedValue(null);
+      // Act
+      const result = service.findByIdForUser(TRIP_ID, { id: 'admin-1', role: 'ADMIN' });
+      // Assert
+      await expect(result).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('startTrip', () => {
     it('throws ForbiddenException when the trip belongs to another carrier', async () => {
       prisma.trip.findUnique.mockResolvedValue({
@@ -536,8 +591,21 @@ describe('TripsService', () => {
       expect(prisma.trip.update).not.toHaveBeenCalled();
     });
 
+    const inProgressTrip = { ...baseTrip, status: TripStatus.IN_PROGRESS };
+
+    it.each([TripStatus.ACCEPTED, TripStatus.COMPLETED, TripStatus.CANCELLED])(
+      'throws BadRequestException when the trip is %s',
+      async (status) => {
+        prisma.trip.findUnique.mockResolvedValue({ ...baseTrip, status });
+        await expect(
+          service.updateLocation(TRIP_ID, CARRIER_ID, -34.6, -58.4),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.trip.update).not.toHaveBeenCalled();
+      },
+    );
+
     it('persists the new GPS coordinates', async () => {
-      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      prisma.trip.findUnique.mockResolvedValue(inProgressTrip);
       prisma.trip.update.mockResolvedValue({
         ...baseTrip,
         currentLat: -34.6037,
@@ -560,8 +628,8 @@ describe('TripsService', () => {
     });
 
     it('passes through zero coordinates without coercion', async () => {
-      prisma.trip.findUnique.mockResolvedValue(baseTrip);
-      prisma.trip.update.mockResolvedValue(baseTrip);
+      prisma.trip.findUnique.mockResolvedValue(inProgressTrip);
+      prisma.trip.update.mockResolvedValue(inProgressTrip);
       await service.updateLocation(TRIP_ID, CARRIER_ID, 0, 0);
       expect(prisma.trip.update).toHaveBeenCalledWith({
         where: { id: TRIP_ID },

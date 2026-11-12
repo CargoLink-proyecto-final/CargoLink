@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
@@ -119,6 +123,40 @@ describe('MessagesService', () => {
             senderId: shipperId,
             receiverId: carrierId,
           }),
+        }),
+      );
+    });
+
+    // El DTO cubre el POST, pero el gateway recibe el payload crudo: sin el
+    // chequeo en el service entraba un mensaje vacío o de largo arbitrario, que
+    // además viaja al cuerpo de la notificación push.
+    it('rejects an empty or whitespace-only message', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+
+      await expect(service.create(carrierId, tripId, '   ')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a message past the length cap', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+
+      await expect(
+        service.create(carrierId, tripId, 'a'.repeat(2001)),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('stores the trimmed text, not the raw input', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      prisma.message.create.mockResolvedValue({ id: 'msg-1' });
+
+      await service.create(carrierId, tripId, '  hola  ');
+
+      expect(prisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ content: 'hola' }),
         }),
       );
     });

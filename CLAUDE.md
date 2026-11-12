@@ -17,11 +17,11 @@ Este mínimo de contexto alcanza para la mayoría de las tareas. Para detalle de
 | **Backend** (`backend/`) | NestJS 10 · Prisma 5 · JWT (@nestjs/jwt + passport-jwt) · Socket.IO (@nestjs/websockets) · Swagger · class-validator/class-transformer · bcrypt · nodemailer |
 | **Base de datos** | PostgreSQL 15 (vía Prisma — schema en `backend/prisma/schema.prisma`, migraciones en `backend/prisma/migrations/`, seed en `backend/prisma/seed.ts`) |
 | **Infra / dev** | Único `docker-compose.yml` en la raíz (`postgres` :5432, `backend` :3001, `frontend` :3000) para dev local · prod y dev en un VPS propio con Docker Compose + Cloudflare Tunnel, deploy continuo con runner self-hosted (`deploy/vps/`) |
-| **Tests** | jest (backend) |
+| **Tests** | jest en las tres capas: backend (`*.spec.ts`), web (`jest` + @testing-library/react) y mobile (`jest-expo` + @testing-library/react-native) |
 
 Comandos útiles de referencia:
 
-- Web: `cd frontend && npm run lint`, `cd frontend && npm run build`. Dev local: `npm run dev` (puerto 3003).
+- Web: `cd frontend && npm test` (jest), `npm run lint`, `npm run build`. Dev local: `npm run dev` (puerto 3003).
 - Backend: `cd backend && npm test` (jest), `npm run lint` (eslint). Prisma: `npm run prisma:generate`, `npm run prisma:migrate` (`prisma migrate dev`), `npm run prisma:seed`, `npm run prisma:studio`.
 - Stack completo: `docker compose up -d`, `docker compose down`. Endpoints locales: Frontend http://localhost:3000, API http://localhost:3001/api, Swagger http://localhost:3001/api/docs, Postgres localhost:5432.
 - Logs: `docker compose logs backend`, `docker compose logs frontend`.

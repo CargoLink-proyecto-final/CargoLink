@@ -11,6 +11,7 @@ Prod y dev dejaron de correr en GCP (Cloud Run + Cloud SQL) y pasaron a un VPS p
 Restricciones duras del VPS:
 
 - **Sin conectividad entrante.** Solo hay acceso por RDP; no hay SSH expuesto ni control del router, así que no se pueden abrir puertos. Todo lo que funcione tiene que salir desde el VPS.
+  - *Actualización 2026-10-13*: se agregó SSH **para personas** por el túnel, detrás de Cloudflare Access (ver [`deployment.md`](./deployment.md) § Acceso por SSH). Fue porque el RDP se colgaba después de los cortes de red del hosting. No cambia esta decisión: el CI sigue sin secretos y sin SSH.
 - **La org tiene deploy keys deshabilitadas.** Los clones hacen pull por HTTPS con un fine-grained PAT de solo lectura.
 - **Org en plan GitHub Free con repo privado**, así que no hay Environments ni rulesets/branch protection. Los secrets y los runners no se pueden atar a una rama.
 - **Recursos acotados**: 4 CPU y 7,3 GB de RAM compartidos entre prod, dev y el túnel. Un build completo tarda unos 7 minutos.

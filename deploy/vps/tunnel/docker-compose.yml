@@ -15,6 +15,10 @@ services:
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set TUNNEL_TOKEN in .env}
+    # Permite que la ruta ssh.cargolink.com.ar llegue al sshd del host
+    # (ssh://host.docker.internal:22). Ver docs/deployment.md § Acceso por SSH.
+    extra_hosts:
+      - host.docker.internal:host-gateway
     networks:
       - edge
 

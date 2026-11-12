@@ -50,6 +50,13 @@ jest.mock('../services/api', () => ({
     getUnreadCount: jest.fn().mockResolvedValue({ data: { count: 0 } }),
   },
   postulationsApi: { listMine: jest.fn().mockResolvedValue({ data: [] }) },
+  // El panel del transportista consulta el estado de su perfil al montar; sin
+  // este mock el módulo devuelve undefined y la pantalla revienta antes de
+  // renderizar nada.
+  transporterProfileApi: {
+    getStatus: jest.fn().mockResolvedValue({ data: { status: 'APPROVED' } }),
+    listDocuments: jest.fn().mockResolvedValue({ data: [] }),
+  },
 }));
 
 // En act() porque el store es zustand y el navigator está suscripto: mutarlo
@@ -85,8 +92,13 @@ describe('AppNavigator — ruteo por rol', () => {
     render(<AppNavigator />);
 
     // 'Mis Viajes' es el título de carrier/DashboardScreen, la screen inicial.
-    await waitFor(() => expect(screen.getByText('Mis Viajes')).toBeTruthy());
-    expect(screen.queryByText('Mis Cargas')).toBeNull();
+    // Las dos aserciones van dentro del mismo waitFor: el panel resuelve el
+    // estado del perfil después de montar, y esa actualización rearma el árbol
+    // — afuera, la segunda consulta quedaba mirando un fiber ya desmontado.
+    await waitFor(() => {
+      expect(screen.getByText('Mis Viajes')).toBeTruthy();
+      expect(screen.queryByText('Mis Cargas')).toBeNull();
+    });
   });
 
   it('manda al dador de carga a sus cargas', async () => {
