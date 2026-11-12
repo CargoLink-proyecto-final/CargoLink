@@ -65,6 +65,33 @@ describe('ShipperDashboard', () => {
     expect(screen.getByText('Load C')).toBeInTheDocument();
   });
 
+  it('takes the counters from the backend totals, not from the first page', async () => {
+    // 23 cargas: la primera página trae 20, así que contar sobre ella daba 20 y 12.
+    const firstPage = Array.from({ length: 20 }, (_, i) => ({
+      id: `l${i}`,
+      title: `Load ${i}`,
+      status: i < 12 ? 'DELIVERED' : 'PUBLISHED',
+      price: 1000,
+      originAddress: 'A',
+      destAddress: 'B',
+    }));
+    const totals: Record<string, number> = { PUBLISHED: 6, IN_TRANSIT: 1, DELIVERED: 15 };
+    loadsApi.getMy.mockImplementation((params?: { status?: string }) =>
+      Promise.resolve({
+        data: params?.status
+          ? { loads: firstPage.filter((l) => l.status === params.status).slice(0, 1), total: totals[params.status] }
+          : { loads: firstPage, total: 23 },
+      }),
+    );
+
+    renderWithClient(<ShipperDashboard />);
+
+    expect(await screen.findByText('23')).toBeInTheDocument();
+    expect(await screen.findByText('15')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
+    expect(loadsApi.getMy).toHaveBeenCalledWith({ status: 'DELIVERED', limit: 1 });
+  });
+
   it('shows the pending postulations badge when count > 0', async () => {
     loadsApi.getMy.mockResolvedValue({
       data: {

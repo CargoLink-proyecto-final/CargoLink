@@ -16,6 +16,17 @@ import {
 import Link from 'next/link';
 import type { ShipperMetrics } from '@/types';
 
+const COUNTED_STATUSES = ['PUBLISHED', 'IN_TRANSIT', 'DELIVERED'] as const;
+
+type LoadsPage = { loads?: { status?: string }[]; total?: number } | undefined;
+
+const countInPage = (page: LoadsPage, status: string) =>
+  (page?.loads || []).filter((l) => l.status === status).length;
+
+// Respuesta de /loads/my filtrada por `status`: su `total` es la cuenta real.
+const totalOf = (page: LoadsPage, status: string) =>
+  typeof page?.total === 'number' ? page.total : countInPage(page, status);
+
 const percent = (rate: number | null | undefined) =>
   rate == null ? '—' : `${Math.round(rate * 100)}%`;
 
@@ -30,12 +41,28 @@ export default function ShipperDashboard() {
     queryFn: () => loadsApi.getMetrics().then((r) => r.data as ShipperMetrics),
   });
 
+  // Los contadores salen del `total` que devuelve el backend por estado: el
+  // listado de arriba es solo la primera página (20 cargas), así que contar
+  // sobre él se quedaba corto en cuanto el publicador superaba esa cantidad.
+  const { data: statusCounts } = useQuery({
+    queryKey: ['my-load-counts'],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        COUNTED_STATUSES.map(async (status) => {
+          const res = await loadsApi.getMy({ status, limit: 1 });
+          return [status, totalOf(res.data, status)] as const;
+        }),
+      );
+      return Object.fromEntries(entries) as Record<(typeof COUNTED_STATUSES)[number], number>;
+    },
+  });
+
   const loads = data?.loads || [];
   const stats = {
-    total: loads.length,
-    published: loads.filter((l: any) => l.status === 'PUBLISHED').length,
-    inTransit: loads.filter((l: any) => l.status === 'IN_TRANSIT').length,
-    delivered: loads.filter((l: any) => l.status === 'DELIVERED').length,
+    total: typeof data?.total === 'number' ? data.total : loads.length,
+    published: statusCounts?.PUBLISHED ?? countInPage(data, 'PUBLISHED'),
+    inTransit: statusCounts?.IN_TRANSIT ?? countInPage(data, 'IN_TRANSIT'),
+    delivered: statusCounts?.DELIVERED ?? countInPage(data, 'DELIVERED'),
   };
 
   // Pagar por encima del precio publicado no es malo en sí mismo, pero es el
