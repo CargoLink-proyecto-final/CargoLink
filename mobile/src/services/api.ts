@@ -26,6 +26,13 @@ export const authApi = {
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token: string, newPassword: string) =>
     api.post('/auth/reset-password', { token, newPassword }),
+  /**
+   * Reenvía el mail de verificación. El login responde 403 con
+   * `code: 'EMAIL_NOT_VERIFIED'` y sin esto la app dejaba al usuario trabado:
+   * mostraba el error y no había forma de pedir otro enlace desde el teléfono.
+   */
+  resendVerification: (email: string) =>
+    api.post('/auth/resend-verification', { email }),
 };
 
 export const loadsApi = {
@@ -36,17 +43,22 @@ export const loadsApi = {
   cancel: (id: string) => api.delete(`/loads/${id}`),
 };
 
+// `POST /trips/accept/:loadId` no tiene cliente acá a propósito: quedó como
+// override de ADMIN y un TRANSPORTER recibe 403. El camino de la app es
+// postularse con `postulationsApi.create` y que el publicador acepte.
 export const tripsApi = {
-  // Override de ADMIN que saltea el ciclo de postulación: un TRANSPORTER recibe
-  // 403. Para postularse va `postulationsApi.create`.
-  accept: (loadId: string) => api.post(`/trips/accept/${loadId}`),
   // Los viajes propios están partidos por rol: `my` es TRANSPORTER-only y
   // `my-loads` CARGO_GENERATOR-only. Llamar el que no corresponde da 403.
   getMy: (params?: any) => api.get('/trips/my', { params }),
   getMyLoads: (params?: any) => api.get('/trips/my-loads', { params }),
   getById: (id: string) => api.get(`/trips/${id}`),
   start: (id: string) => api.patch(`/trips/${id}/start`),
-  complete: (id: string) => api.patch(`/trips/${id}/complete`),
+  /**
+   * Los litros son opcionales en el DTO, pero es el único momento en que se
+   * pueden cargar: sin ellos el viaje queda fuera de las métricas de combustible.
+   */
+  complete: (id: string, fuelLiters?: number) =>
+    api.patch(`/trips/${id}/complete`, fuelLiters != null ? { fuelLiters } : {}),
   updateLocation: (id: string, data: { lat: number; lng: number }) =>
     api.patch(`/trips/${id}/location`, data),
 };

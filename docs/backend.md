@@ -91,6 +91,7 @@ backend/src/
     ├── filters/
     │   └── http-exception.filter.ts
     ├── metrics.ts             # computeFuelAndDeliveryMetrics (km/litro, on-time)
+    │                          # + computeMoneyMetrics / resolveTripPrice (dinero, serie mensual)
     └── routing.ts             # fetchRouteDistanceKm (distancia de ruta vía OSRM)
 ```
 
@@ -225,7 +226,7 @@ Puntos de diseño:
 | `/api/trips/my` | GET | `TRANSPORTER` |
 | `/api/trips/metrics` | GET | `TRANSPORTER` |
 | `/api/trips/my-loads` | GET | `CARGO_GENERATOR` |
-| `/api/trips/:id` | GET | cualquier rol autenticado |
+| `/api/trips/:id` | GET | dador de la carga, transportista asignado o `ADMIN` (ownership en el service) |
 | `/api/trips/:id/start` | PATCH | `TRANSPORTER` |
 | `/api/trips/:id/complete` | PATCH | `TRANSPORTER` |
 | `/api/trips/:id/location` | PATCH | `TRANSPORTER` |
@@ -234,7 +235,7 @@ Puntos de diseño:
 
 `PATCH /trips/:id/location` se llama desde mobile periódicamente con `{ lat, lng }`. El service valida que el carrier sea el dueño del trip y que el estado sea `IN_PROGRESS`.
 
-`PATCH /trips/:id/complete` recibe `{ fuelLiters }` (litros cargados durante el viaje), marca el trip `COMPLETED` y calcula `distanceKm` de la ruta vía OSRM (`fetchRouteDistanceKm` en `src/common/routing.ts`). `GET /trips/metrics` agrega esos datos con `computeFuelAndDeliveryMetrics` (`src/common/metrics.ts`): eficiencia km/litro y tasa de entregas a tiempo. Las mismas métricas, por chofer, las consume el admin de empresa (ver más abajo y [`empresas.md`](./empresas.md)).
+`PATCH /trips/:id/complete` recibe `{ fuelLiters }` (litros cargados durante el viaje), marca el trip `COMPLETED` y calcula `distanceKm` de la ruta vía OSRM (`fetchRouteDistanceKm` en `src/common/routing.ts`). `GET /trips/metrics` agrega esos datos con `computeFuelAndDeliveryMetrics` y `computeMoneyMetrics` (`src/common/metrics.ts`): eficiencia km/litro, tasa de entregas a tiempo, ingresos y serie mensual. Las mismas métricas, por chofer, las consume el admin de empresa (ver más abajo y [`empresas.md`](./empresas.md)).
 
 ### Messages (`src/messages/`)
 

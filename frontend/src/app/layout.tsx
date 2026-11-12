@@ -1,28 +1,31 @@
 import type { Metadata } from 'next';
-import { Outfit, Manrope, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import 'leaflet/dist/leaflet.css';
 import './globals.css';
 import Providers from '@/components/Providers';
 
-const display = Outfit({
-  subsets: ['latin'],
+// Fuentes variables servidas desde el repo (Fontsource, licencia OFL). Con
+// next/font/google el build las descargaba de Google en cada corrida, y cuando
+// esa descarga fallaba se caía el build del CI y del deploy (#160).
+const display = localFont({
+  src: './fonts/outfit-latin-wght-normal.woff2',
   display: 'swap',
   variable: '--font-display',
-  weight: ['300', '400', '500', '600', '700'],
+  weight: '300 700',
 });
 
-const sans = Manrope({
-  subsets: ['latin'],
+const sans = localFont({
+  src: './fonts/manrope-latin-wght-normal.woff2',
   display: 'swap',
   variable: '--font-sans',
-  weight: ['400', '500', '600', '700', '800'],
+  weight: '400 800',
 });
 
-const mono = JetBrains_Mono({
-  subsets: ['latin'],
+const mono = localFont({
+  src: './fonts/jetbrains-mono-latin-wght-normal.woff2',
   display: 'swap',
   variable: '--font-mono',
-  weight: ['400', '500', '600'],
+  weight: '400 600',
 });
 
 export const metadata: Metadata = {

@@ -1,7 +1,10 @@
 import { TripStatus } from '@prisma/client';
 import {
   computeFuelAndDeliveryMetrics,
+  computeMoneyMetrics,
+  resolveTripPrice,
   TripForMetrics,
+  TripForMoneyMetrics,
 } from './metrics';
 
 describe('computeFuelAndDeliveryMetrics', () => {
@@ -169,5 +172,109 @@ describe('computeFuelAndDeliveryMetrics', () => {
     expect(result.totalDistanceKm).toBe(0);
     expect(result.totalFuelLiters).toBe(0);
     expect(result.avgKmPerLiter).toBeNull();
+  });
+});
+
+describe('resolveTripPrice', () => {
+  const trip = (load: any) => ({
+    status: TripStatus.COMPLETED,
+    completedAt: new Date('2026-06-10T00:00:00Z'),
+    distanceKm: null,
+    load,
+  });
+
+  it('prefers the price agreed in the accepted postulation', () => {
+    expect(
+      resolveTripPrice(trip({ price: 50000, postulations: [{ proposedPrice: 65000 }] })),
+    ).toBe(65000);
+  });
+
+  it('falls back to the published price when there was no postulation', () => {
+    expect(resolveTripPrice(trip({ price: 50000, postulations: [] }))).toBe(50000);
+  });
+
+  it('returns 0 for a load published "a convenir" with no accepted offer', () => {
+    expect(resolveTripPrice(trip({ price: null, postulations: [] }))).toBe(0);
+    expect(resolveTripPrice(trip(null))).toBe(0);
+  });
+});
+
+describe('computeMoneyMetrics', () => {
+  const now = new Date('2026-06-15T12:00:00Z');
+
+  const makeTrip = (overrides: Partial<TripForMoneyMetrics> = {}): TripForMoneyMetrics => ({
+    status: TripStatus.COMPLETED,
+    completedAt: new Date('2026-06-10T00:00:00Z'),
+    distanceKm: null,
+    load: { price: null, postulations: [] },
+    ...overrides,
+  });
+
+  it('returns a zeroed 12-month window for an empty trip list', () => {
+    const result = computeMoneyMetrics([], now);
+
+    expect(result.totalAmount).toBe(0);
+    expect(result.amountThisMonth).toBe(0);
+    expect(result.avgAmountPerTrip).toBeNull();
+    expect(result.amountPerKm).toBeNull();
+    expect(result.monthly).toHaveLength(12);
+    expect(result.monthly[0].month).toBe('2025-07');
+    expect(result.monthly[11].month).toBe('2026-06');
+  });
+
+  it('ignores trips that are not COMPLETED', () => {
+    const result = computeMoneyMetrics(
+      [
+        makeTrip({
+          status: TripStatus.IN_PROGRESS,
+          load: { price: 90000, postulations: [] },
+        }),
+      ],
+      now,
+    );
+
+    expect(result.totalAmount).toBe(0);
+    expect(result.monthly[11].trips).toBe(0);
+  });
+
+  it('buckets completed trips by month and keeps totals over the whole history', () => {
+    const trips = [
+      makeTrip({
+        completedAt: new Date('2026-06-10T00:00:00Z'),
+        distanceKm: 100,
+        load: { price: 4000, postulations: [{ proposedPrice: 5000 }] },
+      }),
+      makeTrip({
+        completedAt: new Date('2026-04-02T00:00:00Z'),
+        distanceKm: 50,
+        load: { price: 3000, postulations: [] },
+      }),
+      // Fuera de la ventana de 12 meses: suma al total, no a la serie.
+      makeTrip({
+        completedAt: new Date('2024-01-05T00:00:00Z'),
+        distanceKm: 10,
+        load: { price: 1000, postulations: [] },
+      }),
+    ];
+
+    const result = computeMoneyMetrics(trips, now);
+
+    expect(result.totalAmount).toBe(9000);
+    expect(result.amountThisMonth).toBe(5000);
+    expect(result.avgAmountPerTrip).toBe(3000);
+    expect(result.amountPerKm).toBe(56.25); // 9000 / 160 km
+    expect(result.monthly[11]).toEqual({ month: '2026-06', amount: 5000, trips: 1, km: 100 });
+    expect(result.monthly[9]).toEqual({ month: '2026-04', amount: 3000, trips: 1, km: 50 });
+    expect(result.monthly.reduce((sum, m) => sum + m.amount, 0)).toBe(8000);
+  });
+
+  it('leaves amountPerKm null when no completed trip has a distance', () => {
+    const result = computeMoneyMetrics(
+      [makeTrip({ load: { price: 7000, postulations: [] } })],
+      now,
+    );
+
+    expect(result.totalAmount).toBe(7000);
+    expect(result.amountPerKm).toBeNull();
   });
 });

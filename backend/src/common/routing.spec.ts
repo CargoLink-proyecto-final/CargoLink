@@ -40,6 +40,19 @@ describe('fetchRouteDistanceKm', () => {
     expect(calledUrl).toContain('overview=false');
   });
 
+  it('passes an abort signal so a stalled OSRM cannot hang the caller', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 'Ok', routes: [{ distance: 1000 }] }),
+    });
+    mockFetch(fetchMock);
+
+    await fetchRouteDistanceKm(10, 20, 30, 40);
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('returns null when the HTTP response is not ok', async () => {
     mockFetch(jest.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
     expect(await fetchRouteDistanceKm(1, 2, 3, 4)).toBeNull();

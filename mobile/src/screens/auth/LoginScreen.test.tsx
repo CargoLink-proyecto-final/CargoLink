@@ -13,6 +13,7 @@ jest.mock('../../services/api', () => ({
     register: jest.fn(),
     forgotPassword: jest.fn(),
     resetPassword: jest.fn(),
+    resendVerification: jest.fn(),
   },
 }));
 
@@ -30,6 +31,74 @@ describe('LoginScreen', () => {
     jest.clearAllMocks();
     (authApi.login as jest.Mock).mockResolvedValue({
       data: { user: { id: 'u1', email: 'a@b.com' }, accessToken: 'tok-123' },
+    });
+  });
+
+  // El backend responde 403 con este código cuando falta verificar el correo.
+  // Sin el reenvío, el enlace vencido dejaba al usuario trabado: desde el
+  // teléfono no había forma de pedir otro.
+  describe('correo sin verificar', () => {
+    const emailNotVerified = {
+      response: {
+        data: {
+          code: 'EMAIL_NOT_VERIFIED',
+          message: 'Tenés que verificar tu correo electrónico antes de iniciar sesión.',
+          email: 'a@b.com',
+        },
+      },
+    };
+
+    const submit = async () => {
+      const { getByPlaceholderText, getByText } = render(<LoginScreen navigation={navigation} />);
+      fireEvent.changeText(getByPlaceholderText('Correo electrónico *'), 'a@b.com');
+      fireEvent.changeText(getByPlaceholderText('Contraseña *'), 'secret123');
+      fireEvent.press(getByText('Iniciar Sesión'));
+    };
+
+    it('ofrece reenviar el enlace en vez de dejar sólo el error', async () => {
+      (authApi.login as jest.Mock).mockRejectedValue(emailNotVerified);
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      await submit();
+
+      await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+      expect(alertSpy.mock.calls[0][0]).toBe('Falta verificar tu correo');
+      const actions = alertSpy.mock.calls[0][2] as any[];
+      expect(actions.some((a) => a.text === 'Reenviar')).toBe(true);
+      // Todavía no llamó al API: hace falta que el usuario lo pida.
+      expect(authApi.resendVerification).not.toHaveBeenCalled();
+
+      alertSpy.mockRestore();
+    });
+
+    it('reenvía al correo que devolvió el backend', async () => {
+      (authApi.login as jest.Mock).mockRejectedValue(emailNotVerified);
+      (authApi.resendVerification as jest.Mock).mockResolvedValue({
+        data: { message: 'Si existe una cuenta sin verificar para ese correo, te enviamos un nuevo enlace.' },
+      });
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      await submit();
+      await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+      const actions = alertSpy.mock.calls[0][2] as any[];
+      await actions.find((a) => a.text === 'Reenviar').onPress();
+
+      expect(authApi.resendVerification).toHaveBeenCalledWith('a@b.com');
+      await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Listo', expect.any(String)));
+
+      alertSpy.mockRestore();
+    });
+
+    it('no ofrece reenvío para un error de credenciales', async () => {
+      (authApi.login as jest.Mock).mockRejectedValue({
+        response: { data: { message: 'Credenciales inválidas' } },
+      });
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      await submit();
+
+      await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Error', 'Credenciales inválidas'));
+      alertSpy.mockRestore();
     });
   });
 

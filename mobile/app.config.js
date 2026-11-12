@@ -21,6 +21,10 @@ module.exports = () => ({
       supportsTablet: true,
       bundleIdentifier: 'com.cargolink.app',
       infoPlist: {
+        // La app sólo usa HTTPS estándar, sin criptografía propia ni exenta.
+        // Declararlo evita que App Store Connect pregunte por el cumplimiento
+        // de exportación en cada subida y frene el build en la cola.
+        ITSAppUsesNonExemptEncryption: false,
         // Sólo la cadena de "mientras usás la app": la app pide únicamente
         // permiso en primer plano (`requestForegroundPermissionsAsync`).
         // Declarar además la de segundo plano contradecía el privacy label y es

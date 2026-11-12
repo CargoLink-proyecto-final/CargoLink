@@ -18,13 +18,19 @@ CargoLink corre en un **VPS propio** (`ubuntu-tesis01`) con Docker Compose: **pr
 | Backup pre-deploy (prod) | ✅ `deploy.sh` corre `~/backups/backup.sh` antes de levantar la versión nueva |
 | Backup diario | ✅ cron 03:00, `pg_dump -Fc` de las dos bases (14 copias de prod, 7 de dev). Restore probado |
 | Healthcheck post-deploy | ✅ `/` → 200 y `/api/geo/provinces` → 401 por la URL pública |
+| Smoke test post-deploy | ✅ `smoke.sh` sobre el módulo trips (solo lectura) |
 | Rollback | ⚠️ manual: imágenes `:previous` + restore si hubo migración (ver § Rollback) |
 | Logs / métricas | ⚠️ solo `docker compose logs`; no hay métricas |
 | Backups fuera del host | ❌ los dumps viven en el mismo disco del VPS |
 
 ## Acceso al VPS
 
-**Solo por RDP** (`rpdcs.ddns.net:22989`). No hay SSH entrante ni se pueden abrir puertos en el router: todo lo que llega o sale del VPS es tráfico **saliente** (el túnel de Cloudflare, el runner de GitHub, `git fetch`). Los comandos se corren desde una terminal dentro de la sesión RDP, con el usuario `mfrias` (grupo `docker`).
+Hay dos vías, las dos con el usuario `mfrias` (grupo `docker`):
+
+- **SSH por el Cloudflare Tunnel** (`ssh.cargolink.com.ar`, detrás de Cloudflare Access). Es la vía preferida para operar: va por el mismo túnel que la web, que se reconecta solo después de un corte de red. Setup en § Acceso por SSH.
+- **RDP** (`rpdcs.ddns.net:22989`), por un puerto redirigido en el router del hosting más un DNS dinámico. Queda como respaldo y para lo que necesite escritorio. Se ha colgado después de cortes de red del hosting.
+
+No se pueden abrir puertos en el router: salvo el RDP, todo lo que llega o sale del VPS es tráfico **saliente** (el túnel de Cloudflare, el runner de GitHub, `git fetch`).
 
 ## Layout en el VPS
 
@@ -69,10 +75,100 @@ Los clones hacen pull por HTTPS con un **fine-grained PAT** de la cuenta `soport
 | `plataforma.cargolink.com.ar` | `http://prod-frontend:3000` |
 | `dev.cargolink.com.ar/api/*` | `http://dev-backend:3001` |
 | `dev.cargolink.com.ar` | `http://dev-frontend:3000` |
+| `ssh.cargolink.com.ar` | `ssh://host.docker.internal:22` (protegida con Access, ver § Acceso por SSH) |
 
 Los aliases `prod-*` / `dev-*` los declaran los overrides [`compose.prod.yml`](../deploy/vps/compose.prod.yml) / [`compose.dev.yml`](../deploy/vps/compose.dev.yml). Los overrides también quitan los `ports:`, así que **nada queda publicado en el host**.
 
 Apex y `www` apuntan a GitHub Pages (landing). No hay subdominio `api.`: la API se sirve en `/api` del mismo hostname de cada entorno.
+
+## Acceso por SSH
+
+`ssh.cargolink.com.ar` llega al `sshd` del host a través del túnel. Hay dos barreras: **Cloudflare Access** (login con un mail autorizado) y **sshd solo con clave** ([`../deploy/vps/sshd/10-cargolink.conf`](../deploy/vps/sshd/10-cargolink.conf)). No hay secretos en GitHub: este acceso es para personas, no para el CI.
+
+### Setup en el VPS (una vez, desde RDP)
+
+```bash
+sudo apt install -y openssh-server
+
+# config endurecida (sin password, sin root, solo mfrias)
+sudo cp ~/cargolink/deploy/vps/sshd/10-cargolink.conf /etc/ssh/sshd_config.d/
+sudo sshd -t && sudo systemctl restart ssh     # sshd -t valida la sintaxis antes de reiniciar
+
+# claves autorizadas: la pública de cada persona (ver § Cliente)
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo '<contenido de cargolink_vps.pub>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+
+# el túnel necesita el extra_hosts nuevo del compose
+cp ~/cargolink/deploy/vps/tunnel/docker-compose.yml ~/tunnel/
+cd ~/tunnel && docker compose up -d
+
+# chequeo: el contenedor del túnel tiene que llegar al sshd del host
+docker run --rm --add-host host.docker.internal:host-gateway --network edge \
+  busybox nc -zv -w 3 host.docker.internal 22
+```
+
+Si el chequeo falla y `sudo ufw status` dice `active`, habilitá el puerto para las redes de Docker: `sudo ufw allow from 172.16.0.0/12 to any port 22 proto tcp`.
+
+`sshd` escucha en todas las interfaces, así que el puerto 22 también queda abierto en la LAN del hosting (no hacia internet: el router no lo redirige). Con login solo por clave, el riesgo es bajo.
+
+### Setup en Cloudflare (una vez)
+
+**El orden importa**: primero la aplicación de Access y después la ruta, para que el hostname nunca quede publicado sin protección. Los nombres de menú son los del dashboard unificado (2026-10).
+
+1. Policy: *Zero Trust → Access controls → Policies → Add*. Nombre `Solo soporte`, acción *Allow*, *Include → Emails* → `soportecargolink@gmail.com` (más el de cada persona que opere el VPS). Ojo: *Emails*, no *Emails ending in*.
+2. Aplicación: *Zero Trust → Access controls → Applications → Create new application → Self-hosted and private*.
+   - *Destinations → Public hostnames*: subdominio `ssh`, dominio `cargolink.com.ar`, sin path.
+   - *Browser-based RDP, SSH, or VNC*: **apagado**. La terminal en el navegador necesita la CA de certificados cortos de Cloudflare en el `sshd`, y no está configurada.
+   - *Access policies → Add current policies* → `Solo soporte`.
+   - *Authentication → Choose identity providers* → *Select all*. Sin proveedores configurados, queda el One-time PIN por mail.
+   - *Session duration*: 24 h. *Create*.
+3. Ruta: *Networking → Tunnels → cargolink-vps → Published application routes → Add*: subdominio `ssh`, dominio `cargolink.com.ar`, **Service URL `ssh://host.docker.internal:22`**. Sin el `ssh://`, Cloudflare la toma como HTTP.
+
+Verificación: `curl -sI https://ssh.cargolink.com.ar` tiene que devolver `302` hacia `*.cloudflareaccess.com`. Si devuelve `200`, la aplicación de Access no está cubriendo el hostname y solo queda la barrera de `sshd`.
+
+### Cliente (cada persona)
+
+Una clave dedicada para el VPS:
+
+```bash
+brew install cloudflared
+ssh-keygen -t ed25519 -f ~/.ssh/cargolink_vps -C "soportecargolink@gmail.com"
+ssh-add --apple-use-keychain ~/.ssh/cargolink_vps
+cat ~/.ssh/cargolink_vps.pub
+```
+
+La salida del `cat` es la línea que va al `~/.ssh/authorized_keys` del VPS. El `ssh-add` guarda la passphrase en el llavero de macOS.
+
+En `~/.ssh/config`:
+
+```
+Host cargolink-vps
+  HostName ssh.cargolink.com.ar
+  User mfrias
+  IdentityFile ~/.ssh/cargolink_vps
+  IdentitiesOnly yes
+  UseKeychain yes
+  AddKeysToAgent yes
+  ProxyCommand cloudflared access ssh --hostname %h
+```
+
+Después: `ssh cargolink-vps`. Abre el navegador para el login de Access una vez por sesión (24 h). La primera conexión pregunta por la huella del host; comparala con `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` en el VPS, pero respondé rápido: si la pregunta queda abierta un rato, el túnel corta la conexión (`Broken pipe`) y hay que reintentar.
+
+Para sacarle el acceso a alguien: quitar su mail de la política de Access **y** su línea de `~/.ssh/authorized_keys`.
+
+### Qué se puede resolver por SSH
+
+Regla práctica: si `plataforma.cargolink.com.ar` carga, el túnel está arriba y el SSH entra.
+
+| Situación | ¿SSH? | Qué hacer |
+|---|---|---|
+| Runner offline o RDP colgado, la web anda | ✅ | `sudo systemctl restart 'actions.runner.*'` o `sudo systemctl restart xrdp`. Si no alcanza, `sudo reboot` |
+| Sin salida a internet en el hosting | ❌ | No entra nada; la web también cae. Cuando vuelve la red, el túnel se reconecta solo |
+| VM colgada (kernel, sin memoria) | ❌ | Solo soporte del hosting, desde la consola del hipervisor |
+
+### Pegar comandos en la terminal del RDP
+
+El portapapeles del RDP se lleva mal con el *bracketed paste* de bash: el primer comando pegado llega con `^[[200~` adelante (y falla con `command not found`) y el último puede llegar con un `~` de más al final. Escribí a mano `bind 'set enable-bracketed-paste off'` al abrir la terminal, o pegá los comandos de a uno. Por SSH no pasa.
 
 ## Runner self-hosted
 
@@ -137,6 +233,7 @@ Viven en el `.env` de cada clone (ver [`docker.md`](./docker.md) para la tabla c
 | `JWT_SECRET` | `openssl rand -base64 64`. Distinto entre prod y dev. |
 | `CORS_ORIGIN`, `FRONTEND_URL` | `https://$APP_HOST`. `FRONTEND_URL` la usan los emails de verify/reset. |
 | `ADMIN_PASSWORD` | Obligatoria en prod. Si queda vacía, el seed usa un fallback versionado en el repo. |
+| `E2E_PASSWORD` | **Solo dev.** Crea las cuentas del E2E post-deploy y lo habilita. En prod no se define. |
 | `SMTP_*` | Cuenta real (Gmail soportecargolink@gmail.com con app password). |
 | `NEXT_PUBLIC_API_URL` | No va en el `.env`: es build-arg y lo arma el override. |
 
@@ -232,7 +329,11 @@ Si hacés rollback a una imagen `:previous` construida antes de ese fix, el 502 
 
 ## Smoke test post-deploy
 
-El healthcheck es automático; lo funcional sigue siendo manual:
+Después del healthcheck, `deploy.sh` corre [`smoke.sh`](../deploy/vps/smoke.sh) sobre el módulo de viajes. Es de solo lectura; los checks autenticados usan `SMOKE_EMAIL`/`SMOKE_PASSWORD` del `.env` del entorno si están definidas. Si falla, el deploy queda en rojo. Detalle en [`calidad/pruebas-carga.md`](./calidad/pruebas-carga.md#smoke-test-post-deploy).
+
+En dev, después del smoke corre además el E2E del módulo de viajes ([`e2e-trips.mjs`](../deploy/vps/e2e-trips.mjs)): publica una carga, la asigna, hace el viaje completo con OSRM real y lo califica. Necesita `E2E_PASSWORD` en el `.env`; sin ella se saltea. Detalle en [`calidad/integracion-osrm-e2e.md`](./calidad/integracion-osrm-e2e.md).
+
+El resto sigue siendo manual:
 
 1. Login con una cuenta demo y con la cuenta admin.
 2. `GET /api/users/me` con el token devuelve el user.

@@ -63,6 +63,7 @@ const baseTrip = {
   currentLng: null,
   carrier: { firstName: 'Ada', lastName: 'Lovelace', companyName: 'Lovelace Log' },
   load: {
+    shipperId: 'shipper-1',
     title: 'Granos a Rosario',
     originLat: -34.6, originLng: -58.4, originAddress: 'Buenos Aires',
     destLat: -32.9, destLng: -60.6, destAddress: 'Rosario',
@@ -134,12 +135,17 @@ describe('TripDetailPage', () => {
     );
   });
 
-  it('shows the rating entry on a completed trip and submits a rating', async () => {
+  // La calificación es unidireccional: solo el dador de carga califica al
+  // transportista (el backend rechaza el resto con 403).
+  it('lets the shipper rate the carrier on a completed trip', async () => {
     const user = userEvent.setup();
+    authState = { user: { id: 'shipper-1', role: 'CARGO_GENERATOR' } };
     api.getById.mockResolvedValue({ data: { ...baseTrip, status: 'COMPLETED' } });
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: /Calificar Viaje/ }));
+    await user.click(
+      await screen.findByRole('button', { name: /Calificar al transportista/ }),
+    );
     await user.click(screen.getByRole('button', { name: 'Enviar Calificación' }));
 
     await waitFor(() =>
@@ -151,18 +157,28 @@ describe('TripDetailPage', () => {
     );
   });
 
-  it('hides the rating entry when the user already rated', async () => {
+  it('hides the rating entry when the shipper already rated', async () => {
+    authState = { user: { id: 'shipper-1', role: 'CARGO_GENERATOR' } };
     api.getById.mockResolvedValue({
       data: {
         ...baseTrip,
         status: 'COMPLETED',
-        ratings: [{ id: 'r1', fromUserId: 'me', score: 5 }],
+        ratings: [{ id: 'r1', fromUserId: 'shipper-1', score: 5 }],
       },
     });
     renderPage();
     await screen.findByText('Granos a Rosario');
     expect(
-      screen.queryByRole('button', { name: /Calificar Viaje/ }),
+      screen.queryByRole('button', { name: /Calificar al transportista/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not let the carrier rate a completed trip', async () => {
+    api.getById.mockResolvedValue({ data: { ...baseTrip, status: 'COMPLETED' } });
+    renderPage();
+    await screen.findByText('Granos a Rosario');
+    expect(
+      screen.queryByRole('button', { name: /Calificar/ }),
     ).not.toBeInTheDocument();
   });
 

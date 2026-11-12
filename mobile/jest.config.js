@@ -2,6 +2,11 @@
 module.exports = {
   preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  // El default de 5s alcanza para cualquiera de estos tests, pero el primero de
+  // un archivo pesado paga el arranque en frío del runtime de React Native y se
+  // pasaba del tope cuando la máquina estaba cargada — una falla que no dice
+  // nada del código y manda a investigar al lugar equivocado.
+  testTimeout: 15000,
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
