@@ -5,9 +5,16 @@ import Link from 'next/link';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
+import ChartCard from '@/components/charts/ChartCard';
+import MonthlyTrendChart from '@/components/charts/MonthlyTrendChart';
+import RankingBars from '@/components/charts/RankingBars';
 import { companiesApi } from '@/lib/api';
-import { Users, UserCheck, Truck, CheckCircle, ArrowRight, Inbox, Check, X } from 'lucide-react';
-import type { CompanyOverview, CompanyJoinRequest, CompanyTrip } from '@/types';
+import { formatCurrency } from '@/lib/utils';
+import { Users, UserCheck, Truck, CheckCircle, ArrowRight, Inbox, Check, X, Wallet, Coins, Route, Gauge, Timer, Activity } from 'lucide-react';
+import type { CompanyOverview, CompanyJoinRequest, CompanyTrip, CompanyMetrics } from '@/types';
+
+const percent = (rate: number | null | undefined) =>
+  rate == null ? '—' : `${Math.round(rate * 100)}%`;
 
 export default function CompanyAdminDashboard() {
   const queryClient = useQueryClient();
@@ -20,6 +27,12 @@ export default function CompanyAdminDashboard() {
   const { data: tripsData } = useQuery({
     queryKey: ['company', 'trips', { limit: 100 }],
     queryFn: () => companiesApi.getTrips({ limit: 100 }).then((r) => r.data),
+  });
+
+  const { data: metrics } = useQuery({
+    queryKey: ['company', 'metrics'],
+    queryFn: () =>
+      companiesApi.getMyCompanyMetrics().then((r) => r.data as CompanyMetrics),
   });
 
   const { data: pending } = useQuery({
@@ -67,6 +80,128 @@ export default function CompanyAdminDashboard() {
           <StatCard label="Viajes activos" value={activeTrips} icon={Truck} tone="primary" />
           <StatCard label="Viajes completados" value={completedTrips} icon={CheckCircle} tone="success" />
         </div>
+
+        {/* Facturación de la flota */}
+        <section className="space-y-4">
+          <p className="eyebrow">Facturación de la flota</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              label="Facturación total"
+              value={metrics ? formatCurrency(metrics.totalAmount) : '—'}
+              icon={Wallet}
+              tone="ink"
+              hint="Sobre viajes completados de todos los conductores"
+            />
+            <StatCard
+              label="Facturación del mes"
+              value={metrics ? formatCurrency(metrics.amountThisMonth) : '—'}
+              icon={Coins}
+              tone="success"
+            />
+            <StatCard
+              label="Promedio por viaje"
+              value={metrics?.avgAmountPerTrip != null ? formatCurrency(metrics.avgAmountPerTrip) : '—'}
+              icon={Truck}
+              tone="info"
+            />
+            <StatCard
+              label="Facturación por km"
+              value={metrics?.amountPerKm != null ? formatCurrency(metrics.amountPerKm) : '—'}
+              icon={Route}
+              tone="primary"
+            />
+          </div>
+
+          <ChartCard
+            eyebrow="Últimos 12 meses"
+            title="Facturación mensual"
+            aside={
+              metrics ? (
+                <>
+                  <p className="eyebrow">Utilización</p>
+                  <p className="mt-1 font-mono text-[15px] tabular-nums text-ink-900">
+                    {percent(metrics.utilizationRate)}
+                  </p>
+                  <p className="text-[11.5px] text-ink-500">
+                    {metrics.activeDriverCount} de {metrics.driverCount} con viaje en curso
+                  </p>
+                </>
+              ) : undefined
+            }
+          >
+            <MonthlyTrendChart
+              data={metrics?.monthly ?? []}
+              tone="accent"
+              valueLabel="Facturación"
+              emptyMessage="Cuando la flota complete viajes vas a ver acá la facturación mes a mes."
+            />
+          </ChartCard>
+        </section>
+
+        {/* Operación de la flota */}
+        <section className="space-y-4">
+          <p className="eyebrow">Operación de la flota</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              label="Consumo de flota"
+              value={metrics?.avgKmPerLiter != null ? `${metrics.avgKmPerLiter} km/L` : '—'}
+              icon={Gauge}
+              tone="info"
+              hint={metrics ? `${metrics.totalDistanceKm} km · ${metrics.totalFuelLiters} L` : undefined}
+            />
+            <StatCard
+              label="Entregas a tiempo"
+              value={percent(metrics?.onTimeRate)}
+              icon={Timer}
+              tone={metrics && metrics.lateDeliveries > 0 ? 'warning' : 'success'}
+              hint={
+                metrics
+                  ? `${metrics.onTimeDeliveries} a tiempo · ${metrics.lateDeliveries} demoradas`
+                  : undefined
+              }
+            />
+            <StatCard
+              label="Conductores activos"
+              value={metrics?.activeDriverCount ?? '—'}
+              icon={Activity}
+              tone="primary"
+              hint="Con un viaje en curso ahora mismo"
+            />
+            <StatCard
+              label="Sin actividad"
+              value={metrics?.idleDriverCount ?? '—'}
+              icon={Users}
+              tone={metrics && metrics.idleDriverCount > 0 ? 'warning' : 'ink'}
+              hint="Sin viajes en curso ni entregas en 30 días"
+            />
+          </div>
+
+          <ChartCard
+            eyebrow="Quién factura más"
+            title="Ranking de conductores"
+            aside={<Users size={18} className="text-ink-400" />}
+          >
+            <RankingBars
+              tone="success"
+              items={(metrics?.driverRanking ?? []).map((d) => ({
+                id: d.id,
+                label: d.name,
+                value: d.totalAmount,
+                href: `/dashboard/company-admin/drivers/${d.id}`,
+                hint: [
+                  `${d.completedTrips} viaje${d.completedTrips === 1 ? '' : 's'}`,
+                  d.avgKmPerLiter != null ? `${d.avgKmPerLiter} km/L` : null,
+                  d.onTimeRate != null ? `${percent(d.onTimeRate)} a tiempo` : null,
+                  d.idle ? 'sin actividad hace 30 días' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+              }))}
+              formatValue={formatCurrency}
+              emptyMessage="Todavía no hay conductores con viajes en la empresa."
+            />
+          </ChartCard>
+        </section>
 
         {/* Pending requests inbox */}
         <section className="card overflow-hidden">

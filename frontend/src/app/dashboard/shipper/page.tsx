@@ -4,10 +4,31 @@ import { useQuery } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
+import ChartCard from '@/components/charts/ChartCard';
+import MonthlyTrendChart from '@/components/charts/MonthlyTrendChart';
+import RankingBars from '@/components/charts/RankingBars';
 import { loadsApi } from '@/lib/api';
-import { formatPrice } from '@/lib/utils';
-import { Package, TrendingUp, Clock, CheckCircle, ArrowRight, Inbox, Hand } from 'lucide-react';
+import { formatCurrency, formatPrice } from '@/lib/utils';
+import {
+  Package, TrendingUp, Clock, CheckCircle, ArrowRight, Inbox, Hand,
+  Wallet, Coins, Route, Users, Boxes,
+} from 'lucide-react';
 import Link from 'next/link';
+import type { ShipperMetrics } from '@/types';
+
+const COUNTED_STATUSES = ['PUBLISHED', 'IN_TRANSIT', 'DELIVERED'] as const;
+
+type LoadsPage = { loads?: { status?: string }[]; total?: number } | undefined;
+
+const countInPage = (page: LoadsPage, status: string) =>
+  (page?.loads || []).filter((l) => l.status === status).length;
+
+// Respuesta de /loads/my filtrada por `status`: su `total` es la cuenta real.
+const totalOf = (page: LoadsPage, status: string) =>
+  typeof page?.total === 'number' ? page.total : countInPage(page, status);
+
+const percent = (rate: number | null | undefined) =>
+  rate == null ? '—' : `${Math.round(rate * 100)}%`;
 
 export default function ShipperDashboard() {
   const { data, isLoading } = useQuery({
@@ -15,13 +36,38 @@ export default function ShipperDashboard() {
     queryFn: () => loadsApi.getMy().then((r) => r.data),
   });
 
+  const { data: metrics } = useQuery({
+    queryKey: ['my-load-metrics'],
+    queryFn: () => loadsApi.getMetrics().then((r) => r.data as ShipperMetrics),
+  });
+
+  // Los contadores salen del `total` que devuelve el backend por estado: el
+  // listado de arriba es solo la primera página (20 cargas), así que contar
+  // sobre él se quedaba corto en cuanto el publicador superaba esa cantidad.
+  const { data: statusCounts } = useQuery({
+    queryKey: ['my-load-counts'],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        COUNTED_STATUSES.map(async (status) => {
+          const res = await loadsApi.getMy({ status, limit: 1 });
+          return [status, totalOf(res.data, status)] as const;
+        }),
+      );
+      return Object.fromEntries(entries) as Record<(typeof COUNTED_STATUSES)[number], number>;
+    },
+  });
+
   const loads = data?.loads || [];
   const stats = {
-    total: loads.length,
-    published: loads.filter((l: any) => l.status === 'PUBLISHED').length,
-    inTransit: loads.filter((l: any) => l.status === 'IN_TRANSIT').length,
-    delivered: loads.filter((l: any) => l.status === 'DELIVERED').length,
+    total: typeof data?.total === 'number' ? data.total : loads.length,
+    published: statusCounts?.PUBLISHED ?? countInPage(data, 'PUBLISHED'),
+    inTransit: statusCounts?.IN_TRANSIT ?? countInPage(data, 'IN_TRANSIT'),
+    delivered: statusCounts?.DELIVERED ?? countInPage(data, 'DELIVERED'),
   };
+
+  // Pagar por encima del precio publicado no es malo en sí mismo, pero es el
+  // dato con el que el publicador calibra cómo precifica.
+  const negotiation = metrics?.avgNegotiationDelta;
 
   return (
     <DashboardLayout>
@@ -40,6 +86,110 @@ export default function ShipperDashboard() {
           <StatCard label="Esperando transportista" value={stats.published} icon={TrendingUp} tone="info" />
           <StatCard label="En tránsito" value={stats.inTransit} icon={Clock} tone="primary" />
           <StatCard label="Entregadas" value={stats.delivered} icon={CheckCircle} tone="success" />
+        </div>
+
+        {/* Dinero */}
+        <section className="space-y-4">
+          <p className="eyebrow">Gasto en fletes</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              label="Gasto total"
+              value={metrics ? formatCurrency(metrics.totalAmount) : '—'}
+              icon={Wallet}
+              tone="ink"
+              hint="Sobre viajes completados"
+            />
+            <StatCard
+              label="Gasto del mes"
+              value={metrics ? formatCurrency(metrics.amountThisMonth) : '—'}
+              icon={Coins}
+              tone="primary"
+            />
+            <StatCard
+              label="Costo promedio por viaje"
+              value={metrics?.avgAmountPerTrip != null ? formatCurrency(metrics.avgAmountPerTrip) : '—'}
+              icon={Package}
+              tone="info"
+            />
+            <StatCard
+              label="Costo por km"
+              value={metrics?.amountPerKm != null ? formatCurrency(metrics.amountPerKm) : '—'}
+              icon={Route}
+              tone="success"
+              hint="Lo único comparable entre rutas distintas"
+            />
+          </div>
+
+          <ChartCard
+            eyebrow="Últimos 12 meses"
+            title="Gasto mensual en fletes"
+            aside={
+              negotiation != null ? (
+                <>
+                  <p className="eyebrow">Vs. precio publicado</p>
+                  <p
+                    className={
+                      negotiation > 0
+                        ? 'mt-1 font-mono text-[15px] tabular-nums text-danger-600'
+                        : 'mt-1 font-mono text-[15px] tabular-nums text-success-600'
+                    }
+                  >
+                    {negotiation > 0 ? '+' : ''}
+                    {percent(negotiation)}
+                  </p>
+                  <p className="text-[11.5px] text-ink-500">
+                    en {metrics?.negotiatedLoads} carga{metrics?.negotiatedLoads === 1 ? '' : 's'} con precio
+                  </p>
+                </>
+              ) : undefined
+            }
+          >
+            <MonthlyTrendChart
+              data={metrics?.monthly ?? []}
+              valueLabel="Gasto"
+              emptyMessage="Todavía no cerraste viajes: cuando se completen vas a ver acá el gasto mes a mes."
+            />
+          </ChartCard>
+        </section>
+
+        {/* Rankings */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ChartCard
+            eyebrow="Con quién trabajás"
+            title="Transportistas recurrentes"
+            aside={<Users size={18} className="text-ink-400" />}
+          >
+            <RankingBars
+              items={(metrics?.topCarriers ?? []).map((c) => ({
+                id: c.id,
+                label: c.name,
+                value: c.totalSpend,
+                hint: `${c.completedTrips} viaje${c.completedTrips === 1 ? '' : 's'}${
+                  c.avgRating != null ? ` · ${c.avgRating.toFixed(1)} ★ que le diste` : ''
+                }`,
+              }))}
+              formatValue={formatCurrency}
+              emptyMessage="Sin viajes completados todavía."
+            />
+          </ChartCard>
+
+          <ChartCard
+            eyebrow="Dónde se va el presupuesto"
+            title="Gasto por tipo de carga"
+            aside={<Boxes size={18} className="text-ink-400" />}
+          >
+            <RankingBars
+              tone="accent"
+              items={(metrics?.spendByCargoType ?? []).map((c) => ({
+                id: c.cargoType,
+                label: c.cargoType,
+                value: c.amount,
+                hint: `${c.trips} viaje${c.trips === 1 ? '' : 's'}`,
+              }))}
+              formatValue={formatCurrency}
+              emptyMessage="Sin viajes completados todavía."
+            />
+          </ChartCard>
         </div>
 
         {/* Recent loads */}
