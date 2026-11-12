@@ -492,3 +492,51 @@ model City {
   @@index([name])
   @@map("cities")
 }
+
+// ── Monitoreo del sistema ────────────────────────────────────────────────────
+// Lo escribe el propio backend (módulo system-monitoring); no es dato de negocio.
+
+// Una fila por arranque del proceso del backend. `lastSeenAt` se actualiza cada
+// minuto (heartbeat): el hueco entre el último latido de una sesión y el
+// arranque de la siguiente es tiempo caído. `endedAt` solo se completa en un
+// apagado ordenado (deploy, restart manual) — si quedó null, el proceso murió
+// sin avisar (crash, OOM, VPS caído).
+model UptimeSession {
+  id         String    @id @default(uuid())
+  startedAt  DateTime  @default(now()) @map("started_at")
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at")
+  endedAt    DateTime? @map("ended_at")
+  // Versión desplegada (APP_VERSION / git sha) si el entorno la expone.
+  version    String?
+
+  @@index([startedAt])
+  @@map("uptime_sessions")
+}
+
+// Requests HTTP agregados por minuto y endpoint. Se guarda un histograma de
+// latencias (en vez de cada request) para poder calcular percentiles sobre
+// cualquier rango sumando buckets, con un volumen de filas acotado.
+model RequestMetric {
+  id           String   @id @default(uuid())
+  // Inicio del minuto (truncado) al que pertenecen los requests.
+  bucket       DateTime
+  method       String
+  // Ruta con parámetros sin resolver (/api/loads/:id), nunca la URL real: la
+  // cardinalidad queda acotada y no se guardan ids ni query strings.
+  route        String
+  count        Int
+  // 4xx y 5xx por separado: 4xx suele ser error del cliente; 5xx es el que
+  // indica que el servicio está fallando.
+  clientErrors Int      @map("client_errors")
+  serverErrors Int      @map("server_errors")
+  totalMs      Float    @map("total_ms")
+  maxMs        Float    @map("max_ms")
+  // Cantidad de requests por bucket de latencia (límites en
+  // system-monitoring/latency-histogram.ts). El último bucket es "más lento".
+  histogram    Int[]
+
+  // El índice único empieza por `bucket`, así que también sirve a las
+  // consultas por rango de fechas: no hace falta un índice aparte.
+  @@unique([bucket, method, route])
+  @@map("request_metrics")
+}
