@@ -44,6 +44,16 @@ export class CompaniesController {
     return this.companiesService.getMyCompany(userId);
   }
 
+  @Get('me/metrics')
+  @UseGuards(RolesGuard)
+  @Roles('COMPANY_ADMIN')
+  @ApiOperation({
+    summary: 'Fleet metrics and driver ranking (Company admin)',
+  })
+  getMyCompanyMetrics(@CurrentUser('id') userId: string) {
+    return this.companiesService.getCompanyMetrics(userId);
+  }
+
   @Get('me/drivers')
   @UseGuards(RolesGuard)
   @Roles('COMPANY_ADMIN')
