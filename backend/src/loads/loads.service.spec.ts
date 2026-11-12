@@ -22,6 +22,10 @@ describe('LoadsService', () => {
     };
     user: {
       findUnique: jest.Mock;
+      findFirst: jest.Mock;
+    };
+    postulation: {
+      count: jest.Mock;
     };
     vehicle: {
       findUnique: jest.Mock;
@@ -61,6 +65,10 @@ describe('LoadsService', () => {
       },
       user: {
         findUnique: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      postulation: {
+        count: jest.fn().mockResolvedValue(0),
       },
       vehicle: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -436,6 +444,95 @@ describe('LoadsService', () => {
     it('throws NotFoundException when load does not exist', async () => {
       prisma.load.findUnique.mockResolvedValue(null);
       await expect(service.findById('missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findByIdForUser', () => {
+    const assigned = {
+      ...baseLoad,
+      status: LoadStatus.ASSIGNED,
+      trip: { carrierId: 'carrier-1' },
+    };
+
+    it('lets the admin see any load', async () => {
+      prisma.load.findUnique.mockResolvedValue(assigned);
+      await expect(
+        service.findByIdForUser('load-1', { id: 'admin-1', role: 'ADMIN' }),
+      ).resolves.toMatchObject({ id: 'load-1' });
+    });
+
+    it('lets the owner shipper see their load', async () => {
+      prisma.load.findUnique.mockResolvedValue(assigned);
+      await expect(
+        service.findByIdForUser('load-1', { id: 'shipper-1', role: 'CARGO_GENERATOR' }),
+      ).resolves.toMatchObject({ id: 'load-1' });
+    });
+
+    // El caso que motivó el cambio: un dador espiando las cargas de otro.
+    it('forbids another shipper', async () => {
+      prisma.load.findUnique.mockResolvedValue({ ...baseLoad });
+      await expect(
+        service.findByIdForUser('load-1', { id: 'shipper-2', role: 'CARGO_GENERATOR' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('lets any carrier see a published load so they can apply', async () => {
+      prisma.load.findUnique.mockResolvedValue({ ...baseLoad });
+      await expect(
+        service.findByIdForUser('load-1', { id: 'carrier-9', role: 'TRANSPORTER' }),
+      ).resolves.toMatchObject({ id: 'load-1' });
+      expect(prisma.postulation.count).not.toHaveBeenCalled();
+    });
+
+    it('lets the assigned carrier see the load after it leaves PUBLISHED', async () => {
+      prisma.load.findUnique.mockResolvedValue(assigned);
+      await expect(
+        service.findByIdForUser('load-1', { id: 'carrier-1', role: 'TRANSPORTER' }),
+      ).resolves.toMatchObject({ id: 'load-1' });
+    });
+
+    it('lets a carrier who applied see an assigned load', async () => {
+      prisma.load.findUnique.mockResolvedValue(assigned);
+      prisma.postulation.count.mockResolvedValue(1);
+      await expect(
+        service.findByIdForUser('load-1', { id: 'carrier-2', role: 'TRANSPORTER' }),
+      ).resolves.toMatchObject({ id: 'load-1' });
+      expect(prisma.postulation.count).toHaveBeenCalledWith({
+        where: { loadId: 'load-1', transporterId: 'carrier-2' },
+      });
+    });
+
+    it('forbids an unrelated carrier once the load is assigned', async () => {
+      prisma.load.findUnique.mockResolvedValue(assigned);
+      await expect(
+        service.findByIdForUser('load-1', { id: 'carrier-2', role: 'TRANSPORTER' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('lets a company admin see a load carried by one of their drivers', async () => {
+      prisma.load.findUnique.mockResolvedValue(assigned);
+      prisma.user.findFirst.mockResolvedValue({ id: 'carrier-1' });
+      await expect(
+        service.findByIdForUser('load-1', { id: 'owner-1', role: 'COMPANY_ADMIN' }),
+      ).resolves.toMatchObject({ id: 'load-1' });
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { id: 'carrier-1', company: { ownerId: 'owner-1' } },
+        select: { id: true },
+      });
+    });
+
+    it('forbids a company admin when the carrier is not in their company', async () => {
+      prisma.load.findUnique.mockResolvedValue(assigned);
+      await expect(
+        service.findByIdForUser('load-1', { id: 'owner-2', role: 'COMPANY_ADMIN' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('forbids a company admin on a published load without a carrier', async () => {
+      prisma.load.findUnique.mockResolvedValue({ ...baseLoad });
+      await expect(
+        service.findByIdForUser('load-1', { id: 'owner-1', role: 'COMPANY_ADMIN' }),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

@@ -157,8 +157,9 @@ Logica clave en `auth.service.ts`:
 
 - `register()` — bcrypt para hashear el password, genera `emailVerificationToken` y envía email vía `MailService`.
 - `login()` — exige `emailVerified=true`; firma JWT con payload `{ sub: userId, email, role }`.
-- `verifyEmail()` — busca por token, valida expiración, marca verified.
-- `forgotPassword()` / `resetPassword()` — genera reset token, lo guarda en `resetToken/resetTokenExp`, envía email; el reset valida token + expiración antes de actualizar.
+- `verifyEmail()` — busca por el SHA-256 del token, valida expiración, marca verified y abre sesión.
+- `forgotPassword()` / `resetPassword()` — genera reset token, guarda su SHA-256 en `resetToken/resetTokenExp`, envía email; el reset valida token + expiración antes de actualizar y revoca todas las sesiones.
+- `refresh()` / `logout()` — rotación y revocación de refresh tokens (`RefreshTokenService`). Detalle en [`autenticacion.md`](./autenticacion.md).
 
 Detalle del flujo y consideraciones de seguridad en [`autenticacion.md`](./autenticacion.md).
 

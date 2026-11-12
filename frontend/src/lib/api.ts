@@ -1,36 +1,80 @@
 import axios from 'axios';
 import type { DocumentDecision } from '@/types';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002/api';
+import { useAuthStore } from '@/store/auth';
+import { API_URL, expiresSoon, refreshSession, SESSION_KEYS } from './session';
 
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    // Token por pestaña (sessionStorage). Ver store/auth.ts: cada pestaña tiene
-    // su propia sesión, así dos cuentas en el mismo navegador no se pisan.
-    const token = sessionStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+const isAuthEndpoint = (url: string | undefined) => (url || '').includes('/auth/');
+
+/** Cierra la sesión local y manda al login. */
+function endSession(): void {
+  useAuthStore.getState().logout();
+  window.location.href = '/auth/login';
+}
+
+/** Renueva la sesión y la guarda en el store. Devuelve el access token nuevo. */
+async function renewAccessToken(): Promise<string | null> {
+  const session = await refreshSession();
+  if (!session) return null;
+  useAuthStore.getState().setSession(session.user, session.accessToken, session.refreshToken);
+  return session.accessToken;
+}
+
+api.interceptors.request.use(async (config) => {
+  if (typeof window === 'undefined') return config;
+  // Token por pestaña (sessionStorage). Ver store/auth.ts: cada pestaña tiene
+  // su propia sesión, así dos cuentas en el mismo navegador no se pisan.
+  let token = sessionStorage.getItem(SESSION_KEYS.accessToken);
+  // El access token dura minutos: si está por vencer lo renovamos antes de
+  // mandar la request, en vez de esperar el 401 y reintentar.
+  if (token && !isAuthEndpoint(config.url) && expiresSoon(token)) {
+    token = (await renewAccessToken().catch(() => null)) ?? token;
+  }
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const requestUrl: string = error.config?.url || '';
-    const isAuthEndpoint = requestUrl.includes('/auth/');
-    if (error.response?.status === 401 && typeof window !== 'undefined' && !isAuthEndpoint) {
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('user');
-      window.location.href = '/auth/login';
+  async (error) => {
+    const config = error.config;
+    if (
+      error.response?.status !== 401 ||
+      typeof window === 'undefined' ||
+      isAuthEndpoint(config?.url)
+    ) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    // Un 401 después de reintentar con un token recién renovado: la sesión no
+    // sirve (ej. cuenta desactivada). No reintentamos en loop. Sin config no
+    // hay request que reintentar.
+    if (!config || config._retried) {
+      endSession();
+      return Promise.reject(error);
+    }
+
+    let token: string | null;
+    try {
+      token = await renewAccessToken();
+    } catch {
+      // Sin red no deslogueamos: la sesión puede seguir viva.
+      return Promise.reject(error);
+    }
+    if (!token) {
+      endSession();
+      return Promise.reject(error);
+    }
+
+    config._retried = true;
+    config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
+    return api(config);
   },
 );
 

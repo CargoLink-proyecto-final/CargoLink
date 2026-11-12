@@ -30,7 +30,7 @@ describe('LoginScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (authApi.login as jest.Mock).mockResolvedValue({
-      data: { user: { id: 'u1', email: 'a@b.com' }, accessToken: 'tok-123' },
+      data: { user: { id: 'u1', email: 'a@b.com' }, accessToken: 'tok-123', refreshToken: 'rt-1' },
     });
   });
 
@@ -119,7 +119,7 @@ describe('LoginScreen', () => {
     await waitFor(() => {
       expect(authApi.login).toHaveBeenCalledWith({ email: 'a@b.com', password: 'secret123' });
     });
-    expect(mockLogin).toHaveBeenCalledWith({ id: 'u1', email: 'a@b.com' }, 'tok-123');
+    expect(mockLogin).toHaveBeenCalledWith({ id: 'u1', email: 'a@b.com' }, 'tok-123', 'rt-1');
   });
 
   it('surfaces an alert when login fails', async () => {

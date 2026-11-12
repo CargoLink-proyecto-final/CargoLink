@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ConfigModule } from '@nestjs/config';
 import { MessagesModule } from './messages.module';
 import { MessagesService } from './messages.service';
 import { MessagesGateway } from './messages.gateway';
@@ -34,8 +35,15 @@ class GlobalDoublesModule {}
  */
 describe('MessagesModule (wiring)', () => {
   it('instantiates the whole chat graph without circular resolution', async () => {
+    // El gateway valida tokens con AuthModule, que exige JWT_SECRET y usa el
+    // ConfigModule global (en la app lo registra AppModule).
+    process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
     const moduleRef = await Test.createTestingModule({
-      imports: [GlobalDoublesModule, MessagesModule],
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+        GlobalDoublesModule,
+        MessagesModule,
+      ],
     }).compile();
 
     const service = moduleRef.get(MessagesService);

@@ -6,6 +6,7 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { parsePagination } from '../common/pagination';
 import { CreateLoadDto } from './dto/create-load.dto';
 import { UpdateLoadDto } from './dto/update-load.dto';
 import { RegisterQueryDto } from './dto/register-query.dto';
@@ -146,8 +147,7 @@ export class LoadsService {
   }
 
   async findAll(params?: LoadListParams) {
-    const page = params?.page || 1;
-    const limit = params?.limit || 20;
+    const { page, limit } = parsePagination(params?.page, params?.limit);
     const where: any = {};
 
     if (params?.status) where.status = params.status;
@@ -353,6 +353,51 @@ export class LoadsService {
     };
   }
 
+  /**
+   * Detalle de una carga para quien la pide desde la API.
+   *
+   * `findById` no mira quién pregunta: hasta ahora `GET /loads/:id` lo exponía
+   * tal cual y cualquier usuario logueado veía cualquier carga (con teléfonos del
+   * dador y del transportista). Quién puede verla:
+   * - ADMIN: todas.
+   * - El dador dueño de la carga.
+   * - Un transportista: si está publicada (para postularse), si la lleva él o si
+   *   se postuló (la pantalla de "Mis postulaciones" enlaza al detalle).
+   * - Un COMPANY_ADMIN: si la lleva un conductor de su empresa.
+   */
+  async findByIdForUser(id: string, user: { id: string; role: string }) {
+    const load = await this.findById(id, user.role);
+    if (await this.canView(load, user)) return load;
+    throw new ForbiddenException('No tenés acceso a esta carga');
+  }
+
+  private async canView(
+    load: { id: string; shipperId: string; status: LoadStatus; trip?: { carrierId: string } | null },
+    user: { id: string; role: string },
+  ): Promise<boolean> {
+    if (user.role === 'ADMIN') return true;
+    if (load.shipperId === user.id) return true;
+
+    if (user.role === 'TRANSPORTER') {
+      if (load.status === LoadStatus.PUBLISHED) return true;
+      if (load.trip?.carrierId === user.id) return true;
+      const postulations = await this.prisma.postulation.count({
+        where: { loadId: load.id, transporterId: user.id },
+      });
+      return postulations > 0;
+    }
+
+    if (user.role === 'COMPANY_ADMIN' && load.trip?.carrierId) {
+      const carrier = await this.prisma.user.findFirst({
+        where: { id: load.trip.carrierId, company: { ownerId: user.id } },
+        select: { id: true },
+      });
+      return carrier !== null;
+    }
+
+    return false;
+  }
+
   async update(id: string, userId: string, dto: UpdateLoadDto) {
     await this.assertCitiesExist(dto);
     const load = await this.findById(id);
@@ -402,8 +447,7 @@ export class LoadsService {
   }
 
   async getRegister(authUser: AuthUser, query: RegisterQueryDto) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
+    const { page, limit } = parsePagination(query.page, query.limit);
     const where = this.buildRegisterWhere(authUser, query);
 
     const [rows, total] = await Promise.all([

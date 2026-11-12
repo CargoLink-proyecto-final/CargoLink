@@ -69,7 +69,8 @@ Para cambiar el logo, editar `drawTruck()` y volver a correrlo.
 `src/services/socket.ts`.
 
 - Las conversaciones son **por viaje** (`tripId`), no entre usuarios sueltos.
-- El gateway autentica con `handshake.query.userId` y mete al socket en una room
+- El gateway autentica con el access token (`auth.token` del handshake; ver
+  `src/services/socket.ts`) y mete al socket en una room
   por cada viaje del usuario — el cliente sólo escucha `newMessage`.
 - Si el socket no conecta, `ChatScreen` cae a polling cada 3s y muestra un aviso.
 - La difusión la hace `MessagesService.create` a través de `ChatBroadcaster`, no

@@ -19,6 +19,8 @@ import {
   TripStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { parsePagination } from '../common/pagination';
+import { BCRYPT_ROUNDS, generateOpaqueToken } from '../auth/token-crypto';
 import { MailService } from '../mail/mail.service';
 import { RegisterDto } from '../auth/dto/register.dto';
 import {
@@ -130,8 +132,7 @@ export class UsersService {
   }
 
   async findAll(params?: { role?: string; page?: number; limit?: number }) {
-    const page = params?.page || 1;
-    const limit = params?.limit || 20;
+    const { page, limit } = parsePagination(params?.page, params?.limit);
     const where = params?.role ? { role: params.role as any } : {};
 
     const [users, total] = await Promise.all([
@@ -253,7 +254,7 @@ export class UsersService {
 
     // Hash por fuera de la transacción: bcrypt con cost 10 tarda ~100ms y no
     // hay razón para tener la transacción abierta mientras corre.
-    const unusablePassword = await hash(randomBytes(32).toString('hex'), 10);
+    const unusablePassword = await hash(randomBytes(32).toString('hex'), BCRYPT_ROUNDS);
     // `ownerId` es @unique y la titularidad sólo se crea en el registro, así que
     // esta lectura no puede quedar desactualizada respecto de la transacción.
     const ownedCompany = await this.prisma.company.findUnique({
@@ -378,14 +379,15 @@ export class UsersService {
       throw new ConflictException('El correo ya está registrado');
     }
 
-    const verificationToken = randomBytes(32).toString('hex');
+    // Como en AuthService: en la base el hash, en el mail el token en claro.
+    const { token: verificationToken, tokenHash: verificationHash } = generateOpaqueToken();
     const verificationExp = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
         email: normalizedEmail,
         emailVerified: false,
-        emailVerificationToken: verificationToken,
+        emailVerificationToken: verificationHash,
         emailVerificationTokenExp: verificationExp,
       },
       select: PUBLIC_USER_SELECT,

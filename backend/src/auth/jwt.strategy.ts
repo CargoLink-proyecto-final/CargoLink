@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
+import { getJwtSecret } from './jwt-secret';
 
 export interface JwtPayload {
   sub: string;
@@ -19,13 +20,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET', 'default-secret'),
+      secretOrKey: getJwtSecret(configService),
     });
   }
 
   // Resolvemos el usuario desde la DB en cada request (no confiamos en el payload):
   // así una desactivación corta las sesiones vivas al instante y un cambio de rol
-  // aplica los permisos nuevos sin esperar a que el token expire (TTL 7d).
+  // aplica los permisos nuevos sin esperar a que el token expire (TTL 15m por defecto).
   async validate(payload: JwtPayload) {
     const user = await this.usersService.findById(payload.sub).catch(() => null);
     if (!user || !user.isActive) {

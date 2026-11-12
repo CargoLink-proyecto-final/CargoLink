@@ -5,15 +5,24 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
+  WsException,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { MessagesService } from './messages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../push/presence.service';
 import { ChatBroadcaster } from './chat-broadcaster';
+import { SocketAuthService, extractSocketToken } from '../auth/socket-auth.service';
+import { parseCorsOrigins } from '../common/cors';
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: {
+    // Antes era `'*'`. Se evalúa por handshake (no al importar el módulo) para
+    // que tome el CORS_ORIGIN ya cargado. Sin Origin = app mobile, que no es un
+    // navegador y por lo tanto no aplica CORS; la autenticación va por token.
+    origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) =>
+      cb(null, !origin || parseCorsOrigins().includes(origin)),
+  },
   namespace: '/chat',
 })
 export class MessagesGateway
@@ -30,6 +39,7 @@ export class MessagesGateway
     private prisma: PrismaService,
     private presence: PresenceService,
     private broadcaster: ChatBroadcaster,
+    private socketAuth: SocketAuthService,
   ) {}
 
   /**
@@ -41,8 +51,17 @@ export class MessagesGateway
   }
 
   async handleConnection(client: Socket) {
-    const userId = client.handshake.query.userId as string;
-    if (!userId) return;
+    // Antes el gateway confiaba en `handshake.query.userId`: cualquiera podía
+    // conectarse con el id de otro y recibir sus chats y la ubicación de sus
+    // viajes. Ahora la identidad sale exclusivamente del access token.
+    const user = await this.socketAuth.authenticate(extractSocketToken(client.handshake));
+    if (!user) {
+      client.emit('unauthorized', { message: 'Sesión inválida o vencida' });
+      client.disconnect(true);
+      return;
+    }
+    const userId = user.id;
+    client.data.userId = userId;
 
     // `handleDisconnect` ya no tiene el handshake a mano, así que hay que
     // recordar de quién era el socket para descontarle la presencia.
@@ -78,15 +97,12 @@ export class MessagesGateway
   }
 
   @SubscribeMessage('sendMessage')
-  async handleMessage(
-    client: Socket,
-    payload: { senderId: string; tripId: string; content: string },
-  ) {
+  async handleMessage(client: Socket, payload: { tripId: string; content: string }) {
+    // El remitente es siempre el dueño del socket. El `senderId` que mandaba el
+    // cliente se ignora: permitía escribir en nombre de cualquier usuario.
+    const senderId = client.data?.userId as string | undefined;
+    if (!senderId) throw new WsException('No autenticado');
     // El broadcast lo hace el service, para no emitir dos veces.
-    return this.messagesService.create(
-      payload.senderId,
-      payload.tripId,
-      payload.content,
-    );
+    return this.messagesService.create(senderId, payload?.tripId, payload?.content);
   }
 }

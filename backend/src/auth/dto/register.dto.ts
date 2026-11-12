@@ -1,6 +1,7 @@
 import {
   IsEmail,
-  IsEnum,
+  IsIn,
+  MaxLength,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -11,15 +12,31 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from './password-policy';
+
+// Roles que alguien puede elegir al crear su propia cuenta. ADMIN queda afuera a
+// propósito: con `@IsEnum(Role)` cualquiera se registraba como administrador
+// mandando `"role": "ADMIN"` en el body. Los admins se crean por seed o desde el panel.
+export const SELF_REGISTRABLE_ROLES = [
+  Role.CARGO_GENERATOR,
+  Role.TRANSPORTER,
+  Role.COMPANY_ADMIN,
+] as const;
+export type SelfRegistrableRole = (typeof SELF_REGISTRABLE_ROLES)[number];
 
 export class RegisterDto {
   @ApiProperty({ example: 'john@example.com' })
   @IsEmail({}, { message: 'Debe ser un correo válido' })
   email: string;
 
-  @ApiProperty({ example: 'StrongPass123' })
+  @ApiProperty({ example: 'StrongPass123', minLength: PASSWORD_MIN_LENGTH })
   @IsString({ message: 'La contraseña debe ser texto' })
-  @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres' })
+  @MinLength(PASSWORD_MIN_LENGTH, {
+    message: `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres`,
+  })
+  @MaxLength(PASSWORD_MAX_LENGTH, {
+    message: `La contraseña no puede superar los ${PASSWORD_MAX_LENGTH} caracteres`,
+  })
   password: string;
 
   // Una cuenta de empresa (COMPANY_ADMIN) no lleva nombre/apellido personales:
@@ -41,9 +58,9 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'El teléfono es obligatorio' })
   phone: string;
 
-  @ApiProperty({ enum: Role, example: 'CARGO_GENERATOR' })
-  @IsEnum(Role, { message: 'El rol debe ser un valor válido' })
-  role: Role;
+  @ApiProperty({ enum: SELF_REGISTRABLE_ROLES, example: 'CARGO_GENERATOR' })
+  @IsIn(SELF_REGISTRABLE_ROLES, { message: 'El rol debe ser un valor válido' })
+  role: SelfRegistrableRole;
 
   @ApiProperty({ example: 'Acme Logistics', required: false })
   @IsOptional()

@@ -38,8 +38,13 @@ export class LoadsController {
     return this.loadsService.create(userId, dto);
   }
 
+  // Listado global (todas las cargas, de todos los dadores, en cualquier estado):
+  // solo ADMIN. Antes no tenía guard de rol y cualquier usuario logueado podía
+  // recorrer las cargas ajenas. Dador y transportista tienen `/my` y `/available`.
   @Get()
-  @ApiOperation({ summary: 'List all loads with filters' })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'List all loads with filters (Admin only)' })
   findAll(
     @CurrentUser('role') role?: string,
     @Query('status') status?: LoadStatus,
@@ -197,9 +202,12 @@ export class LoadsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get load details' })
-  findOne(@Param('id') id: string, @CurrentUser('role') role?: string) {
-    return this.loadsService.findById(id, role);
+  @ApiOperation({
+    summary:
+      'Get load details (owner shipper, carriers if published/assigned/postulated, company admin of the carrier, or Admin)',
+  })
+  findOne(@Param('id') id: string, @CurrentUser() user: { id: string; role: string }) {
+    return this.loadsService.findByIdForUser(id, user);
   }
 
   @Patch(':id')

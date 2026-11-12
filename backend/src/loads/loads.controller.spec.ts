@@ -23,7 +23,7 @@ describe('LoadsController', () => {
     create: jest.Mock;
     findAll: jest.Mock;
     findAvailable: jest.Mock;
-    findById: jest.Mock;
+    findByIdForUser: jest.Mock;
     update: jest.Mock;
     cancel: jest.Mock;
     getRegister: jest.Mock;
@@ -35,7 +35,7 @@ describe('LoadsController', () => {
       create: jest.fn().mockResolvedValue({ id: 'load-1' }),
       findAll: jest.fn().mockResolvedValue({ loads: [], total: 0 }),
       findAvailable: jest.fn().mockResolvedValue({ loads: [], total: 0 }),
-      findById: jest.fn().mockResolvedValue({ id: 'load-1' }),
+      findByIdForUser: jest.fn().mockResolvedValue({ id: 'load-1' }),
       update: jest.fn().mockResolvedValue({ id: 'load-1' }),
       cancel: jest.fn().mockResolvedValue({ id: 'load-1' }),
       getRegister: jest.fn().mockResolvedValue({ items: [] }),
@@ -155,9 +155,19 @@ describe('LoadsController', () => {
   });
 
   describe('findOne', () => {
-    it('delegates to service.findById passing the viewer role', async () => {
-      await controller.findOne('load-1', 'TRANSPORTER');
-      expect(service.findById).toHaveBeenCalledWith('load-1', 'TRANSPORTER');
+    it('delegates to service.findByIdForUser passing the viewer', async () => {
+      const viewer = { id: 'carrier-1', role: 'TRANSPORTER' };
+      await controller.findOne('load-1', viewer);
+      expect(service.findByIdForUser).toHaveBeenCalledWith('load-1', viewer);
+    });
+  });
+
+  describe('guards', () => {
+    // El listado global devolvía las cargas de todos los dadores a cualquier
+    // usuario logueado: tiene que quedar restringido a ADMIN.
+    it('restricts GET /loads to ADMIN', () => {
+      const roles = Reflect.getMetadata('roles', LoadsController.prototype.findAll);
+      expect(roles).toEqual(['ADMIN']);
     });
   });
 

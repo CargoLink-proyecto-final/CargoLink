@@ -315,15 +315,25 @@ describe('MessagesService', () => {
       prisma.message.findMany.mockResolvedValue([]);
       prisma.message.count.mockResolvedValue(0);
 
-      // page 0 -> Number(0)||1 -> 1; limit 0 -> Number(0)||1 -> 50
+      // page 0 -> 1; limit 0 -> default 50
       const result = await service.getTripMessages(tripId, carrierUser, 0, 0);
       expect(result.page).toBe(1);
       expect(result.limit).toBe(50);
 
-      // negative page clamps to 1 via Math.max
+      // valores negativos caen a los defaults
       const result2 = await service.getTripMessages(tripId, carrierUser, -5, -5);
       expect(result2.page).toBe(1);
-      expect(result2.limit).toBe(1);
+      expect(result2.limit).toBe(50);
+    });
+
+    it('caps the page size at 200 so one request cannot dump a whole chat', async () => {
+      prisma.trip.findUnique.mockResolvedValue(baseTrip);
+      prisma.message.findMany.mockResolvedValue([]);
+      prisma.message.count.mockResolvedValue(0);
+
+      const result = await service.getTripMessages(tripId, carrierUser, 1, 100000);
+      expect(result.limit).toBe(200);
+      expect(prisma.message.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 200 }));
     });
   });
 

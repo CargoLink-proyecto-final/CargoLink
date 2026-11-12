@@ -342,7 +342,10 @@ export interface PaginatedResponse<T> {
 
 export interface AuthResponse {
   user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role'>;
+  // Access token (JWT) de vida corta: va en el header Authorization.
   accessToken: string;
+  // Refresh token rotativo: solo sirve para pedir un access token nuevo.
+  refreshToken: string;
 }
 
 export interface RoleChangeLog {

@@ -1,8 +1,14 @@
 import { queryClient } from '@/lib/queryClient';
+import { revokeSession } from '@/lib/session';
 import { useAuthStore } from './auth';
 
 jest.mock('@/lib/queryClient', () => ({
   queryClient: { clear: jest.fn() },
+}));
+
+jest.mock('@/lib/session', () => ({
+  ...jest.requireActual('@/lib/session'),
+  revokeSession: jest.fn(),
 }));
 
 // --- JWT helpers -------------------------------------------------------------
@@ -57,7 +63,7 @@ beforeEach(() => {
 describe('login', () => {
   it('persists token and user to sessionStorage and sets state', () => {
     const token = validTokenFor(A_USER);
-    useAuthStore.getState().login(A_USER, token);
+    useAuthStore.getState().login(A_USER, token, 'refresh-1');
 
     const state = useAuthStore.getState();
     expect(state.user).toEqual(A_USER);
@@ -65,12 +71,30 @@ describe('login', () => {
     expect(state.isAuthenticated).toBe(true);
 
     expect(sessionStorage.getItem('token')).toBe(token);
+    expect(sessionStorage.getItem('refreshToken')).toBe('refresh-1');
     expect(JSON.parse(sessionStorage.getItem('user') as string)).toEqual(A_USER);
   });
 
   it('clears the query cache on login', () => {
-    useAuthStore.getState().login(A_USER, validTokenFor(A_USER));
+    useAuthStore.getState().login(A_USER, validTokenFor(A_USER), 'refresh-1');
     expect(queryClient.clear).toHaveBeenCalledTimes(1);
+  });
+});
+
+// --- setSession --------------------------------------------------------------
+
+describe('setSession', () => {
+  it('replaces both tokens without clearing the query cache', () => {
+    useAuthStore.getState().login(A_USER, validTokenFor(A_USER), 'refresh-1');
+    (queryClient.clear as jest.Mock).mockClear();
+
+    const renewed = validTokenFor(A_USER);
+    useAuthStore.getState().setSession(A_USER, renewed, 'refresh-2');
+
+    expect(useAuthStore.getState().token).toBe(renewed);
+    expect(sessionStorage.getItem('token')).toBe(renewed);
+    expect(sessionStorage.getItem('refreshToken')).toBe('refresh-2');
+    expect(queryClient.clear).not.toHaveBeenCalled();
   });
 });
 
@@ -78,7 +102,7 @@ describe('login', () => {
 
 describe('logout', () => {
   it('clears storage, state and the query cache', () => {
-    useAuthStore.getState().login(A_USER, validTokenFor(A_USER));
+    useAuthStore.getState().login(A_USER, validTokenFor(A_USER), 'refresh-1');
     (queryClient.clear as jest.Mock).mockClear();
 
     useAuthStore.getState().logout();
@@ -89,8 +113,16 @@ describe('logout', () => {
     expect(state.isAuthenticated).toBe(false);
 
     expect(sessionStorage.getItem('token')).toBeNull();
+    expect(sessionStorage.getItem('refreshToken')).toBeNull();
     expect(sessionStorage.getItem('user')).toBeNull();
     expect(queryClient.clear).toHaveBeenCalledTimes(1);
+  });
+
+  // Sin esto el refresh token seguiría vivo en el backend después del logout.
+  it('revokes the session on the backend', () => {
+    useAuthStore.getState().login(A_USER, validTokenFor(A_USER), 'refresh-1');
+    useAuthStore.getState().logout();
+    expect(revokeSession).toHaveBeenCalledWith('refresh-1');
   });
 });
 
@@ -133,6 +165,18 @@ describe('hydrate', () => {
 
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     expect(useAuthStore.getState().token).toBeNull();
+  });
+
+  // El access token dura minutos: si vence con la pestaña abierta, recargar no
+  // tiene que echar al usuario mientras tenga un refresh token.
+  it('keeps the session when the access token expired but there is a refresh token', () => {
+    seedStorage(validTokenFor(A_USER, PAST_EXP), JSON.stringify(A_USER));
+    sessionStorage.setItem('refreshToken', 'refresh-1');
+
+    useAuthStore.getState().hydrate();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(sessionStorage.getItem('refreshToken')).toBe('refresh-1');
   });
 
   it('rejects and clears storage when the token is expired', () => {

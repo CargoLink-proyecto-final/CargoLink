@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { parsePagination } from '../common/pagination';
 import { PushService } from '../push/push.service';
 import { ChatBroadcaster } from './chat-broadcaster';
 import { MAX_MESSAGE_LENGTH } from './message-limits';
@@ -108,8 +109,8 @@ export class MessagesService {
       if (!exists) throw new NotFoundException('Viaje no encontrado');
     }
 
-    const p = Math.max(1, Number(page) || 1);
-    const l = Math.max(1, Number(limit) || 50);
+    // Tope 200 (no 100): el hilo del registro pide 200 mensajes de una vez.
+    const { page: p, limit: l } = parsePagination(page, limit, 50, 200);
 
     const [messages, total] = await Promise.all([
       this.prisma.message.findMany({

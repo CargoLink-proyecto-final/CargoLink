@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { authApi } from '../../services/api';
-import { useAuthStore } from '../../store/auth';
 
 interface RegisterForm {
   email: string;
@@ -25,15 +24,21 @@ interface RegisterForm {
 export default function RegisterScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<'CARGO_GENERATOR' | 'TRANSPORTER'>('CARGO_GENERATOR');
-  const login = useAuthStore((s) => s.login);
-
   const { control, handleSubmit, formState: { errors } } = useForm<RegisterForm>();
 
   const onSubmit = async (data: RegisterForm) => {
     setLoading(true);
     try {
       const res = await authApi.register({ ...data, role });
-      await login(res.data.user, res.data.accessToken);
+      // El registro no abre sesión: el backend exige verificar el correo antes
+      // del primer login, así que la respuesta trae solo `{ message, email }`.
+      // Antes se llamaba a login() con un accessToken inexistente.
+      Alert.alert(
+        'Revisá tu correo',
+        res.data?.message ||
+          'Te enviamos un enlace para verificar tu dirección antes de iniciar sesión.',
+      );
+      navigation.navigate('Login');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.message || 'Error en el registro');
     } finally {
@@ -97,11 +102,18 @@ export default function RegisterScreen({ navigation }: any) {
         <Controller
           control={control}
           name="password"
-          rules={{ required: 'Contraseña obligatoria', minLength: { value: 6, message: 'Mínimo 6 caracteres' } }}
+          rules={{
+            required: 'Contraseña obligatoria',
+            minLength: { value: 8, message: 'Mínimo 8 caracteres' },
+            // bcrypt ignora lo que pase de 72 bytes; el backend lo rechaza igual.
+            maxLength: { value: 72, message: 'Máximo 72 caracteres' },
+          }}
           render={({ field: { onChange, value } }) => (
             <TextInput style={styles.input} placeholder="Contraseña *" value={value} onChangeText={onChange} secureTextEntry />
           )}
         />
+        {/* Sin esto el formulario no avanzaba y no decía por qué. */}
+        {errors.password && <Text style={styles.error}>{errors.password.message}</Text>}
 
         <Controller
           control={control}
@@ -158,6 +170,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 8,
   },
   buttonDisabled: { opacity: 0.6 },
+  error: { color: '#ef4444', fontSize: 12, marginTop: -4 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   link: { textAlign: 'center', color: '#6b7280', marginTop: 8 },
   linkBold: { color: '#2563eb', fontWeight: '600' },

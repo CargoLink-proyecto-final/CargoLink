@@ -164,6 +164,9 @@ model User {
   // Documentos de transportistas que este admin aprobó o rechazó
   reviewedDocuments Document[] @relation("DocumentReviewer")
 
+  // Sesiones abiertas (refresh tokens rotativos), ver RefreshToken
+  refreshTokens RefreshToken[]
+
   @@index([companyId])
   // Cada registro de dispositivo desasocia el token de su dueño anterior con un
   // `where: { expoPushToken: token }`. Sin índice eso es un seq scan sobre users.
@@ -491,4 +494,27 @@ model City {
   @@index([provinceId])
   @@index([name])
   @@map("cities")
+}
+
+// Refresh token rotativo. El access token (JWT) dura minutos; este token, de
+// larga vida y guardado solo como hash, permite pedir uno nuevo sin volver a
+// loguearse. Cada uso lo revoca y emite el siguiente de la misma familia
+// (`familyId` = una sesión, desde el login). Si llega un token ya revocado es
+// porque alguien lo reutilizó (robo o copia): se revoca la familia entera.
+model RefreshToken {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SHA-256 del token; el valor en claro solo lo tiene el cliente
+  tokenHash    String    @unique @map("token_hash")
+  familyId     String    @map("family_id")
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  // Token que lo reemplazó al rotar (null si se revocó por logout/reuso/reset)
+  replacedById String?   @map("replaced_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
 }

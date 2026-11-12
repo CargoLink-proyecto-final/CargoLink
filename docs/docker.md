@@ -36,7 +36,8 @@ Variables de entorno inyectadas al contenedor:
 | `JWT_SECRET` | `${JWT_SECRET}` | **requerido**, falla si vacío |
 | `ADMIN_PASSWORD` | `${ADMIN_PASSWORD:-}` | password de `admin@cargolink.com`; vacío = fallback del seed |
 | `E2E_PASSWORD` | `${E2E_PASSWORD:-}` | vacío = no se crean las cuentas del E2E (solo dev) |
-| `JWT_EXPIRATION` | `${JWT_EXPIRATION:-7d}` | `7d` |
+| `JWT_ACCESS_EXPIRATION` | `${JWT_ACCESS_EXPIRATION:-15m}` | `15m` |
+| `REFRESH_TOKEN_TTL_DAYS` | `${REFRESH_TOKEN_TTL_DAYS:-30}` | `30` |
 | `PORT` | `3001` | hardcoded |
 | `CORS_ORIGIN` | `${CORS_ORIGIN:-http://localhost:3000}` | `http://localhost:3000` |
 | `FRONTEND_URL` | `${FRONTEND_URL:-http://localhost:3000}` | `http://localhost:3000` |
@@ -206,7 +207,8 @@ CMD ["node", "server.js"]
 | `JWT_SECRET` | backend | **Sí** | — | Secret para firmar JWTs |
 | `ADMIN_PASSWORD` | backend | No | fallback del seed | Password de `admin@cargolink.com`. Si está seteada, el seed la reescribe en cada arranque |
 | `E2E_PASSWORD` | backend | No | — | Solo dev. Crea las cuentas `e2e-*@cargolink.test` del E2E post-deploy |
-| `JWT_EXPIRATION` | backend | No | `7d` | Lifetime de los tokens |
+| `JWT_ACCESS_EXPIRATION` | backend | No | `15m` | Vida del access token (JWT). Reemplaza a `JWT_EXPIRATION`, que ya no se lee |
+| `REFRESH_TOKEN_TTL_DAYS` | backend | No | `30` | Vida del refresh token (se renueva en cada uso) |
 | `PORT` | backend | No | `3001` | Puerto del server |
 | `CORS_ORIGIN` | backend | No | `http://localhost:3000` | Origen permitido por CORS |
 | `FRONTEND_URL` | backend | No | `http://localhost:3000` | Base de los links en emails (verify, reset) |

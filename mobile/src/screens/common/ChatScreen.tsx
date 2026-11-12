@@ -137,7 +137,8 @@ export default function ChatScreen({ route }: any) {
         .timeout(5000)
         .emit(
           'sendMessage',
-          { senderId: currentUser.id, tripId, content },
+          // El remitente lo pone el server a partir del token del socket.
+          { tripId, content },
           (err: Error | null, message?: Message) => {
             setSending(false);
             if (err) {

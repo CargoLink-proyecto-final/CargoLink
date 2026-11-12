@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { parsePagination } from '../common/pagination';
 import { TripStatus, LoadStatus, PostulationStatus, Role } from '@prisma/client';
 import { fetchRouteDistanceKm } from '../common/routing';
 import { computeFuelAndDeliveryMetrics, computeMoneyMetrics } from '../common/metrics';
@@ -47,8 +48,7 @@ export class TripsService {
     page?: number;
     limit?: number;
   }) {
-    const page = params?.page || 1;
-    const limit = params?.limit || 20;
+    const { page, limit } = parsePagination(params?.page, params?.limit);
     const where: any = {};
 
     if (params?.carrierId) where.carrierId = params.carrierId;
