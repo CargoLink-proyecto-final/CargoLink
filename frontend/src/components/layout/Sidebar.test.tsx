@@ -171,6 +171,7 @@ describe('Sidebar', () => {
       'href',
       '/dashboard/admin/verifications',
     );
+    expect(screen.getByText('Sistema').closest('a')).toHaveAttribute('href', '/dashboard/admin/system');
   });
 
   it('badges "Verificaciones" with the transporters waiting for review', async () => {
