@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import api, {
+  handleResponseError,
+  setUnauthorizedHandler,
   authApi,
   loadsApi,
   tripsApi,
@@ -28,6 +30,7 @@ jest.mock('axios', () => {
           captured.requestHandler = handler;
         }),
       },
+      response: { use: jest.fn() },
     },
   };
   const create = jest.fn(() => instance);
@@ -71,6 +74,43 @@ describe('api service', () => {
       const config = await getRequestHandler()({ headers: {} });
 
       expect(config.headers.Authorization).toBeUndefined();
+    });
+  });
+
+  describe('response error handler (401)', () => {
+    const onUnauthorized = jest.fn();
+    const error401 = (url: string, headers: Record<string, string> = {}) => ({
+      response: { status: 401 },
+      config: { url, headers },
+    });
+
+    beforeEach(() => setUnauthorizedHandler(onUnauthorized));
+    afterEach(() => setUnauthorizedHandler(null));
+
+    it('notifies the rejected token on a 401 from an authenticated request', async () => {
+      const err = error401('/users/me', { Authorization: 'Bearer tok-old' });
+
+      await expect(handleResponseError(err)).rejects.toBe(err);
+      expect(onUnauthorized).toHaveBeenCalledWith('tok-old');
+    });
+
+    it('ignores 401s from /auth/* (wrong credentials are not an expired session)', async () => {
+      const err = error401('/auth/login', { Authorization: 'Bearer tok-old' });
+
+      await expect(handleResponseError(err)).rejects.toBe(err);
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    it('ignores 401s from requests sent without a token', async () => {
+      await expect(handleResponseError(error401('/loads'))).rejects.toBeDefined();
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    it('ignores other statuses and network errors', async () => {
+      const forbidden = { response: { status: 403 }, config: { url: '/trips', headers: { Authorization: 'Bearer t' } } };
+      await expect(handleResponseError(forbidden)).rejects.toBe(forbidden);
+      await expect(handleResponseError(new Error('Network Error'))).rejects.toBeDefined();
+      expect(onUnauthorized).not.toHaveBeenCalled();
     });
   });
 

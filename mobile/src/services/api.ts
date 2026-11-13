@@ -18,6 +18,31 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Un 401 con token significa que el JWT venció o lo firmó otro backend (pasa al
+// cambiar de entorno: la sesión vieja queda en AsyncStorage). Sin esto la app
+// queda logueada en apariencia pero con cada pantalla fallando. El handler lo
+// registra el store de auth: importarlo acá sería un import circular.
+type UnauthorizedHandler = (rejectedToken: string) => void;
+let onUnauthorized: UnauthorizedHandler | null = null;
+
+export const setUnauthorizedHandler = (handler: UnauthorizedHandler | null) => {
+  onUnauthorized = handler;
+};
+
+export const handleResponseError = (error: any) => {
+  const status = error?.response?.status;
+  const url: string = error?.config?.url ?? '';
+  const authHeader: string | undefined = error?.config?.headers?.Authorization;
+  // /auth/* devuelve 401 por credenciales incorrectas: eso no es sesión vencida.
+  // Sin header no había sesión que expirar.
+  if (status === 401 && authHeader && !url.startsWith('/auth/') && onUnauthorized) {
+    onUnauthorized(authHeader.replace(/^Bearer /, ''));
+  }
+  return Promise.reject(error);
+};
+
+api.interceptors.response.use((response) => response, handleResponseError);
+
 export default api;
 
 export const authApi = {
