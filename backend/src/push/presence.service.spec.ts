@@ -50,4 +50,11 @@ describe('PresenceService', () => {
     presence.connect('u1');
     expect(presence.isOnline('u2')).toBe(false);
   });
+
+  it('reports online users and total socket connections', () => {
+    presence.connect('u1');
+    presence.connect('u1');
+    presence.connect('u2');
+    expect(presence.stats()).toEqual({ onlineUsers: 2, connections: 3 });
+  });
 });

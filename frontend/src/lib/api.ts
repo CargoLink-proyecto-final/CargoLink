@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { DocumentDecision } from '@/types';
+import type { MonitoringRange, PlatformMetrics, SystemHealth, SystemMetrics } from '@/types/adminMetrics';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002/api';
 
@@ -180,6 +181,14 @@ export const transporterReviewApi = {
   getProfile: (userId: string) => api.get(`/admin/transporter-reviews/${userId}`),
   review: (userId: string, decisions: DocumentDecision[]) =>
     api.post(`/admin/transporter-reviews/${userId}`, { decisions }),
+};
+
+// Panel del admin de plataforma: métricas de uso y monitoreo del sistema.
+export const adminMetricsApi = {
+  getPlatform: () => api.get<PlatformMetrics>('/admin/metrics'),
+  getSystemHealth: () => api.get<SystemHealth>('/admin/system/health'),
+  getSystemMetrics: (range: MonitoringRange) =>
+    api.get<SystemMetrics>('/admin/system/metrics', { params: { range } }),
 };
 
 // Postulations

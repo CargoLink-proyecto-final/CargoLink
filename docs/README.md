@@ -15,6 +15,7 @@ Plataforma digital de gestión de transporte de carga por carretera que conecta 
 | [`backend.md`](./backend.md) | Estructura NestJS, bootstrap, módulos, guards, decorators, mail service, comandos de dev. |
 | [`api.md`](./api.md) | Referencia REST completa: Auth, Users, Loads, Postulations, Trips, Messages, Ratings, Companies. |
 | [`empresas.md`](./empresas.md) | Flotas multi-conductor: rol `COMPANY_ADMIN`, modelo de datos, flujo de unión, endpoints, métricas. |
+| [`monitoreo.md`](./monitoreo.md) | Panel del admin: métricas de uso de la plataforma y monitoreo del sistema (caídas, latencias, errores, dependencias). |
 | [`websockets.md`](./websockets.md) | Socket.IO `/chat`: rooms, eventos `sendMessage`/`newMessage`, ejemplo de cliente. |
 | [`base-de-datos.md`](./base-de-datos.md) | Schema Prisma: enums, modelos, relaciones, índices, migraciones, seed. |
 | [`autenticacion.md`](./autenticacion.md) | Flujo register/verify/login, JWT, guards, roles, password reset, token storage frontend/mobile. |

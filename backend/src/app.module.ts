@@ -12,6 +12,8 @@ import { RatingsModule } from './ratings/ratings.module';
 import { GeoModule } from './geo/geo.module';
 import { CompaniesModule } from './companies/companies.module';
 import { TransporterProfileModule } from './transporter-profile/transporter-profile.module';
+import { SystemMonitoringModule } from './system-monitoring/system-monitoring.module';
+import { PlatformMetricsModule } from './platform-metrics/platform-metrics.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { TransporterProfileModule } from './transporter-profile/transporter-prof
     CompaniesModule,
     GeoModule,
     TransporterProfileModule,
+    SystemMonitoringModule,
+    PlatformMetricsModule,
   ],
 })
 export class AppModule {}

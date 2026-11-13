@@ -251,6 +251,13 @@ Constraints e índices:
 - `@@index([userId])`
 - `@@index([status])` — la cola de revisión del admin filtra por `PENDING`.
 
+### `UptimeSession` (tabla `uptime_sessions`) y `RequestMetric` (tabla `request_metrics`)
+
+Tablas de **monitoreo** que escribe el propio backend; no son datos de negocio ni tienen relaciones. Diseño completo en [`monitoreo.md`](./monitoreo.md).
+
+- `UptimeSession`: una fila por arranque del proceso (`startedAt`, `lastSeenAt` actualizado cada minuto, `endedAt` solo en un apagado ordenado, `version`). Los huecos entre sesiones son las caídas. `@@index([startedAt])`.
+- `RequestMetric`: requests HTTP agregados por minuto (`bucket`), método y ruta con parámetros sin resolver (`route`). Guarda `count`, `clientErrors` (4xx), `serverErrors` (5xx), `totalMs`, `maxMs` y `histogram Int[]` con la cantidad de requests por bucket de latencia. `@@unique([bucket, method, route])`, que también sirve para filtrar por rango de fechas. Retención de 35 días.
+
 ## Diagrama de relaciones
 
 ```
@@ -302,6 +309,7 @@ Folder: [`../backend/prisma/migrations/`](../backend/prisma/migrations/).
 | `20260606214458_add_company_admin` | Rol `COMPANY_ADMIN`, tablas `companies` y `company_join_requests`, `companyId` en `users` |
 | `20260606233212_add_trip_fuel_and_distance` | Columnas `fuelLiters`, `distanceKm` en `trips` |
 | `20260922223646_add_transporter_profile` | Tablas `vehicles` y `documents`; columnas `cuit`, `licenseCategory`, `licenseExpiresAt`, `termsAcceptedAt`, `termsAcceptedVersion` en `users` |
+| `20261112120000_add_system_monitoring` | Tablas `uptime_sessions` y `request_metrics` para el monitoreo del sistema |
 
 `migration_lock.toml` registra el provider (`postgresql`) — no editarlo.
 

@@ -14,6 +14,10 @@ setDefaultAutoSelectFamilyAttemptTimeout(2000);
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Sin esto Nest ignora el SIGTERM de `docker compose` y no corre los hooks
+  // de apagado: el monitoreo registraría cada deploy como un crash.
+  app.enableShutdownHooks();
+
   // CORS_ORIGIN admite uno o varios orígenes separados por coma (ej. durante una
   // migración de dominio, el viejo y el nuevo a la vez).
   const DEFAULT_CORS_ORIGIN = 'http://localhost:3000';

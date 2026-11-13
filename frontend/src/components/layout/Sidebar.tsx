@@ -24,6 +24,7 @@ import {
   UserCog,
   Hand,
   ShieldCheck,
+  Activity,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -56,6 +57,7 @@ const navItems = {
     { href: '/trips', label: 'Viajes', icon: Truck },
     { href: '/users', label: 'Usuarios', icon: Users },
     { href: '/dashboard/admin/verifications', label: 'Verificaciones', icon: ShieldCheck },
+    { href: '/dashboard/admin/system', label: 'Sistema', icon: Activity },
     { href: '/messages', label: 'Mensajes', icon: MessageSquare },
     { href: '/register', label: 'Registro', icon: ClipboardList },
   ],

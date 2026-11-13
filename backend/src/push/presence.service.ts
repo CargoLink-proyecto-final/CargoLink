@@ -37,4 +37,11 @@ export class PresenceService {
   isOnline(userId: string): boolean {
     return (this.connectionsByUser.get(userId) ?? 0) > 0;
   }
+
+  /** Totales para el monitoreo del sistema (solo este proceso). */
+  stats(): { onlineUsers: number; connections: number } {
+    let connections = 0;
+    for (const count of this.connectionsByUser.values()) connections += count;
+    return { onlineUsers: this.connectionsByUser.size, connections };
+  }
 }

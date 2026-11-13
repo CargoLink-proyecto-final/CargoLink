@@ -414,6 +414,16 @@ Source: [`../backend/src/transporter-profile/transporter-review.controller.ts`](
 
 La revisión se manda junta (no documento por documento) para que el transportista reciba **un solo mail**: con la lista de rechazos y sus motivos, o el aviso de "perfil aprobado" cuando con esta revisión queda habilitado. Si el mail falla, la revisión igual se guarda. `400` si algún documento no es de ese transportista o hay decisiones repetidas; `404` si el usuario no es `TRANSPORTER`. Devuelve el `status` actualizado.
 
+## Admin metrics y monitoreo
+
+Sources: [`../backend/src/platform-metrics/`](../backend/src/platform-metrics/) y [`../backend/src/system-monitoring/`](../backend/src/system-monitoring/). Todos `ADMIN`. Qué mide cada uno y cómo: [`monitoreo.md`](./monitoreo.md).
+
+| Método | Path | Descripción |
+|---|---|---|
+| GET | `/admin/metrics` | Métricas de uso de la plataforma: marketplace, dinero, operación, verificación, crecimiento y alertas |
+| GET | `/admin/system/health` | Salud en vivo: semáforo (`OK`/`DEGRADED`/`DOWN`) con motivos, DB, OSRM, SMTP, memoria, event loop, sockets |
+| GET | `/admin/system/metrics?range=24h\|7d\|30d` | Disponibilidad, caídas (crash vs planificadas), p50/p95/p99, tasa de 5xx, endpoints más lentos y con errores |
+
 ## Trips
 
 Source: [`../backend/src/trips/trips.controller.ts`](../backend/src/trips/trips.controller.ts). Todos requieren JWT.
