@@ -9,7 +9,7 @@
 > que restaurar ambos archivos desde el historial de git (commit anterior a este
 > cambio) y volver a marcar el check como obligatorio.
 
-Pasos para dejar andando el análisis estático y el quality gate del TP de Calidad de Software. El pipeline ya está escrito ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) + [`sonar-project.properties`](../../sonar-project.properties)); lo que sigue es la parte que se hace a mano en SonarCloud y GitHub.
+Pasos para dejar andando el análisis estático y el quality gate del TP de Calidad de Software. El pipeline ya está escrito ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) + `sonar-project.properties`, borrado al deshabilitarlo; está en el historial de git); lo que sigue es la parte que se hace a mano en SonarCloud y GitHub.
 
 **Alcance del análisis:** solo el módulo de viajes (`trips`):
 
