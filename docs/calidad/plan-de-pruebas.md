@@ -2,6 +2,8 @@
 
 Parte del TP Integrador de Calidad de Software sobre el TFG CargoLink. Este documento es el punto de entrada: define qué se prueba, cómo, dónde y con qué criterio se da por terminado. El detalle vive en los documentos que enlaza.
 
+> **Nota (2026-11-13):** SonarCloud se deshabilitó del CI al pasar el repo a privado (el análisis fallaba del lado del servidor y bloqueaba los PRs). Las menciones a SonarCloud y al criterio S2 de este plan describen el estado durante el TP. Detalle en [sonarcloud-setup.md](./sonarcloud-setup.md).
+
 | | |
 |---|---|
 | Versión | **1.0** |
