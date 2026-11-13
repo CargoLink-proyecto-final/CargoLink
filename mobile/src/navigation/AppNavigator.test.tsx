@@ -31,6 +31,7 @@ jest.mock('../services/notifications', () => ({
 // y la pantalla monta en estado de error — el test seguiría verde probando menos
 // de lo que dice.
 jest.mock('../services/api', () => ({
+  setUnauthorizedHandler: jest.fn(),
   api: { get: jest.fn().mockResolvedValue({ data: {} }) },
   usersApi: {
     getMe: jest.fn().mockResolvedValue({ data: null }),
